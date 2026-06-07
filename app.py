@@ -2,14 +2,24 @@
 
 Scans the projects directory, renders a card per project with type-aware
 actions (launch app, open site, open a Claude Code terminal in the project),
-and serves static-site projects directly. Localhost only.
+serves static-site projects directly, and embeds a browser terminal
+(xterm.js + a WebSocket pty bridge) running Claude Code per project.
+Localhost only.
 """
+import asyncio
+import fcntl
 import html
+import json
+import os
+import pty
 import re
+import signal
+import struct
 import subprocess
+import termios
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -84,6 +94,8 @@ for _p in scan():
     if _p["type"] == "site":
         app.mount(f"/sites/{_p['name']}", StaticFiles(directory=_p["path"], html=True))
 
+app.mount("/static", StaticFiles(directory=HUB_DIR / "static"))
+
 
 # ---------------------------------------------------------------------------
 # Actions
@@ -125,6 +137,128 @@ def api_projects():
 
 
 # ---------------------------------------------------------------------------
+# Embedded terminal — WebSocket pty bridge running Claude Code per project
+
+
+def spawn_claude(path: Path):
+    """Start `claude` on a pty in the project dir. Returns (pid, master fd)."""
+    env = dict(os.environ, TERM="xterm-256color", COLORTERM="truecolor")
+    env["PATH"] = f"{Path.home()}/.local/bin:{env.get('PATH', '/usr/bin')}"
+    pid, fd = pty.fork()
+    if pid == 0:  # child
+        os.chdir(path)
+        os.execvpe("claude", ["claude"], env)
+    flags = fcntl.fcntl(fd, fcntl.F_GETFL)
+    fcntl.fcntl(fd, fcntl.F_SETFL, flags | os.O_NONBLOCK)
+    return pid, fd
+
+
+@app.websocket("/ws/terminal/{name}")
+async def terminal_ws(ws: WebSocket, name: str):
+    path = project_path(name)
+    await ws.accept()
+    pid, fd = spawn_claude(path)
+    loop = asyncio.get_running_loop()
+    pty_data = asyncio.Queue()
+    loop.add_reader(fd, lambda: _drain(fd, pty_data, loop))
+
+    async def pty_to_ws():
+        while True:
+            data = await pty_data.get()
+            if data is None:  # EOF — claude exited
+                await ws.close()
+                return
+            await ws.send_bytes(data)
+
+    sender = asyncio.create_task(pty_to_ws())
+    try:
+        while True:
+            msg = json.loads(await ws.receive_text())
+            if msg["type"] == "input":
+                os.write(fd, msg["data"].encode())
+            elif msg["type"] == "resize":
+                winsz = struct.pack("HHHH", msg["rows"], msg["cols"], 0, 0)
+                fcntl.ioctl(fd, termios.TIOCSWINSZ, winsz)
+    except (WebSocketDisconnect, RuntimeError):
+        pass
+    finally:
+        sender.cancel()
+        loop.remove_reader(fd)
+        os.close(fd)
+        try:
+            os.kill(pid, signal.SIGHUP)
+            await asyncio.sleep(0)
+            os.waitpid(pid, os.WNOHANG)
+        except (ProcessLookupError, ChildProcessError):
+            pass
+
+
+def _drain(fd: int, queue: asyncio.Queue, loop) -> None:
+    try:
+        data = os.read(fd, 65536)
+    except (BlockingIOError, InterruptedError):
+        return
+    except OSError:
+        data = b""
+    queue.put_nowait(data or None)
+    if not data:
+        loop.remove_reader(fd)
+
+
+@app.get("/terminal/{name}", response_class=HTMLResponse)
+def terminal_page(name: str):
+    project_path(name)  # 404 unknown names
+    safe = html.escape(name)
+    return f"""<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8"><title>{safe} — claude</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="/static/vendor/xterm.min.css">
+<style>
+  body {{ margin:0; height:100vh; display:flex; flex-direction:column;
+    background:#efe2c0; font:15px "EB Garamond", "Noto Serif", Georgia, serif; }}
+  header {{ display:flex; align-items:center; gap:.8rem; padding:.45rem .9rem;
+    color:#43331c; border-bottom:1.5px solid #6e5a39; }}
+  header a {{ color:#2f5277; text-decoration:none; }}
+  header h1 {{ margin:0; font-size:1rem; font-weight:600; font-variant:small-caps;
+    letter-spacing:.08em; flex:1; }}
+  #term {{ flex:1; padding:.4rem; background:#1a1b26; }}
+</style></head>
+<body>
+  <header>
+    <a href="/" title="back to the shelf">⌂ hub</a>
+    <h1>{safe}</h1>
+    <span style="font-style:italic; font-size:.85rem; color:#6e5a39">claude code</span>
+  </header>
+  <div id="term"></div>
+  <script src="/static/vendor/xterm.min.js"></script>
+  <script src="/static/vendor/addon-fit.min.js"></script>
+  <script>
+    const term = new Terminal({{
+      fontFamily: "monospace", fontSize: 14, cursorBlink: true,
+      theme: {{ background: "#1a1b26", foreground: "#c0caf5" }},
+    }});
+    const fit = new FitAddon.FitAddon();
+    term.loadAddon(fit);
+    term.open(document.getElementById("term"));
+    fit.fit();
+    term.focus();
+
+    const ws = new WebSocket(`ws://${{location.host}}/ws/terminal/{safe}`);
+    ws.binaryType = "arraybuffer";
+    ws.onopen = () => ws.send(JSON.stringify({{type:"resize", cols:term.cols, rows:term.rows}}));
+    ws.onmessage = e => term.write(new Uint8Array(e.data));
+    ws.onclose = () => term.write("\\r\\n\\x1b[33m[session ended — refresh to start a new one]\\x1b[0m\\r\\n");
+    term.onData(d => ws.readyState === 1 && ws.send(JSON.stringify({{type:"input", data:d}})));
+    new ResizeObserver(() => {{
+      fit.fit();
+      ws.readyState === 1 && ws.send(JSON.stringify({{type:"resize", cols:term.cols, rows:term.rows}}));
+    }}).observe(document.getElementById("term"));
+  </script>
+</body></html>"""
+
+
+# ---------------------------------------------------------------------------
 # Page
 
 TYPE_GLYPHS = {"site": "☉", "app": "⚙", "code": "✒", "notes": "✎", "empty": "◯"}
@@ -152,7 +286,8 @@ def glyph(p: dict) -> str:
 def card(p: dict, folio: int) -> str:
     name = html.escape(p["name"])
     buttons = [
-        f"""<button class="b-claude" onclick="act('{name}','terminal')" title="Open Claude Code here">🗨 claude</button>""",
+        f"""<a class="btn b-claude" href="/terminal/{name}" title="Claude Code, right here in the hub">🗨 claude</a>""",
+        f"""<button class="b-claude" onclick="act('{name}','terminal')" title="Claude Code in Konsole">⧉</button>""",
         f"""<button class="b-files" onclick="act('{name}','folder')" title="Open in Dolphin">files</button>""",
     ]
     if p["type"] == "site":
