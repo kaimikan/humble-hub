@@ -341,7 +341,6 @@ def index():
   header {{ text-align:center; margin-bottom:2rem; }}
   h1 {{ margin:0; font-size:1.9rem; font-weight:600; letter-spacing:.35em;
         font-variant:small-caps; }}
-  .motto {{ margin:.2rem 0 0; font-style:italic; color:var(--ink-soft); font-size:.95rem; }}
   .rule {{ width:60%; margin:.9rem auto 0; border:0; border-top:1.5px solid var(--ink-soft);
            position:relative; }}
   .rule::after {{ content:"❧"; position:absolute; top:-0.75em; left:50%;
