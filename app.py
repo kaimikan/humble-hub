@@ -334,12 +334,18 @@ def index():
     --ink:#43331c; --ink-soft:#6e5a39; --ink-faint:#9c875f;
     --parchment:#efe2c0; }}
   body {{ color:var(--ink); font:16px/1.55 "EB Garamond", "Noto Serif", Georgia, serif;
-    max-width:1100px; margin:2.2rem auto; padding:0 1.2rem;
+    margin:0; height:100vh; overflow:hidden;
     background:
       radial-gradient(ellipse at 15% 8%, #f7edd3 0%, transparent 55%),
       radial-gradient(ellipse at 85% 95%, #e2d2a8 0%, transparent 55%),
       radial-gradient(ellipse at 60% 40%, #f2e6c6 0%, transparent 70%),
       var(--parchment); }}
+  /* the shelf is the scroll container, so its scrollbar sits at its own right
+     edge — left of the drawer when one is open */
+  #shelf {{ height:100%; overflow-y:auto; box-sizing:border-box;
+    padding:2.2rem 1.2rem; transition:margin-right .22s ease; }}
+  #shelf > header, #shelf > .grid {{ max-width:1100px; margin-left:auto;
+    margin-right:auto; }}
   header {{ text-align:center; margin-bottom:2rem; }}
   h1 {{ margin:0; font-size:1.9rem; font-weight:600; letter-spacing:.35em;
         font-variant:small-caps; }}
@@ -368,9 +374,7 @@ def index():
   .chip[data-type="empty"] {{ --chip:#9c875f; }}
   /* side-drawer terminal — pushes the shelf aside rather than covering it */
   :root {{ --drawer-w: min(680px, 58vw); }}
-  body {{ transition:margin .22s ease; }}
-  body.drawer-open {{ max-width:none; margin-left:1.5rem;
-    margin-right:calc(var(--drawer-w) + 1.5rem); }}
+  body.drawer-open #shelf {{ margin-right:var(--drawer-w); }}
   body.drawer-open #pills {{ right:calc(var(--drawer-w) + 1.1rem); }}
   #drawer {{ position:fixed; top:0; right:0; height:100vh; width:var(--drawer-w);
     background:#1a1b26; border-left:2px solid var(--ink-soft);
