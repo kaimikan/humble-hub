@@ -154,6 +154,7 @@ const sessions = new Map();
 let active = null; // project name shown in the drawer, or null when hidden
 
 const drawerEl = () => document.getElementById("drawer");
+const disp = name => name === "~" ? "~/Projects" : name; // display name
 
 let audioCtx = null;
 function blip(freqs) {
@@ -204,7 +205,7 @@ function createSession(name, resume) {
   term.open(host);
 
   const ws = new WebSocket(
-    `ws://${location.host}/ws/terminal/${name}${resume ? "?resume=1" : ""}`);
+    `ws://${location.host}/ws/terminal/${encodeURIComponent(name)}${resume ? "?resume=1" : ""}`);
   ws.binaryType = "arraybuffer";
 
   const s = { name, ws, term, fit, host, status: "working", lastOut: Date.now(), sawOutput: false };
@@ -243,8 +244,8 @@ function activate(name) {
   active = name;
   const s = sessions.get(name);
   sessions.forEach(o => o.host.classList.toggle("shown", o.name === name));
-  document.getElementById("d-title").textContent = name;
-  document.getElementById("d-full").href = `/terminal/${name}`;
+  document.getElementById("d-title").textContent = disp(name);
+  document.getElementById("d-full").href = `/terminal/${encodeURIComponent(name)}`;
   drawerEl().classList.add("open");
   document.body.classList.add("drawer-open");
   if (s.status === "attention" || s.status === "ready") s.status = "working";
@@ -278,7 +279,7 @@ function renderPills() {
     if (s.name === active && drawerEl().classList.contains("open")) return;
     const pill = document.createElement("button");
     pill.className = `pill s-${s.status}`;
-    pill.innerHTML = `<span class="dot"></span>🗨 ${s.name}`;
+    pill.innerHTML = `<span class="dot"></span>🗨 ${disp(s.name)}`;
     pill.title = { working: "working…", ready: "ready for you",
                    attention: "needs your input", ended: "session ended" }[s.status] || "";
     pill.onclick = () => s.status === "ended"

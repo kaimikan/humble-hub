@@ -108,6 +108,8 @@ app.mount("/static", StaticFiles(directory=HUB_DIR / "static"))
 
 
 def project_path(name: str) -> Path:
+    if name == "~":  # the root claude — a session over all of ~/Projects
+        return PROJECTS_DIR
     path = PROJECTS_DIR / name
     if not path.is_dir() or SKIP.match(name) or "/" in name:
         raise HTTPException(404, f"no such project: {name}")
@@ -526,6 +528,14 @@ def index():
     <h1>the humble hub</h1>
     <hr class="rule">
     <div class="controls">
+      <div class="menu">
+        <button class="b-claude" onclick="openDrawer('~')">🗨 root claude ▾</button>
+        <div class="menu-items">
+          <button onclick="openDrawer('~')">fresh chat</button>
+          <button onclick="openDrawer('~', true)">resume chat</button>
+          <button onclick="act('~','terminal')">in konsole</button>
+        </div>
+      </div>
       <button class="jot-open" onclick="openJot('todos')">✎ to-do <span id="todos-count"></span></button>
       <button class="jot-open" onclick="openJot('ideas')">✎ ideas <span id="ideas-count"></span></button>
       <input id="search" type="search" placeholder="search…" oninput="refilter()">
