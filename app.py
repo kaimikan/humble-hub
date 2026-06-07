@@ -290,10 +290,11 @@ def card(p: dict) -> str:
     name = html.escape(p["name"])
     buttons = [
         f"""<div class="menu">
-          <a class="btn b-claude" href="/terminal/{name}">🗨 claude ▾</a>
+          <button class="b-claude" onclick="openDrawer('{name}')">🗨 claude ▾</button>
           <div class="menu-items">
-            <a href="/terminal/{name}">fresh chat · in hub</a>
-            <a href="/terminal/{name}?resume=1">resume chat · in hub</a>
+            <button onclick="openDrawer('{name}')">fresh chat · drawer</button>
+            <button onclick="openDrawer('{name}', true)">resume chat · drawer</button>
+            <a href="/terminal/{name}">full page</a>
             <button onclick="act('{name}','terminal')">in konsole</button>
           </div>
         </div>""",
@@ -328,6 +329,7 @@ def index():
 <html lang="en"><head>
 <meta charset="utf-8"><title>the humble hub</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="/static/vendor/xterm.min.css">
 <style>
   :root {{ color-scheme: light;
     --ink:#43331c; --ink-soft:#6e5a39; --ink-faint:#9c875f;
@@ -365,6 +367,27 @@ def index():
   .chip[data-type="code"]  {{ --chip:#8a6d1f; }}
   .chip[data-type="notes"] {{ --chip:#4f6b3a; }}
   .chip[data-type="empty"] {{ --chip:#9c875f; }}
+  /* side-drawer terminal */
+  #drawer {{ position:fixed; top:0; right:0; height:100vh; width:min(680px, 92vw);
+    background:#1a1b26; border-left:2px solid var(--ink-soft);
+    box-shadow:-4px 0 18px rgba(67,51,28,.4); transform:translateX(105%);
+    transition:transform .22s ease; display:flex; flex-direction:column; z-index:50; }}
+  #drawer.open {{ transform:none; }}
+  .d-head {{ display:flex; align-items:center; gap:.7rem; padding:.4rem .8rem;
+    background:var(--parchment); border-bottom:1.5px solid var(--ink-soft);
+    color:var(--ink); }}
+  .d-head h2 {{ margin:0; flex:1; font-size:.98rem; font-weight:600;
+    font-variant:small-caps; letter-spacing:.07em; }}
+  .d-head a, .d-head button {{ border:0; background:transparent; color:#2f5277;
+    font:inherit; font-size:1rem; cursor:pointer; padding:.1rem .35rem;
+    text-decoration:none; }}
+  .d-head a:hover, .d-head button:hover {{ color:#9a3b22; background:transparent; }}
+  #dterm {{ flex:1; min-height:0; padding:.3rem; }}
+  #pill {{ position:fixed; right:1.1rem; bottom:1.1rem; z-index:40; display:none;
+    background:#2f5277; color:var(--parchment); border:0; border-radius:999px;
+    padding:.5rem 1rem; font:inherit; font-size:.88rem; font-variant:small-caps;
+    letter-spacing:.06em; cursor:pointer; box-shadow:2px 3px 10px rgba(67,51,28,.4); }}
+  #pill.show {{ display:inline-flex; }}
   .grid {{ display:grid; grid-template-columns:repeat(auto-fill, minmax(320px,1fr)); gap:1.3rem; }}
   .card {{ border:1.5px solid var(--ink-soft); outline:1px solid var(--ink-faint);
     outline-offset:4px; border-radius:2px; padding:1rem 1.2rem;
@@ -427,9 +450,84 @@ def index():
     </div>
   </header>
   <div class="grid">{cards}</div>
+
+  <aside id="drawer">
+    <div class="d-head">
+      <h2 id="d-title"></h2>
+      <a id="d-full" href="#" title="open as full page">⤢</a>
+      <button onclick="minimizeDrawer()" title="minimize — keeps the chat alive">▁</button>
+      <button onclick="closeDrawer()" title="end the session">✕</button>
+    </div>
+    <div id="dterm"></div>
+  </aside>
+  <button id="pill" onclick="restoreDrawer()"></button>
+
+  <script src="/static/vendor/xterm.min.js"></script>
+  <script src="/static/vendor/addon-fit.min.js"></script>
   <script>
     async function act(name, action) {{
       await fetch(`/api/projects/${{name}}/${{action}}`, {{method:'POST'}});
+    }}
+
+    // --- side-drawer terminal: one live session, minimize keeps it alive ---
+    const drawer = {{ ws:null, term:null, fit:null, name:null }};
+    const dEl = () => document.getElementById('drawer');
+
+    function refit() {{
+      if (!drawer.fit) return;
+      drawer.fit.fit();
+      drawer.ws?.readyState === 1 && drawer.ws.send(JSON.stringify(
+        {{type:'resize', cols:drawer.term.cols, rows:drawer.term.rows}}));
+    }}
+
+    function openDrawer(name, resume=false) {{
+      if (drawer.name === name && drawer.ws?.readyState === 1) {{ restoreDrawer(); return; }}
+      if (drawer.ws) closeDrawer();
+      drawer.name = name;
+      document.getElementById('d-title').textContent = name;
+      document.getElementById('d-full').href = `/terminal/${{name}}`;
+      const host = document.getElementById('dterm');
+      host.innerHTML = '';
+      drawer.term = new Terminal({{
+        fontFamily: "'JetBrains Mono', 'Hack', 'Noto Sans Mono', monospace",
+        fontSize: 14, cursorBlink: true, customGlyphs: true,
+        theme: {{ background: "#1a1b26", foreground: "#c0caf5" }},
+      }});
+      drawer.fit = new FitAddon.FitAddon();
+      drawer.term.loadAddon(drawer.fit);
+      drawer.term.open(host);
+      const ws = new WebSocket(`ws://${{location.host}}/ws/terminal/${{name}}${{resume ? '?resume=1' : ''}}`);
+      ws.binaryType = 'arraybuffer';
+      ws.onopen = () => refit();
+      ws.onmessage = e => drawer.term.write(new Uint8Array(e.data));
+      ws.onclose = () => drawer.term?.write('\\r\\n\\x1b[33m[session ended]\\x1b[0m\\r\\n');
+      drawer.term.onData(d => ws.readyState === 1 && ws.send(JSON.stringify({{type:'input', data:d}})));
+      drawer.ws = ws;
+      new ResizeObserver(refit).observe(host);
+      dEl().classList.add('open');
+      document.getElementById('pill').classList.remove('show');
+      setTimeout(() => {{ refit(); drawer.term.focus(); }}, 240);
+    }}
+
+    function minimizeDrawer() {{
+      dEl().classList.remove('open');
+      const pill = document.getElementById('pill');
+      pill.textContent = `🗨 ${{drawer.name}}`;
+      pill.classList.add('show');
+    }}
+
+    function restoreDrawer() {{
+      dEl().classList.add('open');
+      document.getElementById('pill').classList.remove('show');
+      setTimeout(() => {{ refit(); drawer.term?.focus(); }}, 240);
+    }}
+
+    function closeDrawer() {{
+      drawer.ws?.close();
+      drawer.term?.dispose();
+      drawer.ws = drawer.term = drawer.fit = drawer.name = null;
+      dEl().classList.remove('open');
+      document.getElementById('pill').classList.remove('show');
     }}
     let typeFilter = "";
     function pick(chip) {{
