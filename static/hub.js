@@ -16,11 +16,56 @@ function pick(chip) {
 
 function refilter() {
   const q = document.getElementById("search").value.toLowerCase();
+  let visible = 0;
   document.querySelectorAll(".card").forEach(card => {
     const hit = (!typeFilter || card.dataset.type === typeFilter)
              && (!q || card.dataset.text.includes(q));
     card.style.display = hit ? "" : "none";
+    if (hit) visible++;
   });
+  updateEmptyState(visible, q);
+}
+
+function clearFilters() {
+  document.getElementById("search").value = "";
+  typeFilter = "";
+  document.querySelectorAll(".chip").forEach(c =>
+    c.classList.toggle("active", c.dataset.type === ""));
+  refilter();
+}
+
+// empty state for fruitless filtering — built here rather than in the page
+// template so it deploys without a hub.service restart (which kills drawers)
+const emptyState = (() => {
+  const style = document.createElement("style");
+  style.textContent = `
+    #empty-state { text-align:center; font-style:italic; color:#6e5a39;
+      margin:2.6rem auto; }
+    #empty-state p { margin:0 0 .8rem; }
+    #empty-state button { background:transparent; border:1px solid #6e5a39;
+      border-radius:2px; color:#43331c; font:inherit; font-size:.85rem;
+      font-variant:small-caps; letter-spacing:.06em; padding:.32rem .8rem;
+      cursor:pointer; font-style:normal; }
+    #empty-state button:hover { background:#43331c; color:#efe2c0; }`;
+  document.head.appendChild(style);
+  const el = document.createElement("div");
+  el.id = "empty-state";
+  el.hidden = true;
+  document.querySelector(".grid").after(el);
+  return el;
+})();
+
+function updateEmptyState(visible, q) {
+  emptyState.hidden = visible > 0;
+  if (visible === 0) {
+    const what = [q && `“${q}”`, typeFilter && `type ${typeFilter}`]
+      .filter(Boolean).join(" and ");
+    emptyState.innerHTML = `<p>nothing on the shelf matches ${what || "this"}.</p>`;
+    const btn = document.createElement("button");
+    btn.textContent = "clear search & filters";
+    btn.onclick = clearFilters;
+    emptyState.appendChild(btn);
+  }
 }
 
 // open card dropdowns upward when there's no room below
