@@ -302,8 +302,10 @@ function createSession(name, resume) {
 
   const params = new URLSearchParams({ mode: chatMode });
   if (resume) params.set("resume", "1");
+  // wss when served over https (e.g. via Tailscale Serve)
+  const wsProto = location.protocol === "https:" ? "wss" : "ws";
   const ws = new WebSocket(
-    `ws://${location.host}/ws/terminal/${encodeURIComponent(name)}?${params}`);
+    `${wsProto}://${location.host}/ws/terminal/${encodeURIComponent(name)}?${params}`);
   ws.binaryType = "arraybuffer";
 
   const s = { name, ws, term, fit, host, status: "working", lastOut: Date.now(), sawOutput: false };

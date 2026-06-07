@@ -284,7 +284,8 @@ def terminal_page(name: str, resume: bool = False):
     fit.fit();
     term.focus();
 
-    const ws = new WebSocket(`ws://${{location.host}}/ws/terminal/{safe}{ws_query}`);
+    const wsProto = location.protocol === "https:" ? "wss" : "ws";
+    const ws = new WebSocket(`${{wsProto}}://${{location.host}}/ws/terminal/{safe}{ws_query}`);
     ws.binaryType = "arraybuffer";
     ws.onopen = () => ws.send(JSON.stringify({{type:"resize", cols:term.cols, rows:term.rows}}));
     ws.onmessage = e => term.write(new Uint8Array(e.data));
