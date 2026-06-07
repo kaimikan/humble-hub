@@ -1,0 +1,13 @@
+[Unit]
+Description=hub — local start page for ~/Projects
+# Run inside the graphical session so launched apps (konsole, dolphin)
+# inherit WAYLAND_DISPLAY etc.
+After=graphical-session.target
+
+[Service]
+WorkingDirectory=%h/Projects/hub
+ExecStart=%h/Projects/hub/.venv/bin/python -m uvicorn app:app --host 127.0.0.1 --port 7700
+Restart=on-failure
+
+[Install]
+WantedBy=graphical-session.target
