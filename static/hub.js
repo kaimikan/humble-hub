@@ -1,0 +1,184 @@
+// hub.js — shelf actions, search/filter, and the multi-session drawer.
+
+async function act(name, action) {
+  await fetch(`/api/projects/${name}/${action}`, { method: "POST" });
+}
+
+// --- search + type filter ---------------------------------------------------
+
+let typeFilter = "";
+
+function pick(chip) {
+  typeFilter = chip.dataset.type;
+  document.querySelectorAll(".chip").forEach(c => c.classList.toggle("active", c === chip));
+  refilter();
+}
+
+function refilter() {
+  const q = document.getElementById("search").value.toLowerCase();
+  document.querySelectorAll(".card").forEach(card => {
+    const hit = (!typeFilter || card.dataset.type === typeFilter)
+             && (!q || card.dataset.text.includes(q));
+    card.style.display = hit ? "" : "none";
+  });
+}
+
+// open card dropdowns upward when there's no room below
+document.querySelectorAll(".menu").forEach(m => {
+  m.addEventListener("mouseenter", () => {
+    const items = m.querySelector(".menu-items");
+    items.classList.toggle("up",
+      m.getBoundingClientRect().bottom + 140 > window.innerHeight);
+  });
+});
+
+// --- multi-session drawer ----------------------------------------------------
+// One live pty session per project; the drawer shows one at a time, the rest
+// stay alive behind status pills. Statuses: working (output flowing),
+// ready (quiet after activity), attention (terminal bell).
+
+const sessions = new Map();
+let active = null; // project name shown in the drawer, or null when hidden
+
+const drawerEl = () => document.getElementById("drawer");
+
+let audioCtx = null;
+function blip(freqs) {
+  // gentle sine blips; created on user-gesture-driven flows so autoplay rules allow it
+  try {
+    audioCtx = audioCtx || new AudioContext();
+    freqs.forEach((f, i) => {
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.frequency.value = f;
+      gain.gain.setValueAtTime(0.06, audioCtx.currentTime + i * 0.14);
+      gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + i * 0.14 + 0.12);
+      osc.connect(gain).connect(audioCtx.destination);
+      osc.start(audioCtx.currentTime + i * 0.14);
+      osc.stop(audioCtx.currentTime + i * 0.14 + 0.13);
+    });
+  } catch (e) { /* audio unavailable — stay silent */ }
+}
+
+function setStatus(s, status) {
+  if (s.status === status) return;
+  s.status = status;
+  if (s.name !== active || !drawerEl().classList.contains("open")) {
+    if (status === "attention") blip([880, 660]);
+    else if (status === "ready") blip([520]);
+  }
+  renderPills();
+}
+
+function openDrawer(name, resume = false) {
+  let s = sessions.get(name);
+  if (!s || s.ws.readyState > 1) s = createSession(name, resume);
+  activate(name);
+}
+
+function createSession(name, resume) {
+  const host = document.createElement("div");
+  host.className = "term-host";
+  document.getElementById("dterm").appendChild(host);
+
+  const term = new Terminal({
+    fontFamily: "'JetBrains Mono', 'Hack', 'Noto Sans Mono', monospace",
+    fontSize: 14, cursorBlink: true, customGlyphs: true,
+    theme: { background: "#1a1b26", foreground: "#c0caf5" },
+  });
+  const fit = new FitAddon.FitAddon();
+  term.loadAddon(fit);
+  term.open(host);
+
+  const ws = new WebSocket(
+    `ws://${location.host}/ws/terminal/${name}${resume ? "?resume=1" : ""}`);
+  ws.binaryType = "arraybuffer";
+
+  const s = { name, ws, term, fit, host, status: "working", lastOut: Date.now(), sawOutput: false };
+  sessions.set(name, s);
+
+  ws.onopen = () => refit(s);
+  ws.onmessage = e => {
+    const data = new Uint8Array(e.data);
+    term.write(data);
+    s.lastOut = Date.now();
+    s.sawOutput = true;
+    if (data.includes(7)) setStatus(s, "attention");
+    else if (s.status !== "attention" || s.name === active) setStatus(s, "working");
+  };
+  ws.onclose = () => {
+    term.write("\r\n\x1b[33m[session ended]\x1b[0m\r\n");
+    setStatus(s, "ended");
+  };
+  term.onData(d => {
+    if (ws.readyState === 1) ws.send(JSON.stringify({ type: "input", data: d }));
+    if (s.status === "attention") setStatus(s, "working"); // user responded
+  });
+  new ResizeObserver(() => s.name === active && refit(s)).observe(host);
+  return s;
+}
+
+function refit(s) {
+  if (!s || !s.host.offsetParent) return;
+  s.fit.fit();
+  if (s.ws.readyState === 1) {
+    s.ws.send(JSON.stringify({ type: "resize", cols: s.term.cols, rows: s.term.rows }));
+  }
+}
+
+function activate(name) {
+  active = name;
+  const s = sessions.get(name);
+  sessions.forEach(o => o.host.classList.toggle("shown", o.name === name));
+  document.getElementById("d-title").textContent = name;
+  document.getElementById("d-full").href = `/terminal/${name}`;
+  drawerEl().classList.add("open");
+  if (s.status === "attention" || s.status === "ready") s.status = "working";
+  renderPills();
+  setTimeout(() => { refit(s); s.term.focus(); }, 240);
+}
+
+function minimizeDrawer() {
+  drawerEl().classList.remove("open");
+  active = null;
+  renderPills();
+}
+
+function closeActive() {
+  const s = sessions.get(active);
+  if (!s) return;
+  s.ws.close();
+  s.term.dispose();
+  s.host.remove();
+  sessions.delete(active);
+  const next = sessions.keys().next();
+  if (next.done) minimizeDrawer();
+  else activate(next.value);
+}
+
+function renderPills() {
+  const box = document.getElementById("pills");
+  box.innerHTML = "";
+  sessions.forEach(s => {
+    if (s.name === active && drawerEl().classList.contains("open")) return;
+    const pill = document.createElement("button");
+    pill.className = `pill s-${s.status}`;
+    pill.innerHTML = `<span class="dot"></span>🗨 ${s.name}`;
+    pill.title = { working: "working…", ready: "ready for you",
+                   attention: "needs your input", ended: "session ended" }[s.status] || "";
+    pill.onclick = () => s.status === "ended"
+      ? (s.host.remove(), sessions.delete(s.name), renderPills())
+      : activate(s.name);
+    box.appendChild(pill);
+  });
+}
+
+// working → ready when output has been quiet for a few seconds
+setInterval(() => {
+  sessions.forEach(s => {
+    if (s.status === "working" && s.sawOutput && Date.now() - s.lastOut > 4000
+        && (s.name !== active || !drawerEl().classList.contains("open"))) {
+      setStatus(s, "ready");
+    }
+  });
+}, 1000);
