@@ -129,11 +129,11 @@ def api_projects():
 
 TYPE_GLYPHS = {"site": "☉", "app": "⚙", "code": "✒", "notes": "✎", "empty": "◯"}
 TYPE_LABELS = {
-    "site": "a view",
-    "app": "a machine",
-    "code": "a contrivance",
-    "notes": "a notebook",
-    "empty": "a blank page",
+    "site": "site",
+    "app": "app",
+    "code": "code",
+    "notes": "notes",
+    "empty": "empty",
 }
 
 
@@ -165,8 +165,9 @@ def card(p: dict, folio: int) -> str:
     if p.get("dirty"):
         meta += " · ✱ wet ink"
     excerpt = html.escape(p.get("excerpt") or "")
+    search_blob = html.escape(f"{p['name']} {p.get('excerpt') or ''}".lower())
     return f"""
-    <div class="card">
+    <div class="card" data-type="{p['type']}" data-text="{search_blob}">
       <div class="head">
         <span class="glyph">{glyph(p)}</span>
         <h2>{name}</h2>
@@ -205,6 +206,17 @@ def index():
   .rule::after {{ content:"❧"; position:absolute; top:-0.75em; left:50%;
                   transform:translateX(-50%); background:var(--parchment);
                   padding:0 .6em; color:var(--ink-soft); }}
+  .controls {{ margin-top:1.1rem; display:flex; gap:.7rem; justify-content:center;
+               align-items:center; flex-wrap:wrap; }}
+  #search {{ background:rgba(255,250,235,.5); border:1px solid var(--ink-soft);
+    border-radius:2px; color:var(--ink); font:inherit; font-size:.9rem;
+    padding:.35rem .7rem; width:240px; }}
+  #search::placeholder {{ color:var(--ink-faint); font-style:italic; }}
+  .chip {{ background:transparent; border:1px solid var(--ink-faint); border-radius:999px;
+    color:var(--ink-soft); font:inherit; font-size:.78rem; font-variant:small-caps;
+    letter-spacing:.05em; padding:.15rem .65rem; cursor:pointer; }}
+  .chip:hover {{ border-color:var(--ink); color:var(--ink); }}
+  .chip.active {{ background:var(--ink); border-color:var(--ink); color:var(--parchment); }}
   .grid {{ display:grid; grid-template-columns:repeat(auto-fill, minmax(320px,1fr)); gap:1.3rem; }}
   .card {{ border:1.5px solid var(--ink-soft); outline:1px solid var(--ink-faint);
     outline-offset:4px; border-radius:2px; padding:1rem 1.2rem;
@@ -237,13 +249,38 @@ def index():
 <body>
   <header>
     <h1>the humble hub</h1>
-    <p class="motto">the notebook of inventions · man at the center of his works</p>
+    <p class="motto">a small shelf for homemade things</p>
     <hr class="rule">
+    <div class="controls">
+      <input id="search" type="search" placeholder="search the shelf…" oninput="refilter()">
+      <span id="filters">
+        <button class="chip active" data-type="" onclick="pick(this)">all</button>
+        <button class="chip" data-type="site" onclick="pick(this)">site</button>
+        <button class="chip" data-type="app" onclick="pick(this)">app</button>
+        <button class="chip" data-type="code" onclick="pick(this)">code</button>
+        <button class="chip" data-type="notes" onclick="pick(this)">notes</button>
+        <button class="chip" data-type="empty" onclick="pick(this)">empty</button>
+      </span>
+    </div>
   </header>
   <div class="grid">{cards}</div>
   <script>
     async function act(name, action) {{
       await fetch(`/api/projects/${{name}}/${{action}}`, {{method:'POST'}});
+    }}
+    let typeFilter = "";
+    function pick(chip) {{
+      typeFilter = chip.dataset.type;
+      document.querySelectorAll('.chip').forEach(c => c.classList.toggle('active', c === chip));
+      refilter();
+    }}
+    function refilter() {{
+      const q = document.getElementById('search').value.toLowerCase();
+      document.querySelectorAll('.card').forEach(card => {{
+        const hit = (!typeFilter || card.dataset.type === typeFilter)
+                 && (!q || card.dataset.text.includes(q));
+        card.style.display = hit ? '' : 'none';
+      }});
     }}
   </script>
 </body></html>"""
