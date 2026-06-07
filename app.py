@@ -140,24 +140,25 @@ def api_projects():
 # Embedded terminal — WebSocket pty bridge running Claude Code per project
 
 
-def spawn_claude(path: Path):
+def spawn_claude(path: Path, resume: bool = False):
     """Start `claude` on a pty in the project dir. Returns (pid, master fd)."""
     env = dict(os.environ, TERM="xterm-256color", COLORTERM="truecolor")
     env["PATH"] = f"{Path.home()}/.local/bin:{env.get('PATH', '/usr/bin')}"
+    argv = ["claude", "--resume"] if resume else ["claude"]
     pid, fd = pty.fork()
     if pid == 0:  # child
         os.chdir(path)
-        os.execvpe("claude", ["claude"], env)
+        os.execvpe("claude", argv, env)
     flags = fcntl.fcntl(fd, fcntl.F_GETFL)
     fcntl.fcntl(fd, fcntl.F_SETFL, flags | os.O_NONBLOCK)
     return pid, fd
 
 
 @app.websocket("/ws/terminal/{name}")
-async def terminal_ws(ws: WebSocket, name: str):
+async def terminal_ws(ws: WebSocket, name: str, resume: bool = False):
     path = project_path(name)
     await ws.accept()
-    pid, fd = spawn_claude(path)
+    pid, fd = spawn_claude(path, resume)
     loop = asyncio.get_running_loop()
     pty_data = asyncio.Queue()
     loop.add_reader(fd, lambda: _drain(fd, pty_data, loop))
@@ -206,9 +207,10 @@ def _drain(fd: int, queue: asyncio.Queue, loop) -> None:
 
 
 @app.get("/terminal/{name}", response_class=HTMLResponse)
-def terminal_page(name: str):
+def terminal_page(name: str, resume: bool = False):
     project_path(name)  # 404 unknown names
     safe = html.escape(name)
+    ws_query = "?resume=1" if resume else ""
     return f"""<!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8"><title>{safe} — claude</title>
@@ -244,7 +246,7 @@ def terminal_page(name: str):
     fit.fit();
     term.focus();
 
-    const ws = new WebSocket(`ws://${{location.host}}/ws/terminal/{safe}`);
+    const ws = new WebSocket(`ws://${{location.host}}/ws/terminal/{safe}{ws_query}`);
     ws.binaryType = "arraybuffer";
     ws.onopen = () => ws.send(JSON.stringify({{type:"resize", cols:term.cols, rows:term.rows}}));
     ws.onmessage = e => term.write(new Uint8Array(e.data));
@@ -283,20 +285,24 @@ def glyph(p: dict) -> str:
     return TYPE_GLYPHS[p["type"]]
 
 
-def card(p: dict, folio: int) -> str:
+def card(p: dict) -> str:
     name = html.escape(p["name"])
     buttons = [
-        f"""<a class="btn b-claude" href="/terminal/{name}" title="Claude Code, right here in the hub">🗨 claude</a>""",
-        f"""<button class="b-claude" onclick="act('{name}','terminal')" title="Claude Code in Konsole">⧉</button>""",
+        f"""<div class="menu">
+          <a class="btn b-claude" href="/terminal/{name}">🗨 claude ▾</a>
+          <div class="menu-items">
+            <a href="/terminal/{name}">fresh chat · in hub</a>
+            <a href="/terminal/{name}?resume=1">resume chat · in hub</a>
+            <button onclick="act('{name}','terminal')">in konsole</button>
+          </div>
+        </div>""",
         f"""<button class="b-files" onclick="act('{name}','folder')" title="Open in Dolphin">files</button>""",
     ]
     if p["type"] == "site":
         buttons.insert(0, f"""<a class="btn b-go" href="{p['site']}" target="_blank">▶ open site</a>""")
     if p["type"] == "app":
         buttons.insert(0, f"""<button class="b-go" onclick="act('{name}','launch')">▶ launch</button>""")
-    meta = f"fol. {folio}{'r' if folio % 2 else 'v'}"
-    if p.get("last_commit"):
-        meta += " · " + html.escape(p["last_commit"])
+    meta = html.escape(p["last_commit"]) if p.get("last_commit") else ""
     if p.get("dirty"):
         meta += " · ✱ wet ink"
     excerpt = html.escape(p.get("excerpt") or "")
@@ -316,7 +322,7 @@ def card(p: dict, folio: int) -> str:
 
 @app.get("/", response_class=HTMLResponse)
 def index():
-    cards = "".join(card(p, i + 1) for i, p in enumerate(scan()))
+    cards = "".join(card(p) for p in scan())
     return f"""<!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8"><title>the humble hub</title>
@@ -380,6 +386,16 @@ def index():
   .b-claude:hover {{ background:#2f5277; color:var(--parchment); }}
   .b-files  {{ color:#4f6b3a; border-color:#4f6b3a; }}
   .b-files:hover  {{ background:#4f6b3a; color:var(--parchment); }}
+  /* hover menu on the claude button */
+  .menu {{ position:relative; display:inline-block; }}
+  .menu-items {{ display:none; position:absolute; left:0; top:100%; z-index:5;
+    min-width:11.5rem; flex-direction:column; background:#f6edd6;
+    border:1px solid var(--ink-soft); box-shadow:2px 3px 8px rgba(67,51,28,.25); }}
+  .menu:hover .menu-items {{ display:flex; }}
+  .menu-items a, .menu-items button {{ border:0; border-radius:0; text-align:left;
+    padding:.42rem .8rem; color:#2f5277; background:transparent; }}
+  .menu-items a:hover, .menu-items button:hover {{ background:#2f5277;
+    color:var(--parchment); }}
 </style></head>
 <body>
   <header>
