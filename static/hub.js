@@ -133,6 +133,7 @@ function activate(name) {
   document.getElementById("d-title").textContent = name;
   document.getElementById("d-full").href = `/terminal/${name}`;
   drawerEl().classList.add("open");
+  document.body.classList.add("drawer-open");
   if (s.status === "attention" || s.status === "ready") s.status = "working";
   renderPills();
   setTimeout(() => { refit(s); s.term.focus(); }, 240);
@@ -140,6 +141,7 @@ function activate(name) {
 
 function minimizeDrawer() {
   drawerEl().classList.remove("open");
+  document.body.classList.remove("drawer-open");
   active = null;
   renderPills();
 }

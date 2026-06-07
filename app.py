@@ -366,12 +366,19 @@ def index():
   .chip[data-type="code"]  {{ --chip:#8a6d1f; }}
   .chip[data-type="notes"] {{ --chip:#4f6b3a; }}
   .chip[data-type="empty"] {{ --chip:#9c875f; }}
-  /* side-drawer terminal */
-  #drawer {{ position:fixed; top:0; right:0; height:100vh; width:min(680px, 92vw);
+  /* side-drawer terminal — pushes the shelf aside rather than covering it */
+  :root {{ --drawer-w: min(680px, 58vw); }}
+  body {{ transition:margin .22s ease; }}
+  body.drawer-open {{ max-width:none; margin-left:1.5rem;
+    margin-right:calc(var(--drawer-w) + 1.5rem); }}
+  body.drawer-open #pills {{ right:calc(var(--drawer-w) + 1.1rem); }}
+  #drawer {{ position:fixed; top:0; right:0; height:100vh; width:var(--drawer-w);
     background:#1a1b26; border-left:2px solid var(--ink-soft);
     box-shadow:-4px 0 18px rgba(67,51,28,.4); transform:translateX(105%);
     transition:transform .22s ease; display:flex; flex-direction:column; z-index:50; }}
   #drawer.open {{ transform:none; }}
+  /* keep terminal wheel events from chaining into the page scroll */
+  .xterm-viewport {{ overscroll-behavior:contain; }}
   .d-head {{ display:flex; align-items:center; gap:.7rem; padding:.4rem .8rem;
     background:var(--parchment); border-bottom:1.5px solid var(--ink-soft);
     color:var(--ink); }}
@@ -443,6 +450,7 @@ def index():
     color:var(--parchment); }}
 </style></head>
 <body>
+  <div id="shelf">
   <header>
     <h1>the humble hub</h1>
     <hr class="rule">
@@ -459,6 +467,7 @@ def index():
     </div>
   </header>
   <div class="grid">{cards}</div>
+  </div>
 
   <aside id="drawer">
     <div class="d-head">
