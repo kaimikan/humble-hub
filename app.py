@@ -152,13 +152,13 @@ def glyph(p: dict) -> str:
 def card(p: dict, folio: int) -> str:
     name = html.escape(p["name"])
     buttons = [
-        f"""<button onclick="act('{name}','terminal')" title="Open Claude Code here">parla con claude</button>""",
-        f"""<button onclick="act('{name}','folder')" title="Open in Dolphin">carte</button>""",
+        f"""<button class="b-claude" onclick="act('{name}','terminal')" title="Open Claude Code here">🗨 claude</button>""",
+        f"""<button class="b-files" onclick="act('{name}','folder')" title="Open in Dolphin">files</button>""",
     ]
     if p["type"] == "site":
-        buttons.insert(0, f"""<a class="btn" href="{p['site']}" target="_blank">aprire ▶</a>""")
+        buttons.insert(0, f"""<a class="btn b-go" href="{p['site']}" target="_blank">▶ open site</a>""")
     if p["type"] == "app":
-        buttons.insert(0, f"""<button onclick="act('{name}','launch')">avviare ▶</button>""")
+        buttons.insert(0, f"""<button class="b-go" onclick="act('{name}','launch')">▶ launch</button>""")
     meta = f"fol. {folio}{'r' if folio % 2 else 'v'}"
     if p.get("last_commit"):
         meta += " · " + html.escape(p["last_commit"])
@@ -220,11 +220,19 @@ def index():
   .excerpt {{ margin:0; font-style:italic; color:var(--ink-soft); font-size:.92rem;
               min-height:2.8em; }}
   .meta {{ margin:0; color:var(--ink-faint); font-size:.78rem; }}
-  .actions {{ display:flex; gap:.55rem; margin-top:.45rem; flex-wrap:wrap; }}
+  /* pinned to the card bottom so every panel's buttons align across the row */
+  .actions {{ display:flex; gap:.55rem; margin-top:auto; padding-top:.6rem; flex-wrap:wrap; }}
   button, .btn {{ background:transparent; color:var(--ink); border:1px solid var(--ink-soft);
     border-radius:2px; padding:.3rem .75rem; font:inherit; font-size:.84rem;
     font-variant:small-caps; letter-spacing:.06em; cursor:pointer; text-decoration:none; }}
   button:hover, .btn:hover {{ background:var(--ink); color:var(--parchment); }}
+  /* manuscript pigments: sanguine, lapis, verdigris */
+  .b-go     {{ color:#9a3b22; border-color:#9a3b22; }}
+  .b-go:hover     {{ background:#9a3b22; color:var(--parchment); }}
+  .b-claude {{ color:#2f5277; border-color:#2f5277; }}
+  .b-claude:hover {{ background:#2f5277; color:var(--parchment); }}
+  .b-files  {{ color:#4f6b3a; border-color:#4f6b3a; }}
+  .b-files:hover  {{ background:#4f6b3a; color:var(--parchment); }}
 </style></head>
 <body>
   <header>
