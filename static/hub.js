@@ -131,7 +131,10 @@ function renderNotes() {
 
 // --- jot modal ---
 
-function openJot(kind) {
+async function openJot(kind) {
+  // re-fetch before showing — another writer (e.g. a Claude session editing
+  // via the API) may have changed the file; a stale tab's save would clobber it
+  await loadNotes();
   document.getElementById("overlay").hidden = false;
   document.getElementById("m-title").textContent = kind === "todos" ? "to-do" : "ideas";
   document.getElementById("col-todos").style.display = kind === "todos" ? "" : "none";
@@ -234,6 +237,15 @@ loadNotes();
 // stay alive behind status pills. Statuses: working (output flowing),
 // ready (quiet after activity), attention (terminal bell).
 
+// permission-mode preset for new chats (server whitelists; unknown → default)
+let chatMode = localStorage.getItem("chatMode") || "default";
+function setChatMode(mode) {
+  chatMode = mode;
+  localStorage.setItem("chatMode", mode);
+}
+const modeSelect = document.getElementById("mode-select");
+if (modeSelect) modeSelect.value = chatMode;
+
 const sessions = new Map();
 let active = null; // project name shown in the drawer, or null when hidden
 
@@ -288,8 +300,10 @@ function createSession(name, resume) {
   term.loadAddon(fit);
   term.open(host);
 
+  const params = new URLSearchParams({ mode: chatMode });
+  if (resume) params.set("resume", "1");
   const ws = new WebSocket(
-    `ws://${location.host}/ws/terminal/${encodeURIComponent(name)}${resume ? "?resume=1" : ""}`);
+    `ws://${location.host}/ws/terminal/${encodeURIComponent(name)}?${params}`);
   ws.binaryType = "arraybuffer";
 
   const s = { name, ws, term, fit, host, status: "working", lastOut: Date.now(), sawOutput: false };

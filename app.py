@@ -167,11 +167,21 @@ def put_notes(doc: dict):
 # Embedded terminal — WebSocket pty bridge running Claude Code per project
 
 
-def spawn_claude(path: Path, resume: bool = False):
+# permission-mode presets for spawned chats; unknown values fall back to
+# default. Deliberately no bypass/--dangerously-skip-permissions preset —
+# launch that manually in a real terminal when truly needed.
+MODE_ARGS = {
+    "default": [],
+    "accept-edits": ["--permission-mode", "acceptEdits"],
+    "plan": ["--permission-mode", "plan"],
+}
+
+
+def spawn_claude(path: Path, resume: bool = False, mode: str = "default"):
     """Start `claude` on a pty in the project dir. Returns (pid, master fd)."""
     env = dict(os.environ, TERM="xterm-256color", COLORTERM="truecolor")
     env["PATH"] = f"{Path.home()}/.local/bin:{env.get('PATH', '/usr/bin')}"
-    argv = ["claude", "--resume"] if resume else ["claude"]
+    argv = ["claude", *MODE_ARGS.get(mode, []), *(["--resume"] if resume else [])]
     pid, fd = pty.fork()
     if pid == 0:  # child
         os.chdir(path)
@@ -182,10 +192,10 @@ def spawn_claude(path: Path, resume: bool = False):
 
 
 @app.websocket("/ws/terminal/{name}")
-async def terminal_ws(ws: WebSocket, name: str, resume: bool = False):
+async def terminal_ws(ws: WebSocket, name: str, resume: bool = False, mode: str = "default"):
     path = project_path(name)
     await ws.accept()
-    pid, fd = spawn_claude(path, resume)
+    pid, fd = spawn_claude(path, resume, mode)
     loop = asyncio.get_running_loop()
     pty_data = asyncio.Queue()
     loop.add_reader(fd, lambda: _drain(fd, pty_data, loop))
@@ -383,6 +393,10 @@ def index():
     font-variant:small-caps; letter-spacing:.06em; padding:.3rem .75rem;
     cursor:pointer; }}
   .jot-open:hover {{ background:var(--ink); color:var(--parchment); }}
+  #mode-select {{ background:transparent; border:1px solid var(--ink-faint);
+    border-radius:2px; color:var(--ink-soft); font:inherit; font-size:.82rem;
+    font-variant:small-caps; letter-spacing:.05em; padding:.28rem .4rem;
+    cursor:pointer; }}
   #overlay {{ position:fixed; inset:0; background:rgba(67,51,28,.4); z-index:60;
     display:flex; align-items:flex-start; justify-content:center;
     padding-top:11vh; }}
@@ -551,6 +565,12 @@ def index():
           <button onclick="act('~','terminal')">in konsole</button>
         </div>
       </div>
+      <select id="mode-select" title="permission mode for newly opened chats"
+             onchange="setChatMode(this.value)">
+        <option value="default">mode: default</option>
+        <option value="accept-edits">mode: accept edits</option>
+        <option value="plan">mode: plan</option>
+      </select>
       <button class="jot-open" onclick="openJot('todos')">✎ to-do <span id="todos-count"></span></button>
       <button class="jot-open" onclick="openJot('ideas')">✎ ideas <span id="ideas-count"></span></button>
       <input id="search" type="search" placeholder="search…" oninput="refilter()">
