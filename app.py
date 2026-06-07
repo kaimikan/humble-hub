@@ -136,6 +136,25 @@ def api_projects():
     return scan()
 
 
+# --- notes & to-dos (file-backed, see data/notes.json) ---
+
+NOTES_FILE = HUB_DIR / "data" / "notes.json"
+
+
+@app.get("/api/notes")
+def get_notes():
+    if NOTES_FILE.is_file():
+        return json.loads(NOTES_FILE.read_text())
+    return {"todos": [], "ideas": []}
+
+
+@app.put("/api/notes")
+def put_notes(doc: dict):
+    NOTES_FILE.parent.mkdir(exist_ok=True)
+    NOTES_FILE.write_text(json.dumps(doc, ensure_ascii=False, indent=1))
+    return {"ok": True}
+
+
 # ---------------------------------------------------------------------------
 # Embedded terminal — WebSocket pty bridge running Claude Code per project
 
@@ -344,8 +363,30 @@ def index():
      edge — left of the drawer when one is open */
   #shelf {{ height:100%; overflow-y:auto; box-sizing:border-box;
     padding:2.2rem 1.2rem; transition:margin-right .22s ease; }}
-  #shelf > header, #shelf > .grid {{ max-width:1100px; margin-left:auto;
-    margin-right:auto; }}
+  #shelf > header, #shelf > .grid, #shelf > #jot {{ max-width:1100px;
+    margin-left:auto; margin-right:auto; }}
+  /* jottings: to-do + ideas */
+  #jot {{ display:grid; grid-template-columns:1fr 1fr; gap:1.3rem;
+    margin-bottom:1.6rem; }}
+  @media (max-width: 760px) {{ #jot {{ grid-template-columns:1fr; }} }}
+  .jot-col {{ border:1px solid var(--ink-faint); border-radius:2px;
+    padding:.7rem 1rem .8rem; background:rgba(255,250,235,.25); }}
+  .jot-col h3 {{ margin:0 0 .4rem; font-size:.92rem; font-weight:600;
+    font-variant:small-caps; letter-spacing:.08em; color:var(--ink-soft); }}
+  .jot-col ul {{ list-style:none; margin:0; padding:0; }}
+  .jot-col li {{ display:flex; align-items:baseline; gap:.5rem; padding:.18rem 0;
+    font-size:.92rem; border-bottom:1px dotted rgba(156,135,95,.4); }}
+  .jot-col li.done .txt {{ text-decoration:line-through; color:var(--ink-faint); }}
+  .jot-col li .txt {{ flex:1; }}
+  .jot-col li .del {{ border:0; background:transparent; color:var(--ink-faint);
+    cursor:pointer; font:inherit; padding:0 .2rem; }}
+  .jot-col li .del:hover {{ color:#9a3b22; background:transparent; }}
+  .jot-col input[type="checkbox"] {{ accent-color:#4f6b3a; }}
+  .jot-col form input[type="text"], .jot-col form input:not([type]) {{ width:100%;
+    box-sizing:border-box; margin-top:.5rem; background:transparent;
+    border:0; border-bottom:1px solid var(--ink-faint); color:var(--ink);
+    font:inherit; font-size:.9rem; padding:.2rem .1rem; outline:none; }}
+  .jot-col form input::placeholder {{ color:var(--ink-faint); font-style:italic; }}
   header {{ text-align:center; margin-bottom:2rem; }}
   h1 {{ margin:0; font-size:1.9rem; font-weight:600; letter-spacing:.35em;
         font-variant:small-caps; }}
@@ -470,6 +511,20 @@ def index():
       </span>
     </div>
   </header>
+  <section id="jot">
+    <div class="jot-col">
+      <h3>to-do</h3>
+      <ul id="todos"></ul>
+      <form onsubmit="return addItem(event,'todos')">
+        <input id="todos-input" placeholder="add a task…"></form>
+    </div>
+    <div class="jot-col">
+      <h3>ideas</h3>
+      <ul id="ideas"></ul>
+      <form onsubmit="return addItem(event,'ideas')">
+        <input id="ideas-input" placeholder="jot an idea…"></form>
+    </div>
+  </section>
   <div class="grid">{cards}</div>
   </div>
 

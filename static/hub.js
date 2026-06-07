@@ -32,6 +32,68 @@ document.querySelectorAll(".menu").forEach(m => {
   });
 });
 
+// --- notes & to-dos -----------------------------------------------------------
+
+let notes = { todos: [], ideas: [] };
+
+async function loadNotes() {
+  notes = await (await fetch("/api/notes")).json();
+  renderNotes();
+}
+
+let saveTimer = null;
+function saveNotes() {
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => fetch("/api/notes", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(notes),
+  }), 400);
+}
+
+function renderNotes() {
+  for (const kind of ["todos", "ideas"]) {
+    const ul = document.getElementById(kind);
+    ul.innerHTML = "";
+    notes[kind].forEach((item, i) => {
+      const li = document.createElement("li");
+      if (item.done) li.classList.add("done");
+      if (kind === "todos") {
+        const box = document.createElement("input");
+        box.type = "checkbox";
+        box.checked = !!item.done;
+        box.onchange = () => { item.done = box.checked; renderNotes(); saveNotes(); };
+        li.appendChild(box);
+      }
+      const txt = document.createElement("span");
+      txt.className = "txt";
+      txt.textContent = item.text;
+      const del = document.createElement("button");
+      del.className = "del";
+      del.textContent = "✕";
+      del.title = "remove";
+      del.onclick = () => { notes[kind].splice(i, 1); renderNotes(); saveNotes(); };
+      li.append(txt, del);
+      ul.appendChild(li);
+    });
+  }
+}
+
+function addItem(ev, kind) {
+  ev.preventDefault();
+  const input = document.getElementById(`${kind}-input`);
+  const text = input.value.trim();
+  if (text) {
+    notes[kind].push(kind === "todos" ? { text, done: false } : { text });
+    input.value = "";
+    renderNotes();
+    saveNotes();
+  }
+  return false;
+}
+
+loadNotes();
+
 // --- multi-session drawer ----------------------------------------------------
 // One live pty session per project; the drawer shows one at a time, the rest
 // stay alive behind status pills. Statuses: working (output flowing),
