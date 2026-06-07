@@ -353,16 +353,26 @@ def index():
     border-radius:2px; color:var(--ink); font:inherit; font-size:.9rem;
     padding:.35rem .7rem; width:240px; }}
   #search::placeholder {{ color:var(--ink-faint); font-style:italic; }}
-  .chip {{ background:transparent; border:1px solid var(--ink-faint); border-radius:999px;
-    color:var(--ink-soft); font:inherit; font-size:.78rem; font-variant:small-caps;
-    letter-spacing:.05em; padding:.15rem .65rem; cursor:pointer; }}
-  .chip:hover {{ border-color:var(--ink); color:var(--ink); }}
-  .chip.active {{ background:var(--ink); border-color:var(--ink); color:var(--parchment); }}
+  .chip {{ background:transparent; border:1px solid var(--chip, var(--ink-soft));
+    border-radius:999px; color:var(--chip, var(--ink-soft)); font:inherit;
+    font-size:.78rem; font-variant:small-caps; letter-spacing:.05em;
+    padding:.15rem .65rem; cursor:pointer; }}
+  /* hover and active both fill with the chip's pigment, text stays parchment */
+  .chip:hover, .chip.active {{ background:var(--chip, var(--ink));
+    border-color:var(--chip, var(--ink)); color:var(--parchment); }}
+  .chip[data-type="site"]  {{ --chip:#2f5277; }}
+  .chip[data-type="app"]   {{ --chip:#9a3b22; }}
+  .chip[data-type="code"]  {{ --chip:#8a6d1f; }}
+  .chip[data-type="notes"] {{ --chip:#4f6b3a; }}
+  .chip[data-type="empty"] {{ --chip:#9c875f; }}
   .grid {{ display:grid; grid-template-columns:repeat(auto-fill, minmax(320px,1fr)); gap:1.3rem; }}
   .card {{ border:1.5px solid var(--ink-soft); outline:1px solid var(--ink-faint);
     outline-offset:4px; border-radius:2px; padding:1rem 1.2rem;
-    display:flex; flex-direction:column; gap:.45rem;
+    display:flex; flex-direction:column; gap:.45rem; position:relative;
     background:rgba(255,250,235,.35); box-shadow:2px 3px 8px rgba(67,51,28,.18); }}
+  /* rotated cards form stacking contexts — lift the hovered one so its
+     dropdown isn't painted under later cards */
+  .card:hover {{ z-index:10; }}
   .card:nth-child(odd) {{ transform:rotate(-.35deg); }}
   .card:nth-child(even) {{ transform:rotate(.3deg); }}
   .head {{ display:flex; align-items:baseline; gap:.6rem; }}
@@ -374,10 +384,12 @@ def index():
               min-height:2.8em; }}
   .meta {{ margin:0; color:var(--ink-faint); font-size:.78rem; }}
   /* pinned to the card bottom so every panel's buttons align across the row */
-  .actions {{ display:flex; gap:.55rem; margin-top:auto; padding-top:.6rem; flex-wrap:wrap; }}
+  .actions {{ display:flex; gap:.55rem; margin-top:auto; padding-top:.6rem; flex-wrap:wrap;
+    align-items:center; }}
   button, .btn {{ background:transparent; color:var(--ink); border:1px solid var(--ink-soft);
-    border-radius:2px; padding:.3rem .75rem; font:inherit; font-size:.84rem;
-    font-variant:small-caps; letter-spacing:.06em; cursor:pointer; text-decoration:none; }}
+    border-radius:2px; padding:.3rem .75rem; font:inherit; font-size:.84rem; line-height:1.3;
+    font-variant:small-caps; letter-spacing:.06em; cursor:pointer; text-decoration:none;
+    display:inline-flex; align-items:center; box-sizing:border-box; }}
   button:hover, .btn:hover {{ background:var(--ink); color:var(--parchment); }}
   /* manuscript pigments: sanguine, lapis, verdigris */
   .b-go     {{ color:#9a3b22; border-color:#9a3b22; }}
@@ -387,11 +399,12 @@ def index():
   .b-files  {{ color:#4f6b3a; border-color:#4f6b3a; }}
   .b-files:hover  {{ background:#4f6b3a; color:var(--parchment); }}
   /* hover menu on the claude button */
-  .menu {{ position:relative; display:inline-block; }}
+  .menu {{ position:relative; display:inline-flex; }}
   .menu-items {{ display:none; position:absolute; left:0; top:100%; z-index:5;
     min-width:11.5rem; flex-direction:column; background:#f6edd6;
     border:1px solid var(--ink-soft); box-shadow:2px 3px 8px rgba(67,51,28,.25); }}
   .menu:hover .menu-items {{ display:flex; }}
+  .menu-items.up {{ top:auto; bottom:100%; }}
   .menu-items a, .menu-items button {{ border:0; border-radius:0; text-align:left;
     padding:.42rem .8rem; color:#2f5277; background:transparent; }}
   .menu-items a:hover, .menu-items button:hover {{ background:#2f5277;
@@ -400,10 +413,9 @@ def index():
 <body>
   <header>
     <h1>the humble hub</h1>
-    <p class="motto">a small shelf for homemade things</p>
     <hr class="rule">
     <div class="controls">
-      <input id="search" type="search" placeholder="search the shelf…" oninput="refilter()">
+      <input id="search" type="search" placeholder="search…" oninput="refilter()">
       <span id="filters">
         <button class="chip active" data-type="" onclick="pick(this)">all</button>
         <button class="chip" data-type="site" onclick="pick(this)">site</button>
@@ -433,5 +445,13 @@ def index():
         card.style.display = hit ? '' : 'none';
       }});
     }}
+    // open dropdowns upward when there's no room below
+    document.querySelectorAll('.menu').forEach(m => {{
+      m.addEventListener('mouseenter', () => {{
+        const items = m.querySelector('.menu-items');
+        items.classList.toggle('up',
+          m.getBoundingClientRect().bottom + 140 > window.innerHeight);
+      }});
+    }});
   </script>
 </body></html>"""
