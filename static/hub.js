@@ -103,9 +103,16 @@ function closeJot() {
 }
 
 function beginEdit(item, li, txt) {
-  const input = document.createElement("input");
+  const input = document.createElement("textarea");
   input.className = "edit-input";
   input.value = item.text;
+  input.rows = 1;
+  // grow with content up to the CSS max-height, then scroll internally
+  const grow = () => {
+    input.style.height = "auto";
+    input.style.height = `${input.scrollHeight + 2}px`;
+  };
+  input.oninput = grow;
   let done = false;
   const commit = () => {
     if (done) return;
@@ -116,11 +123,12 @@ function beginEdit(item, li, txt) {
     saveNotes();
   };
   input.onkeydown = e => {
-    if (e.key === "Enter") commit();
+    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); commit(); }
     else if (e.key === "Escape") { done = true; renderNotes(); }
   };
   input.onblur = commit;
   li.replaceChild(input, txt);
+  grow();
   input.focus();
   input.setSelectionRange(input.value.length, input.value.length);
 }

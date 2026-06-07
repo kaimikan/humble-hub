@@ -390,7 +390,8 @@ def index():
   #modal {{ width:min(560px, 92vw); background:var(--parchment);
     border:1.5px solid var(--ink-soft); outline:1px solid var(--ink-faint);
     outline-offset:4px; border-radius:2px; padding:1rem 1.2rem;
-    box-shadow:3px 5px 18px rgba(40,30,15,.45); position:relative; }}
+    box-shadow:3px 5px 18px rgba(40,30,15,.45); position:relative;
+    display:flex; flex-direction:column; max-height:72vh; }}
   .m-head {{ display:flex; align-items:center; }}
   .m-head h3 {{ margin:0; flex:1; font-size:1rem; font-weight:600;
     font-variant:small-caps; letter-spacing:.08em; color:var(--ink); }}
@@ -400,7 +401,11 @@ def index():
   #confirm[hidden] {{ display:none; }}
   #confirm p {{ margin:0; font-style:italic; text-align:center; }}
   .confirm-row {{ display:flex; gap:.7rem; }}
-  .jot-col {{ padding:.5rem .1rem 0; }}
+  /* the list scrolls; the add-input stays pinned below it */
+  .jot-col {{ padding:.5rem .1rem 0; flex:1; min-height:0;
+    display:flex; flex-direction:column; }}
+  .jot-col ul {{ overflow-y:auto; min-height:0; overscroll-behavior:contain; }}
+  .jot-col li .txt {{ white-space:pre-wrap; overflow-wrap:anywhere; }}
   .jot-col ul {{ list-style:none; margin:0; padding:0; }}
   .jot-col li {{ display:flex; align-items:baseline; gap:.5rem; padding:.18rem 0;
     font-size:.92rem; border-bottom:1px dotted rgba(156,135,95,.4); }}
@@ -417,7 +422,8 @@ def index():
   .jot-col form input::placeholder {{ color:var(--ink-faint); font-style:italic; }}
   .edit-input {{ flex:1; background:transparent; border:0;
     border-bottom:1px solid var(--ink-soft); color:var(--ink); font:inherit;
-    font-size:.92rem; padding:0 .1rem; outline:none; }}
+    font-size:.92rem; padding:0 .1rem; outline:none; resize:none;
+    line-height:1.45; max-height:9.8rem; overflow-y:auto; }}
   header {{ text-align:center; margin-bottom:2rem; }}
   h1 {{ margin:0; font-size:1.9rem; font-weight:600; letter-spacing:.35em;
         font-variant:small-caps; }}
