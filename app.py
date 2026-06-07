@@ -404,8 +404,10 @@ def index():
   /* the list scrolls; the add-input stays pinned below it */
   .jot-col {{ padding:.5rem .1rem 0; flex:1; min-height:0;
     display:flex; flex-direction:column; }}
-  .jot-col ul {{ overflow-y:auto; min-height:0; overscroll-behavior:contain; }}
-  .jot-col li .txt {{ white-space:pre-wrap; overflow-wrap:anywhere; }}
+  .jot-col ul {{ overflow-y:auto; min-height:0; overscroll-behavior:contain;
+    padding-right:.55rem; scrollbar-gutter:stable; }}
+  .jot-col li .txt {{ white-space:pre-wrap; overflow-wrap:anywhere; cursor:text; }}
+  .jot-col li:hover {{ background:rgba(255,250,235,.65); }}
   .jot-col ul {{ list-style:none; margin:0; padding:0; }}
   .jot-col li {{ display:flex; align-items:baseline; gap:.5rem; padding:.18rem 0;
     font-size:.92rem; border-bottom:1px dotted rgba(156,135,95,.4); }}

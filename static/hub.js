@@ -68,17 +68,14 @@ function renderNotes() {
       const txt = document.createElement("span");
       txt.className = "txt";
       txt.textContent = item.text;
-      const edit = document.createElement("button");
-      edit.className = "del";
-      edit.textContent = "✎";
-      edit.title = "edit";
-      edit.onclick = () => beginEdit(item, li, txt);
+      txt.title = "click to edit";
+      txt.onclick = () => beginEdit(item, li, txt);
       const del = document.createElement("button");
       del.className = "del";
       del.textContent = "✕";
       del.title = "remove";
       del.onclick = () => askDelete(kind, i);
-      li.append(txt, edit, del);
+      li.append(txt, del);
       ul.appendChild(li);
     });
   }
