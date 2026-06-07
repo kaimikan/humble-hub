@@ -68,12 +68,17 @@ function renderNotes() {
       const txt = document.createElement("span");
       txt.className = "txt";
       txt.textContent = item.text;
+      const edit = document.createElement("button");
+      edit.className = "del";
+      edit.textContent = "✎";
+      edit.title = "edit";
+      edit.onclick = () => beginEdit(item, li, txt);
       const del = document.createElement("button");
       del.className = "del";
       del.textContent = "✕";
       del.title = "remove";
       del.onclick = () => askDelete(kind, i);
-      li.append(txt, del);
+      li.append(txt, edit, del);
       ul.appendChild(li);
     });
   }
@@ -97,8 +102,37 @@ function closeJot() {
   document.getElementById("overlay").hidden = true;
 }
 
-document.getElementById("overlay").addEventListener("click", e => {
-  if (e.target.id === "overlay") closeJot();
+function beginEdit(item, li, txt) {
+  const input = document.createElement("input");
+  input.className = "edit-input";
+  input.value = item.text;
+  let done = false;
+  const commit = () => {
+    if (done) return;
+    done = true;
+    const text = input.value.trim();
+    if (text) item.text = text;
+    renderNotes();
+    saveNotes();
+  };
+  input.onkeydown = e => {
+    if (e.key === "Enter") commit();
+    else if (e.key === "Escape") { done = true; renderNotes(); }
+  };
+  input.onblur = commit;
+  li.replaceChild(input, txt);
+  input.focus();
+  input.setSelectionRange(input.value.length, input.value.length);
+}
+
+// close only when both press AND release happen on the backdrop — a drag
+// that starts inside the modal and ends outside must not close it
+let overlayPress = false;
+const overlayEl = document.getElementById("overlay");
+overlayEl.addEventListener("mousedown", e => { overlayPress = e.target === overlayEl; });
+overlayEl.addEventListener("mouseup", e => {
+  if (overlayPress && e.target === overlayEl) closeJot();
+  overlayPress = false;
 });
 document.addEventListener("keydown", e => {
   if (e.key === "Escape" && !document.getElementById("overlay").hidden) closeJot();

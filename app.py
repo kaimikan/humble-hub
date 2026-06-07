@@ -415,6 +415,9 @@ def index():
     border:0; border-bottom:1px solid var(--ink-faint); color:var(--ink);
     font:inherit; font-size:.9rem; padding:.2rem .1rem; outline:none; }}
   .jot-col form input::placeholder {{ color:var(--ink-faint); font-style:italic; }}
+  .edit-input {{ flex:1; background:transparent; border:0;
+    border-bottom:1px solid var(--ink-soft); color:var(--ink); font:inherit;
+    font-size:.92rem; padding:0 .1rem; outline:none; }}
   header {{ text-align:center; margin-bottom:2rem; }}
   h1 {{ margin:0; font-size:1.9rem; font-weight:600; letter-spacing:.35em;
         font-variant:small-caps; }}
