@@ -127,70 +127,111 @@ def api_projects():
 # ---------------------------------------------------------------------------
 # Page
 
-TYPE_BADGES = {
-    "site": ("site", "#7aa2f7"),
-    "app": ("app", "#9ece6a"),
-    "code": ("code", "#e0af68"),
-    "notes": ("notes", "#bb9af7"),
-    "empty": ("empty", "#565f89"),
+TYPE_GLYPHS = {"site": "☉", "app": "⚙", "code": "✒", "notes": "✎", "empty": "◯"}
+TYPE_LABELS = {
+    "site": "veduta",       # a view
+    "app": "macchina",      # a machine
+    "code": "congegno",     # a contrivance
+    "notes": "quaderno",    # a notebook
+    "empty": "tabula rasa",
 }
 
 
-def card(p: dict) -> str:
+def glyph(p: dict) -> str:
+    """Hand-inked glyph for a project — .desktop icon hints beat type defaults."""
+    icon_hint = ""
+    if p.get("desktop"):
+        for line in Path(p["desktop"]).read_text(errors="replace").splitlines():
+            if line.startswith("Icon="):
+                icon_hint = line[5:].lower()
+    if "audio" in icon_hint or "music" in icon_hint:
+        return "♪"
+    return TYPE_GLYPHS[p["type"]]
+
+
+def card(p: dict, folio: int) -> str:
     name = html.escape(p["name"])
-    label, color = TYPE_BADGES[p["type"]]
     buttons = [
-        f"""<button onclick="act('{name}','terminal')" title="Open Claude Code here">🗨 claude</button>""",
-        f"""<button onclick="act('{name}','folder')" title="Open in Dolphin">📁</button>""",
+        f"""<button onclick="act('{name}','terminal')" title="Open Claude Code here">parla con claude</button>""",
+        f"""<button onclick="act('{name}','folder')" title="Open in Dolphin">carte</button>""",
     ]
     if p["type"] == "site":
-        buttons.insert(0, f"""<a class="btn" href="{p['site']}" target="_blank">▶ open site</a>""")
+        buttons.insert(0, f"""<a class="btn" href="{p['site']}" target="_blank">aprire ▶</a>""")
     if p["type"] == "app":
-        buttons.insert(0, f"""<button onclick="act('{name}','launch')">▶ launch</button>""")
-    meta = []
+        buttons.insert(0, f"""<button onclick="act('{name}','launch')">avviare ▶</button>""")
+    meta = f"fol. {folio}{'r' if folio % 2 else 'v'}"
     if p.get("last_commit"):
-        dirty = " · ✱ uncommitted changes" if p.get("dirty") else ""
-        meta.append(html.escape(p["last_commit"]) + dirty)
+        meta += " · " + html.escape(p["last_commit"])
+    if p.get("dirty"):
+        meta += " · ✱ wet ink"
+    excerpt = html.escape(p.get("excerpt") or "")
     return f"""
     <div class="card">
       <div class="head">
+        <span class="glyph">{glyph(p)}</span>
         <h2>{name}</h2>
-        <span class="badge" style="background:{color}">{label}</span>
+        <span class="kind">{TYPE_LABELS[p["type"]]}</span>
       </div>
-      <p class="excerpt">{html.escape(p.get("excerpt") or "")}</p>
-      <p class="meta">{" ".join(meta)}</p>
+      <p class="excerpt">{f'“{excerpt}”' if excerpt else ''}</p>
+      <p class="meta">{meta}</p>
       <div class="actions">{''.join(buttons)}</div>
     </div>"""
 
 
 @app.get("/", response_class=HTMLResponse)
 def index():
-    cards = "".join(card(p) for p in scan())
+    cards = "".join(card(p, i + 1) for i, p in enumerate(scan()))
     return f"""<!doctype html>
 <html lang="en"><head>
-<meta charset="utf-8"><title>hub</title>
+<meta charset="utf-8"><title>the humble hub</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <style>
-  :root {{ color-scheme: dark; }}
-  body {{ background:#1a1b26; color:#c0caf5; font:16px/1.5 system-ui, sans-serif;
-         max-width: 1100px; margin: 2rem auto; padding: 0 1rem; }}
-  h1 {{ font-weight: 600; letter-spacing: .03em; }}
-  .grid {{ display:grid; grid-template-columns:repeat(auto-fill, minmax(320px,1fr)); gap:1rem; }}
-  .card {{ background:#24283b; border-radius:12px; padding:1rem 1.2rem;
-           display:flex; flex-direction:column; gap:.4rem; }}
-  .head {{ display:flex; align-items:center; justify-content:space-between; }}
-  .card h2 {{ margin:0; font-size:1.1rem; font-weight:600; }}
-  .badge {{ color:#1a1b26; font-size:.72rem; font-weight:700; padding:.15rem .5rem;
-            border-radius:999px; }}
-  .excerpt {{ margin:0; color:#a9b1d6; font-size:.9rem; min-height:2.7em; }}
-  .meta {{ margin:0; color:#565f89; font-size:.78rem; }}
-  .actions {{ display:flex; gap:.5rem; margin-top:.4rem; flex-wrap:wrap; }}
-  button, .btn {{ background:#414868; color:#c0caf5; border:0; border-radius:8px;
-           padding:.35rem .7rem; font-size:.85rem; cursor:pointer; text-decoration:none; }}
-  button:hover, .btn:hover {{ background:#565f89; }}
+  :root {{ color-scheme: light;
+    --ink:#43331c; --ink-soft:#6e5a39; --ink-faint:#9c875f;
+    --parchment:#efe2c0; }}
+  body {{ color:var(--ink); font:16px/1.55 "EB Garamond", "Noto Serif", Georgia, serif;
+    max-width:1100px; margin:2.2rem auto; padding:0 1.2rem;
+    background:
+      radial-gradient(ellipse at 15% 8%, #f7edd3 0%, transparent 55%),
+      radial-gradient(ellipse at 85% 95%, #e2d2a8 0%, transparent 55%),
+      radial-gradient(ellipse at 60% 40%, #f2e6c6 0%, transparent 70%),
+      var(--parchment); }}
+  header {{ text-align:center; margin-bottom:2rem; }}
+  h1 {{ margin:0; font-size:1.9rem; font-weight:600; letter-spacing:.35em;
+        font-variant:small-caps; }}
+  .motto {{ margin:.2rem 0 0; font-style:italic; color:var(--ink-soft); font-size:.95rem; }}
+  .rule {{ width:60%; margin:.9rem auto 0; border:0; border-top:1.5px solid var(--ink-soft);
+           position:relative; }}
+  .rule::after {{ content:"❧"; position:absolute; top:-0.75em; left:50%;
+                  transform:translateX(-50%); background:var(--parchment);
+                  padding:0 .6em; color:var(--ink-soft); }}
+  .grid {{ display:grid; grid-template-columns:repeat(auto-fill, minmax(320px,1fr)); gap:1.3rem; }}
+  .card {{ border:1.5px solid var(--ink-soft); outline:1px solid var(--ink-faint);
+    outline-offset:4px; border-radius:2px; padding:1rem 1.2rem;
+    display:flex; flex-direction:column; gap:.45rem;
+    background:rgba(255,250,235,.35); box-shadow:2px 3px 8px rgba(67,51,28,.18); }}
+  .card:nth-child(odd) {{ transform:rotate(-.35deg); }}
+  .card:nth-child(even) {{ transform:rotate(.3deg); }}
+  .head {{ display:flex; align-items:baseline; gap:.6rem; }}
+  .glyph {{ font-size:1.45rem; line-height:1; }}
+  .card h2 {{ margin:0; font-size:1.12rem; font-weight:600; flex:1;
+              font-variant:small-caps; letter-spacing:.05em; }}
+  .kind {{ font-style:italic; color:var(--ink-faint); font-size:.82rem; }}
+  .excerpt {{ margin:0; font-style:italic; color:var(--ink-soft); font-size:.92rem;
+              min-height:2.8em; }}
+  .meta {{ margin:0; color:var(--ink-faint); font-size:.78rem; }}
+  .actions {{ display:flex; gap:.55rem; margin-top:.45rem; flex-wrap:wrap; }}
+  button, .btn {{ background:transparent; color:var(--ink); border:1px solid var(--ink-soft);
+    border-radius:2px; padding:.3rem .75rem; font:inherit; font-size:.84rem;
+    font-variant:small-caps; letter-spacing:.06em; cursor:pointer; text-decoration:none; }}
+  button:hover, .btn:hover {{ background:var(--ink); color:var(--parchment); }}
 </style></head>
 <body>
-  <h1>hub</h1>
+  <header>
+    <h1>the humble hub</h1>
+    <p class="motto">il quaderno delle invenzioni · l'uomo al centro delle sue opere</p>
+    <hr class="rule">
+  </header>
   <div class="grid">{cards}</div>
   <script>
     async function act(name, action) {{
