@@ -51,10 +51,16 @@ def git_info(path: Path) -> dict:
     run = lambda *args: subprocess.run(  # noqa: E731
         ["git", "-C", str(path), *args], capture_output=True, text=True
     ).stdout.strip()
+    remote = run("remote", "get-url", "origin")
+    web = ""
+    if "github.com" in remote:
+        web = re.sub(r"^git@github\.com:", "https://github.com/", remote)
+        web = re.sub(r"\.git$", "", web)
     return {
         "last_commit": run("log", "-1", "--format=%ad — %s", "--date=format:%Y-%m-%d"),
         "dirty": bool(run("status", "--porcelain")),
-        "remote": run("remote", "get-url", "origin"),
+        "remote": remote,
+        "github": web,
     }
 
 
@@ -318,6 +324,10 @@ def card(p: dict) -> str:
         </div>""",
         f"""<button class="b-files" onclick="act('{name}','folder')" title="Open in Dolphin">files</button>""",
     ]
+    if p.get("github"):
+        buttons.append(
+            f"""<a class="btn" href="{html.escape(p['github'])}" target="_blank"
+               title="remote repository">github</a>""")
     if p["type"] == "site":
         buttons.insert(0, f"""<a class="btn b-go" href="{p['site']}" target="_blank">▶ open site</a>""")
     if p["type"] == "app":
