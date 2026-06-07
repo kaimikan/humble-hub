@@ -20,11 +20,14 @@ project one click from being used.
 
 ## v2 (current)
 
-- **Embedded terminal**: each card's claude button opens `/terminal/<name>` —
-  xterm.js (vendored under `static/vendor/`, offline-capable) bridged over a
-  WebSocket to a pty running Claude Code in that project's directory. Voice
-  dictation (see `../babble-building/jarvis/`) types into it for free; a ⧉
-  button still opens a real Konsole instead.
+- **Embedded terminal**: xterm.js (vendored under `static/vendor/`,
+  offline-capable) bridged over a WebSocket to a pty running Claude Code in
+  that project's directory. Voice dictation (see `../babble-building/jarvis/`)
+  types into it for free.
+- **Side drawer**: the claude button opens the terminal in a slide-in panel
+  over the shelf — minimize keeps the session alive (restore via the pill),
+  close ends it. The hover menu also offers resume (`claude --resume`),
+  a full-page terminal at `/terminal/<name>`, and external Konsole.
 
 ## Install
 
