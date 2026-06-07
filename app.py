@@ -228,7 +228,7 @@ def terminal_page(name: str, resume: bool = False):
 </style></head>
 <body>
   <header>
-    <a href="/" title="back to the shelf">⌂ hub</a>
+    <a href="/" title="back to the humble hub">⌂ hub</a>
     <h1>{safe}</h1>
     <span style="font-style:italic; font-size:.85rem; color:#6e5a39">claude code</span>
   </header>
@@ -237,7 +237,8 @@ def terminal_page(name: str, resume: bool = False):
   <script src="/static/vendor/addon-fit.min.js"></script>
   <script>
     const term = new Terminal({{
-      fontFamily: "monospace", fontSize: 14, cursorBlink: true,
+      fontFamily: "'JetBrains Mono', 'Hack', 'Noto Sans Mono', monospace",
+      fontSize: 14, cursorBlink: true, customGlyphs: true,
       theme: {{ background: "#1a1b26", foreground: "#c0caf5" }},
     }});
     const fit = new FitAddon.FitAddon();
