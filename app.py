@@ -375,14 +375,30 @@ def index():
     padding:2.2rem 1.2rem; transition:margin-right .22s ease; }}
   #shelf > header, #shelf > .grid, #shelf > #jot {{ max-width:1100px;
     margin-left:auto; margin-right:auto; }}
-  /* jottings: to-do + ideas */
-  #jot {{ display:grid; grid-template-columns:1fr 1fr; gap:1.3rem;
-    margin-bottom:1.6rem; }}
-  @media (max-width: 760px) {{ #jot {{ grid-template-columns:1fr; }} }}
-  .jot-col {{ border:1px solid var(--ink-faint); border-radius:2px;
-    padding:.7rem 1rem .8rem; background:rgba(255,250,235,.25); }}
-  .jot-col h3 {{ margin:0 0 .4rem; font-size:.92rem; font-weight:600;
-    font-variant:small-caps; letter-spacing:.08em; color:var(--ink-soft); }}
+  /* jottings: to-do + ideas, opened as modals from the controls row */
+  .jot-open {{ background:transparent; border:1px solid var(--ink-soft);
+    border-radius:2px; color:var(--ink); font:inherit; font-size:.84rem;
+    font-variant:small-caps; letter-spacing:.06em; padding:.3rem .75rem;
+    cursor:pointer; }}
+  .jot-open:hover {{ background:var(--ink); color:var(--parchment); }}
+  #overlay {{ position:fixed; inset:0; background:rgba(67,51,28,.4); z-index:60;
+    display:flex; align-items:flex-start; justify-content:center;
+    padding-top:11vh; }}
+  #overlay[hidden] {{ display:none; }}
+  #modal {{ width:min(560px, 92vw); background:var(--parchment);
+    border:1.5px solid var(--ink-soft); outline:1px solid var(--ink-faint);
+    outline-offset:4px; border-radius:2px; padding:1rem 1.2rem;
+    box-shadow:3px 5px 18px rgba(40,30,15,.45); position:relative; }}
+  .m-head {{ display:flex; align-items:center; }}
+  .m-head h3 {{ margin:0; flex:1; font-size:1rem; font-weight:600;
+    font-variant:small-caps; letter-spacing:.08em; color:var(--ink); }}
+  #confirm {{ position:absolute; inset:0; background:rgba(239,226,192,.96);
+    display:flex; flex-direction:column; align-items:center;
+    justify-content:center; gap:.6rem; padding:1rem; border-radius:2px; }}
+  #confirm[hidden] {{ display:none; }}
+  #confirm p {{ margin:0; font-style:italic; text-align:center; }}
+  .confirm-row {{ display:flex; gap:.7rem; }}
+  .jot-col {{ padding:.5rem .1rem 0; }}
   .jot-col ul {{ list-style:none; margin:0; padding:0; }}
   .jot-col li {{ display:flex; align-items:baseline; gap:.5rem; padding:.18rem 0;
     font-size:.92rem; border-bottom:1px dotted rgba(156,135,95,.4); }}
@@ -510,6 +526,8 @@ def index():
     <h1>the humble hub</h1>
     <hr class="rule">
     <div class="controls">
+      <button class="jot-open" onclick="openJot('todos')">✎ to-do <span id="todos-count"></span></button>
+      <button class="jot-open" onclick="openJot('ideas')">✎ ideas <span id="ideas-count"></span></button>
       <input id="search" type="search" placeholder="search…" oninput="refilter()">
       <span id="filters">
         <button class="chip active" data-type="" onclick="pick(this)">all</button>
@@ -521,21 +539,33 @@ def index():
       </span>
     </div>
   </header>
-  <section id="jot">
-    <div class="jot-col">
-      <h3>to-do</h3>
-      <ul id="todos"></ul>
-      <form onsubmit="return addItem(event,'todos')">
-        <input id="todos-input" placeholder="add a task…"></form>
-    </div>
-    <div class="jot-col">
-      <h3>ideas</h3>
-      <ul id="ideas"></ul>
-      <form onsubmit="return addItem(event,'ideas')">
-        <input id="ideas-input" placeholder="jot an idea…"></form>
-    </div>
-  </section>
   <div class="grid">{cards}</div>
+  </div>
+
+  <div id="overlay" hidden>
+    <div id="modal">
+      <div class="m-head">
+        <h3 id="m-title">to-do</h3>
+        <button class="del" onclick="closeJot()" title="close">✕</button>
+      </div>
+      <div class="jot-col" id="col-todos">
+        <ul id="todos"></ul>
+        <form onsubmit="return addItem(event,'todos')">
+          <input id="todos-input" placeholder="add a task…"></form>
+      </div>
+      <div class="jot-col" id="col-ideas">
+        <ul id="ideas"></ul>
+        <form onsubmit="return addItem(event,'ideas')">
+          <input id="ideas-input" placeholder="jot an idea…"></form>
+      </div>
+      <div id="confirm" hidden>
+        <p id="confirm-text"></p>
+        <div class="confirm-row">
+          <button class="b-go" onclick="doDelete()">remove</button>
+          <button onclick="cancelDelete()">keep</button>
+        </div>
+      </div>
+    </div>
   </div>
 
   <aside id="drawer">

@@ -72,11 +72,62 @@ function renderNotes() {
       del.className = "del";
       del.textContent = "✕";
       del.title = "remove";
-      del.onclick = () => { notes[kind].splice(i, 1); renderNotes(); saveNotes(); };
+      del.onclick = () => askDelete(kind, i);
       li.append(txt, del);
       ul.appendChild(li);
     });
   }
+  document.getElementById("todos-count").textContent =
+    `· ${notes.todos.filter(t => !t.done).length}`;
+  document.getElementById("ideas-count").textContent = `· ${notes.ideas.length}`;
+}
+
+// --- jot modal ---
+
+function openJot(kind) {
+  document.getElementById("overlay").hidden = false;
+  document.getElementById("m-title").textContent = kind === "todos" ? "to-do" : "ideas";
+  document.getElementById("col-todos").style.display = kind === "todos" ? "" : "none";
+  document.getElementById("col-ideas").style.display = kind === "ideas" ? "" : "none";
+  cancelDelete();
+  document.getElementById(`${kind}-input`).focus();
+}
+
+function closeJot() {
+  document.getElementById("overlay").hidden = true;
+}
+
+document.getElementById("overlay").addEventListener("click", e => {
+  if (e.target.id === "overlay") closeJot();
+});
+document.addEventListener("keydown", e => {
+  if (e.key === "Escape" && !document.getElementById("overlay").hidden) closeJot();
+});
+
+// --- delete confirmation ---
+
+let pendingDelete = null;
+
+function askDelete(kind, i) {
+  pendingDelete = { kind, i };
+  const text = notes[kind][i].text;
+  document.getElementById("confirm-text").textContent =
+    `remove “${text.length > 90 ? text.slice(0, 90) + "…" : text}”?`;
+  document.getElementById("confirm").hidden = false;
+}
+
+function doDelete() {
+  if (pendingDelete) {
+    notes[pendingDelete.kind].splice(pendingDelete.i, 1);
+    renderNotes();
+    saveNotes();
+  }
+  cancelDelete();
+}
+
+function cancelDelete() {
+  pendingDelete = null;
+  document.getElementById("confirm").hidden = true;
 }
 
 function addItem(ev, kind) {
