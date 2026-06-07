@@ -405,7 +405,11 @@ def index():
   .jot-col {{ padding:.5rem .1rem 0; flex:1; min-height:0;
     display:flex; flex-direction:column; }}
   .jot-col ul {{ overflow-y:auto; min-height:0; overscroll-behavior:contain;
-    padding-right:1.1rem; scrollbar-gutter:stable; }}
+    padding-right:1.1rem; scrollbar-gutter:stable;
+    /* thin, ink-tinted scrollbar — the default overlay one expands on
+       hover and floats over the ✕ buttons */
+    scrollbar-width:thin; scrollbar-color:var(--ink-faint) transparent; }}
+  #shelf {{ scrollbar-width:thin; scrollbar-color:var(--ink-faint) transparent; }}
   .jot-col li .txt {{ white-space:pre-wrap; overflow-wrap:anywhere; cursor:text; }}
   .jot-col li:hover {{ background:rgba(255,250,235,.65); }}
   .jot-col ul {{ list-style:none; margin:0; padding:0; }}
