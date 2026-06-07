@@ -129,11 +129,11 @@ def api_projects():
 
 TYPE_GLYPHS = {"site": "☉", "app": "⚙", "code": "✒", "notes": "✎", "empty": "◯"}
 TYPE_LABELS = {
-    "site": "veduta",       # a view
-    "app": "macchina",      # a machine
-    "code": "congegno",     # a contrivance
-    "notes": "quaderno",    # a notebook
-    "empty": "tabula rasa",
+    "site": "a view",
+    "app": "a machine",
+    "code": "a contrivance",
+    "notes": "a notebook",
+    "empty": "a blank page",
 }
 
 
@@ -237,7 +237,7 @@ def index():
 <body>
   <header>
     <h1>the humble hub</h1>
-    <p class="motto">il quaderno delle invenzioni · l'uomo al centro delle sue opere</p>
+    <p class="motto">the notebook of inventions · man at the center of his works</p>
     <hr class="rule">
   </header>
   <div class="grid">{cards}</div>
