@@ -28,6 +28,19 @@ project one click from being used.
   over the shelf — minimize keeps the session alive (restore via the pill),
   close ends it. The hover menu also offers resume (`claude --resume`),
   a full-page terminal at `/terminal/<name>`, and external Konsole.
+- **Jottings**: file-backed to-do and ideas lists (`data/notes.json`). To-dos
+  filter by done/active/all (opens on active), rows drag to reorder, carry
+  filter-stable reference numbers (active to-dos only) for terse mentions, and
+  a per-row ⋯ menu promotes/demotes items between the two lists or removes them.
+
+## v3
+
+- **Conversation manager**: the **❧ chats** trigger (next to root claude) opens
+  a searchable list of every past Claude Code session across projects, read
+  from the transcripts under `~/.claude/projects/`. Each row shows its title,
+  project, relative time, and message count; clicking resumes it
+  (`claude --resume <id>`) straight into the drawer, where it joins the live
+  status pills like any other chat.
 
 ## Install
 
@@ -39,7 +52,13 @@ Then set `http://localhost:7700` as the browser homepage/new-tab page.
 
 ## Roadmap
 
-- **v3 — conversation manager**: list/search/resume Claude Code sessions
-  across projects (transcripts already live under `~/.claude/projects/`).
+- **Shared pty sessions (tmux-style)**: one persistent `claude` pty per
+  project owned by the hub server; every client (laptop browser, phone,
+  multiple tabs) *attaches* to the same pty instead of spawning a new
+  process. Laptop and phone become live mirrors of one conversation, the
+  chat survives browser closes, and a forgotten open client can no longer
+  fork the session — avoids the two-Claudes-diverging problem hit on
+  2026-06-08. Replaces the current spawn-per-WebSocket model in `app.py`
+  (`spawn_claude`/`terminal_ws`).
 - Later: a "today" panel — goals/mindful-living tie-in (possible radial
   Vitruvian centerpiece).

@@ -163,6 +163,82 @@ def put_notes(doc: dict):
     return {"ok": True}
 
 
+# --- conversation manager (v3) ---------------------------------------------
+# Lists past Claude Code sessions per project by reading the transcripts under
+# ~/.claude/projects/<encoded-cwd>/<session-id>.jsonl. Resume wires back through
+# the terminal WebSocket with ?session=<id> → `claude --resume <id>`.
+
+CLAUDE_PROJECTS = Path.home() / ".claude" / "projects"
+
+
+def _encode_cwd(path: Path) -> str:
+    """Mirror Claude Code's transcript-dir naming: the cwd with / → -."""
+    return str(path).replace("/", "-")
+
+
+def _user_text(content) -> str:
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        # tool results are not real user turns — skip those messages entirely
+        if any(isinstance(b, dict) and b.get("type") == "tool_result" for b in content):
+            return ""
+        return " ".join(b.get("text", "") for b in content
+                        if isinstance(b, dict) and b.get("type") == "text")
+    return ""
+
+
+def _session_meta(f: Path) -> dict:
+    """Title (ai-title if present, else first real user line), preview, turn
+    count, and mtime — one pass over the transcript."""
+    title, first_user, count = "", "", 0
+    try:
+        with f.open(errors="replace") as fh:
+            for line in fh:
+                try:
+                    d = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                if d.get("aiTitle"):
+                    title = d["aiTitle"]
+                t = d.get("type")
+                if t in ("user", "assistant"):
+                    count += 1
+                if t == "user" and not first_user:
+                    txt = _user_text(d.get("message", {}).get("content")).strip()
+                    if txt and not txt.startswith("<"):
+                        first_user = txt[:160]
+    except OSError:
+        return {}
+    return {
+        "title": title or first_user or "(untitled)",
+        "preview": first_user,
+        "count": count,
+        "mtime": f.stat().st_mtime,
+    }
+
+
+@app.get("/api/sessions")
+def api_sessions():
+    # map each known project (root + children of ~/Projects) to its transcript dir
+    known = {_encode_cwd(PROJECTS_DIR): "~"}
+    for p in sorted(PROJECTS_DIR.iterdir()):
+        if p.is_dir() and not SKIP.match(p.name):
+            known[_encode_cwd(p)] = p.name
+    out = []
+    if CLAUDE_PROJECTS.is_dir():
+        for enc, name in known.items():
+            d = CLAUDE_PROJECTS / enc
+            if not d.is_dir():
+                continue
+            for f in d.glob("*.jsonl"):
+                meta = _session_meta(f)
+                if meta and meta["count"]:  # skip empty/aborted transcripts
+                    out.append({"id": f.stem, "project": name, **meta})
+    out.sort(key=lambda s: s["mtime"], reverse=True)
+    return out
+
+
 # ---------------------------------------------------------------------------
 # Embedded terminal — WebSocket pty bridge running Claude Code per project
 
@@ -177,11 +253,22 @@ MODE_ARGS = {
 }
 
 
-def spawn_claude(path: Path, resume: bool = False, mode: str = "default"):
-    """Start `claude` on a pty in the project dir. Returns (pid, master fd)."""
+def spawn_claude(path: Path, resume: bool = False, mode: str = "default",
+                 session: str = ""):
+    """Start `claude` on a pty in the project dir. Returns (pid, master fd).
+
+    `session` resumes that specific session id (`claude --resume <id>`);
+    `resume` without it opens claude's interactive resume picker.
+    """
     env = dict(os.environ, TERM="xterm-256color", COLORTERM="truecolor")
     env["PATH"] = f"{Path.home()}/.local/bin:{env.get('PATH', '/usr/bin')}"
-    argv = ["claude", *MODE_ARGS.get(mode, []), *(["--resume"] if resume else [])]
+    if session:
+        resume_args = ["--resume", session]
+    elif resume:
+        resume_args = ["--resume"]
+    else:
+        resume_args = []
+    argv = ["claude", *MODE_ARGS.get(mode, []), *resume_args]
     pid, fd = pty.fork()
     if pid == 0:  # child
         os.chdir(path)
@@ -192,10 +279,11 @@ def spawn_claude(path: Path, resume: bool = False, mode: str = "default"):
 
 
 @app.websocket("/ws/terminal/{name}")
-async def terminal_ws(ws: WebSocket, name: str, resume: bool = False, mode: str = "default"):
+async def terminal_ws(ws: WebSocket, name: str, resume: bool = False,
+                      mode: str = "default", session: str = ""):
     path = project_path(name)
     await ws.accept()
-    pid, fd = spawn_claude(path, resume, mode)
+    pid, fd = spawn_claude(path, resume, mode, session)
     loop = asyncio.get_running_loop()
     pty_data = asyncio.Queue()
     loop.add_reader(fd, lambda: _drain(fd, pty_data, loop))

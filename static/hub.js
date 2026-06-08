@@ -9,8 +9,12 @@ async function act(name, action) {
 let typeFilter = "";
 
 function pick(chip) {
+  // clicking the already-active chip toggles it off → falls back to "all"
+  if (chip.classList.contains("active") && chip.dataset.type !== "") {
+    chip = document.querySelector('#filters .chip[data-type=""]');
+  }
   typeFilter = chip.dataset.type;
-  document.querySelectorAll(".chip").forEach(c => c.classList.toggle("active", c === chip));
+  document.querySelectorAll("#filters .chip").forEach(c => c.classList.toggle("active", c === chip));
   refilter();
 }
 
@@ -29,7 +33,7 @@ function refilter() {
 function clearFilters() {
   document.getElementById("search").value = "";
   typeFilter = "";
-  document.querySelectorAll(".chip").forEach(c =>
+  document.querySelectorAll("#filters .chip").forEach(c =>
     c.classList.toggle("active", c.dataset.type === ""));
   refilter();
 }
@@ -96,38 +100,182 @@ function saveNotes() {
   }), 400);
 }
 
+// done/not-done filter for the to-do list (ideas have no done state).
+// Defaults to "active" — finished items are the least interesting at a glance.
+let todoFilter = "active";
+function matchesTodoFilter(kind, item) {
+  if (kind !== "todos" || todoFilter === "all") return true;
+  return todoFilter === "done" ? !!item.done : !item.done;
+}
+function applyTodoFilter(value) {
+  todoFilter = value;
+  document.querySelectorAll(".todo-filter .chip").forEach(c =>
+    c.classList.toggle("active", c.dataset.val === value));
+  renderNotes();
+}
+
 function renderNotes() {
   for (const kind of ["todos", "ideas"]) {
     const ul = document.getElementById(kind);
     ul.innerHTML = "";
-    notes[kind].forEach((item, i) => {
+    let shown = 0;
+    // sequential reference numbers for terse communication ("do to-do 3").
+    // For to-dos only active items are numbered — done ones are noise we
+    // rarely point at — and the rank is over the full list, so an item keeps
+    // the same number in every filter view (active and all agree).
+    const refNum = new Map();
+    let n = 0;
+    notes[kind].forEach(it => { if (kind === "ideas" || !it.done) refNum.set(it, ++n); });
+    notes[kind].forEach(item => {
+      if (!matchesTodoFilter(kind, item)) return; // hidden by the to-do filter
+      shown++;
       const li = document.createElement("li");
+      li.__item = item; // ref used by drag-commit + the row menu (indices shift)
       if (item.done) li.classList.add("done");
+
+      // left rail: checkbox (todos) on top, drag handle beneath — the two
+      // most-used controls, always visible and easy to hit on touch
+      const left = document.createElement("div");
+      left.className = "row-left";
       if (kind === "todos") {
         const box = document.createElement("input");
         box.type = "checkbox";
         box.checked = !!item.done;
         box.onchange = () => { item.done = box.checked; renderNotes(); saveNotes(); };
-        li.appendChild(box);
+        left.appendChild(box);
       }
+      const handle = document.createElement("span");
+      handle.className = "drag-handle";
+      handle.textContent = "⠿";
+      handle.title = "drag to reorder";
+      handle.addEventListener("pointerdown", e => startDrag(e, kind, li, item));
+      left.appendChild(handle);
+
+      const idx = document.createElement("span");
+      idx.className = "idx";
+      idx.textContent = refNum.has(item) ? refNum.get(item) : "";
+      idx.setAttribute("aria-hidden", "true");
+
       const txt = document.createElement("span");
       txt.className = "txt";
       txt.textContent = item.text;
       txt.title = "click to edit";
       txt.onclick = () => beginEdit(item, li, txt);
-      const del = document.createElement("button");
-      del.className = "del";
-      del.textContent = "✕";
-      del.title = "remove";
-      del.onclick = () => askDelete(kind, i);
-      li.append(txt, del);
+
+      const menuBtn = document.createElement("button");
+      menuBtn.className = "row-menu-btn";
+      menuBtn.textContent = "⋯";
+      menuBtn.title = "actions";
+      menuBtn.onclick = e => openRowMenu(e, kind, item);
+
+      li.append(left, idx, txt, menuBtn);
       ul.appendChild(li);
     });
+    if (shown === 0 && notes[kind].length) {
+      const li = document.createElement("li");
+      li.className = "empty-hint";
+      li.textContent = kind === "todos" && todoFilter === "done"
+        ? "nothing finished yet."
+        : kind === "todos" ? "all done — nothing pending." : "no ideas yet.";
+      ul.appendChild(li);
+    }
   }
   document.getElementById("todos-count").textContent =
     `· ${notes.todos.filter(t => !t.done).length}`;
   document.getElementById("ideas-count").textContent = `· ${notes.ideas.length}`;
 }
+
+// promote idea → to-do / demote to-do → idea
+function convertItem(from, i) {
+  const to = from === "todos" ? "ideas" : "todos";
+  const [item] = notes[from].splice(i, 1);
+  if (to === "todos") item.done = item.done || false;
+  else delete item.done; // ideas carry no done state
+  notes[to].push(item);
+  renderNotes();
+  saveNotes();
+}
+
+// --- drag-to-reorder (pointer events → works with mouse and touch) ----------
+// Only the dragged item moves; rows hidden by the filter keep their slots, so
+// reordering stays correct under any to-do filter.
+let drag = null;
+function startDrag(e, kind, li, item) {
+  e.preventDefault();
+  const ul = li.parentElement;
+  li.classList.add("dragging");
+  const onMove = ev => dragMove(ev, ul, li);
+  const onUp = () => {
+    li.classList.remove("dragging");
+    window.removeEventListener("pointermove", onMove);
+    window.removeEventListener("pointerup", onUp);
+    window.removeEventListener("pointercancel", onUp);
+    commitDrag(kind, item, ul);
+    drag = null;
+  };
+  drag = { kind, li, item, ul };
+  window.addEventListener("pointermove", onMove);
+  window.addEventListener("pointerup", onUp);
+  window.addEventListener("pointercancel", onUp);
+}
+function dragMove(e, ul, li) {
+  const after = [...ul.querySelectorAll("li:not(.dragging):not(.empty-hint)")]
+    .find(s => { const r = s.getBoundingClientRect(); return e.clientY < r.top + r.height / 2; });
+  if (after) ul.insertBefore(li, after);
+  else ul.appendChild(li);
+  const r = ul.getBoundingClientRect(); // autoscroll near the edges
+  if (e.clientY < r.top + 24) ul.scrollTop -= 8;
+  else if (e.clientY > r.bottom - 24) ul.scrollTop += 8;
+}
+function commitDrag(kind, item, ul) {
+  const arr = notes[kind];
+  const vis = [...ul.querySelectorAll("li:not(.empty-hint)")].map(x => x.__item);
+  const pos = vis.indexOf(item);
+  arr.splice(arr.indexOf(item), 1); // pull it out, then reinsert by neighbour
+  const afterObj = vis[pos + 1];
+  if (afterObj) arr.splice(arr.indexOf(afterObj), 0, item);
+  else {
+    const prevObj = vis[pos - 1];
+    if (prevObj) arr.splice(arr.indexOf(prevObj) + 1, 0, item);
+    else arr.push(item);
+  }
+  renderNotes();
+  saveNotes();
+}
+
+// --- per-row action menu (⋯) -------------------------------------------------
+// Floating, body-anchored so the scrolling list's overflow can't clip it.
+let rowMenuEl = null;
+function closeRowMenu() { if (rowMenuEl) { rowMenuEl.remove(); rowMenuEl = null; } }
+function openRowMenu(e, kind, item) {
+  e.stopPropagation();
+  closeRowMenu();
+  const menu = document.createElement("div");
+  menu.className = "row-menu";
+  const idx = () => notes[kind].indexOf(item); // recompute — indices shift
+  const add = (label, fn, danger) => {
+    const b = document.createElement("button");
+    b.textContent = label;
+    if (danger) b.className = "danger";
+    b.onclick = ev => { ev.stopPropagation(); closeRowMenu(); fn(); };
+    menu.appendChild(b);
+  };
+  if (kind === "todos") {
+    add(item.done ? "mark active" : "mark done",
+        () => { item.done = !item.done; renderNotes(); saveNotes(); });
+    add("→ make idea", () => convertItem("todos", idx()));
+  } else {
+    add("→ make to-do", () => convertItem("ideas", idx()));
+  }
+  add("remove", () => askDelete(kind, idx()), true);
+  document.body.appendChild(menu);
+  rowMenuEl = menu;
+  const r = e.currentTarget.getBoundingClientRect();
+  menu.style.top = `${Math.min(r.bottom + 4, window.innerHeight - menu.offsetHeight - 8)}px`;
+  menu.style.left = `${Math.max(8, r.right - menu.offsetWidth)}px`;
+}
+document.addEventListener("click", closeRowMenu);
+document.addEventListener("keydown", e => { if (e.key === "Escape") closeRowMenu(); });
 
 // --- jot modal ---
 
@@ -135,15 +283,24 @@ async function openJot(kind) {
   // re-fetch before showing — another writer (e.g. a Claude session editing
   // via the API) may have changed the file; a stale tab's save would clobber it
   await loadNotes();
+  applyTodoFilter("active"); // always open the to-do list on the active view
   document.getElementById("overlay").hidden = false;
   document.getElementById("m-title").textContent = kind === "todos" ? "to-do" : "ideas";
   document.getElementById("col-todos").style.display = kind === "todos" ? "" : "none";
   document.getElementById("col-ideas").style.display = kind === "ideas" ? "" : "none";
+  jotKind = kind;
+  const sw = document.getElementById("jot-switch");
+  if (sw) sw.textContent = kind === "todos" ? "→ ideas" : "→ to-do";
   cancelDelete();
   document.getElementById(`${kind}-input`).focus();
 }
 
+// one-click jump to the other list (to-do ⇄ ideas) from the modal header
+let jotKind = "todos";
+function switchJot() { openJot(jotKind === "todos" ? "ideas" : "todos"); }
+
 function closeJot() {
+  closeRowMenu();
   document.getElementById("overlay").hidden = true;
 }
 
@@ -230,6 +387,69 @@ function addItem(ev, kind) {
   return false;
 }
 
+// to-do filter bar (all/active/done) + per-row tool styling — injected from JS
+// (not the page template) so it ships without a hub.service restart, which would
+// kill live drawer sessions. Same rationale as the empty-state block above.
+(() => {
+  const style = document.createElement("style");
+  style.textContent = `
+    .todo-filter { display:flex; gap:.4rem; justify-content:flex-end;
+      padding:0 .1rem .4rem; }
+    /* row layout: left rail (checkbox + drag handle) | text | ⋯ menu */
+    #col-todos li, #col-ideas li { align-items:flex-start; gap:.5rem; }
+    .jot-col li .row-left { display:flex; flex-direction:column; align-items:center;
+      gap:.2rem; padding-top:.05rem; }
+    .jot-col li .idx { flex:none; min-width:1.5rem; text-align:right;
+      color:var(--ink-faint); font-size:.8rem; font-variant-numeric:tabular-nums;
+      user-select:none; padding-top:.06rem; }
+    .jot-col li .drag-handle { cursor:grab; color:var(--ink-faint); font-size:.9rem;
+      line-height:1; touch-action:none; user-select:none; }
+    .jot-col li .drag-handle:hover { color:var(--ink-soft); }
+    .jot-col li.dragging { opacity:.65; background:rgba(255,250,235,.95);
+      box-shadow:1px 2px 9px rgba(67,51,28,.3); }
+    .jot-col li .row-menu-btn { border:0; background:transparent; color:var(--ink-faint);
+      cursor:pointer; font:inherit; font-size:1.05rem; line-height:1; padding:0 .25rem;
+      align-self:center; }
+    .jot-col li .row-menu-btn:hover { color:var(--ink); background:transparent; }
+    .row-menu { position:fixed; z-index:100; background:#f6edd6;
+      border:1px solid var(--ink-soft); box-shadow:2px 3px 11px rgba(67,51,28,.35);
+      border-radius:2px; display:flex; flex-direction:column; min-width:9.5rem; }
+    .row-menu button { border:0; border-radius:0; background:transparent; text-align:left;
+      color:var(--ink); font:inherit; font-size:.82rem; font-variant:small-caps;
+      letter-spacing:.04em; padding:.42rem .75rem; cursor:pointer; }
+    .row-menu button:hover { background:var(--ink); color:var(--parchment); }
+    .row-menu button.danger { color:#9a3b22; }
+    .row-menu button.danger:hover { background:#9a3b22; color:var(--parchment); }
+    .jot-col li.empty-hint { justify-content:center; font-style:italic;
+      color:var(--ink-faint); border-bottom:0; }`;
+  document.head.appendChild(style);
+
+  const bar = document.createElement("div");
+  bar.className = "todo-filter";
+  // color-coded: all = neutral, active = ochre (pending), done = verdigris (complete)
+  [["all", "all", null], ["active", "active", "#8a6d1f"], ["done", "done", "#4f6b3a"]]
+    .forEach(([val, label, color]) => {
+      const b = document.createElement("button");
+      b.className = "chip" + (val === todoFilter ? " active" : "");
+      b.dataset.val = val;
+      b.textContent = label;
+      if (color) b.style.setProperty("--chip", color);
+      b.onclick = () => applyTodoFilter(val);
+      bar.appendChild(b);
+    });
+  const col = document.getElementById("col-todos");
+  col.insertBefore(bar, document.getElementById("todos"));
+
+  // header switch button — flips the jot modal to the other list in one click
+  const switchBtn = document.createElement("button");
+  switchBtn.className = "jot-open";
+  switchBtn.id = "jot-switch";
+  switchBtn.style.marginRight = ".5rem";
+  switchBtn.onclick = () => switchJot();
+  const mhead = document.querySelector("#modal .m-head");
+  mhead.insertBefore(switchBtn, mhead.querySelector(".del"));
+})();
+
 loadNotes();
 
 // --- multi-session drawer ----------------------------------------------------
@@ -247,7 +467,7 @@ const modeSelect = document.getElementById("mode-select");
 if (modeSelect) modeSelect.value = chatMode;
 
 const sessions = new Map();
-let active = null; // project name shown in the drawer, or null when hidden
+let active = null; // key of the session shown in the drawer, or null when hidden
 
 const drawerEl = () => document.getElementById("drawer");
 const disp = name => name === "~" ? "~/Projects" : name; // display name
@@ -273,20 +493,26 @@ function blip(freqs) {
 function setStatus(s, status) {
   if (s.status === status) return;
   s.status = status;
-  if (s.name !== active || !drawerEl().classList.contains("open")) {
+  if (s.key !== active || !drawerEl().classList.contains("open")) {
     if (status === "attention") blip([880, 660]);
     else if (status === "ready") blip([520]);
   }
   renderPills();
 }
 
-function openDrawer(name, resume = false) {
-  let s = sessions.get(name);
-  if (!s || s.ws.readyState > 1) s = createSession(name, resume);
-  activate(name);
+// opt is a legacy boolean (resume picker) OR an options object:
+//   { resume: bool, session: "<id>" (resume a specific session), label: "<text>" }
+function openDrawer(project, opt = false) {
+  const o = (typeof opt === "boolean") ? { resume: opt } : (opt || {});
+  // resumed historical sessions are keyed by id so several from one project
+  // can coexist; fresh/picker chats keep keying by project (focus, don't dupe)
+  const key = o.session ? `${project}#${o.session}` : project;
+  let s = sessions.get(key);
+  if (!s || s.ws.readyState > 1) s = createSession(key, project, o);
+  activate(key);
 }
 
-function createSession(name, resume) {
+function createSession(key, project, o) {
   const host = document.createElement("div");
   host.className = "term-host";
   document.getElementById("dterm").appendChild(host);
@@ -301,15 +527,17 @@ function createSession(name, resume) {
   term.open(host);
 
   const params = new URLSearchParams({ mode: chatMode });
-  if (resume) params.set("resume", "1");
+  if (o.resume) params.set("resume", "1");
+  if (o.session) params.set("session", o.session);
   // wss when served over https (e.g. via Tailscale Serve)
   const wsProto = location.protocol === "https:" ? "wss" : "ws";
   const ws = new WebSocket(
-    `${wsProto}://${location.host}/ws/terminal/${encodeURIComponent(name)}?${params}`);
+    `${wsProto}://${location.host}/ws/terminal/${encodeURIComponent(project)}?${params}`);
   ws.binaryType = "arraybuffer";
 
-  const s = { name, ws, term, fit, host, status: "working", lastOut: Date.now(), sawOutput: false };
-  sessions.set(name, s);
+  const s = { key, name: project, label: o.label || disp(project),
+    ws, term, fit, host, status: "working", lastOut: Date.now(), sawOutput: false };
+  sessions.set(key, s);
 
   ws.onopen = () => refit(s);
   ws.onmessage = e => {
@@ -318,7 +546,7 @@ function createSession(name, resume) {
     s.lastOut = Date.now();
     s.sawOutput = true;
     if (data.includes(7)) setStatus(s, "attention");
-    else if (s.status !== "attention" || s.name === active) setStatus(s, "working");
+    else if (s.status !== "attention" || s.key === active) setStatus(s, "working");
   };
   ws.onclose = () => {
     term.write("\r\n\x1b[33m[session ended]\x1b[0m\r\n");
@@ -328,7 +556,7 @@ function createSession(name, resume) {
     if (ws.readyState === 1) ws.send(JSON.stringify({ type: "input", data: d }));
     if (s.status === "attention") setStatus(s, "working"); // user responded
   });
-  new ResizeObserver(() => s.name === active && refit(s)).observe(host);
+  new ResizeObserver(() => s.key === active && refit(s)).observe(host);
   return s;
 }
 
@@ -340,12 +568,12 @@ function refit(s) {
   }
 }
 
-function activate(name) {
-  active = name;
-  const s = sessions.get(name);
-  sessions.forEach(o => o.host.classList.toggle("shown", o.name === name));
-  document.getElementById("d-title").textContent = disp(name);
-  document.getElementById("d-full").href = `/terminal/${encodeURIComponent(name)}`;
+function activate(key) {
+  active = key;
+  const s = sessions.get(key);
+  sessions.forEach(o => o.host.classList.toggle("shown", o.key === key));
+  document.getElementById("d-title").textContent = s.label;
+  document.getElementById("d-full").href = `/terminal/${encodeURIComponent(s.name)}`;
   drawerEl().classList.add("open");
   document.body.classList.add("drawer-open");
   if (s.status === "attention" || s.status === "ready") s.status = "working";
@@ -376,15 +604,18 @@ function renderPills() {
   const box = document.getElementById("pills");
   box.innerHTML = "";
   sessions.forEach(s => {
-    if (s.name === active && drawerEl().classList.contains("open")) return;
+    if (s.key === active && drawerEl().classList.contains("open")) return;
     const pill = document.createElement("button");
     pill.className = `pill s-${s.status}`;
-    pill.innerHTML = `<span class="dot"></span>🗨 ${disp(s.name)}`;
-    pill.title = { working: "working…", ready: "ready for you",
-                   attention: "needs your input", ended: "session ended" }[s.status] || "";
+    const short = s.label.length > 26 ? s.label.slice(0, 25) + "…" : s.label;
+    pill.innerHTML = `<span class="dot"></span>🗨 `;
+    pill.appendChild(document.createTextNode(short)); // label may be arbitrary text
+    pill.title = ({ working: "working…", ready: "ready for you",
+                   attention: "needs your input", ended: "session ended" }[s.status] || "")
+                 + (short !== s.label ? ` — ${s.label}` : "");
     pill.onclick = () => s.status === "ended"
-      ? (s.host.remove(), sessions.delete(s.name), renderPills())
-      : activate(s.name);
+      ? (s.host.remove(), sessions.delete(s.key), renderPills())
+      : activate(s.key);
     box.appendChild(pill);
   });
 }
@@ -393,8 +624,135 @@ function renderPills() {
 setInterval(() => {
   sessions.forEach(s => {
     if (s.status === "working" && s.sawOutput && Date.now() - s.lastOut > 4000
-        && (s.name !== active || !drawerEl().classList.contains("open"))) {
+        && (s.key !== active || !drawerEl().classList.contains("open"))) {
       setStatus(s, "ready");
     }
   });
 }, 1000);
+
+// --- conversation manager (v3) ----------------------------------------------
+// Browse past Claude sessions across projects (GET /api/sessions) and resume
+// one into the drawer — it then joins the live-session pills like any chat.
+// Injected from JS (no app.py template change → no service restart).
+(() => {
+  const style = document.createElement("style");
+  style.textContent = `
+    .sess-overlay { position:fixed; inset:0; background:rgba(67,51,28,.4); z-index:70;
+      display:flex; align-items:flex-start; justify-content:center; padding-top:9vh; }
+    .sess-overlay[hidden] { display:none; }
+    .sess-modal { width:min(640px,94vw); max-height:78vh; background:var(--parchment);
+      border:1.5px solid var(--ink-soft); outline:1px solid var(--ink-faint);
+      outline-offset:4px; border-radius:2px; padding:1rem 1.2rem; position:relative;
+      display:flex; flex-direction:column; box-shadow:3px 5px 18px rgba(40,30,15,.45); }
+    .sess-modal .m-head { display:flex; align-items:center; margin-bottom:.5rem; }
+    .sess-modal .m-head h3 { margin:0; flex:1; font-size:1rem; font-weight:600;
+      font-variant:small-caps; letter-spacing:.08em; color:var(--ink); }
+    #sess-search { width:100%; box-sizing:border-box; background:rgba(255,250,235,.5);
+      border:1px solid var(--ink-soft); border-radius:2px; color:var(--ink); font:inherit;
+      font-size:.9rem; padding:.35rem .6rem; margin-bottom:.5rem; }
+    #sess-search::placeholder { color:var(--ink-faint); font-style:italic; }
+    #sess-list { overflow-y:auto; min-height:0; scrollbar-width:thin;
+      scrollbar-color:var(--ink-faint) transparent; }
+    /* badge on its own line on top, title + meta beneath — keeps every row's
+       text left-aligned regardless of project-name length */
+    .sess-row { display:flex; flex-direction:column; align-items:flex-start; gap:.28rem;
+      padding:.5rem .35rem; border-bottom:1px dotted rgba(156,135,95,.4); cursor:pointer; }
+    .sess-row:hover { background:rgba(255,250,235,.7); }
+    .sess-row .s-main { width:100%; min-width:0; }
+    .sess-row .s-title { display:block; color:var(--ink); font-size:.92rem;
+      white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .sess-row .s-meta { display:block; color:var(--ink-faint); font-size:.76rem;
+      font-variant:small-caps; letter-spacing:.04em; }
+    .sess-row .s-proj { color:var(--parchment); background:var(--ink-soft);
+      border-radius:999px; font-size:.7rem; font-variant:small-caps; letter-spacing:.05em;
+      padding:.05rem .55rem; }
+    .sess-empty { color:var(--ink-faint); font-style:italic; text-align:center; padding:1.4rem; }`;
+  document.head.appendChild(style);
+
+  const trigger = document.createElement("button");
+  trigger.className = "jot-open";
+  trigger.id = "sess-open";
+  trigger.textContent = "❧ chats";
+  trigger.title = "browse & resume past Claude sessions";
+  trigger.onclick = () => openSessions();
+  const rootMenu = document.querySelector(".controls > .menu");
+  if (rootMenu) rootMenu.after(trigger);
+  else document.querySelector(".controls").prepend(trigger);
+
+  const overlay = document.createElement("div");
+  overlay.className = "sess-overlay";
+  overlay.hidden = true;
+  overlay.innerHTML = `
+    <div class="sess-modal">
+      <div class="m-head"><h3>conversations</h3><button class="del" title="close">✕</button></div>
+      <input id="sess-search" type="search" placeholder="search sessions…">
+      <div id="sess-list"></div>
+    </div>`;
+  document.body.appendChild(overlay);
+  const listEl = overlay.querySelector("#sess-list");
+  const searchEl = overlay.querySelector("#sess-search");
+  overlay.querySelector(".del").onclick = () => closeSessions();
+
+  let allSessions = [];
+
+  window.openSessions = async function () {
+    overlay.hidden = false;
+    searchEl.value = "";
+    listEl.innerHTML = `<div class="sess-empty">loading…</div>`;
+    try { allSessions = await (await fetch("/api/sessions")).json(); }
+    catch (e) { allSessions = []; }
+    renderSessions("");
+    searchEl.focus();
+  };
+  window.closeSessions = function () { overlay.hidden = true; };
+
+  function rel(mtime) {
+    const s = Math.max(0, Date.now() / 1000 - mtime);
+    if (s < 45) return "just now";
+    if (s < 3600) return `${Math.round(s / 60)}m ago`;
+    if (s < 86400) return `${Math.round(s / 3600)}h ago`;
+    return `${Math.round(s / 86400)}d ago`;
+  }
+
+  function renderSessions(q) {
+    q = q.toLowerCase();
+    const rows = allSessions.filter(s =>
+      !q || `${s.title} ${s.project} ${s.preview}`.toLowerCase().includes(q));
+    listEl.innerHTML = "";
+    if (!rows.length) {
+      listEl.innerHTML = `<div class="sess-empty">no sessions${q ? " match" : " yet"}.</div>`;
+      return;
+    }
+    rows.forEach(s => {
+      const row = document.createElement("div");
+      row.className = "sess-row";
+      const proj = document.createElement("span");
+      proj.className = "s-proj";
+      proj.textContent = s.project;
+      const main = document.createElement("div");
+      main.className = "s-main";
+      const title = document.createElement("span");
+      title.className = "s-title";
+      title.textContent = s.title;
+      const meta = document.createElement("span");
+      meta.className = "s-meta";
+      meta.textContent = `${rel(s.mtime)} · ${s.count} msgs`;
+      main.append(title, meta);
+      row.append(proj, main);
+      row.title = "resume this session";
+      row.onclick = () => { closeSessions(); openDrawer(s.project, { session: s.id, label: s.title }); };
+      listEl.appendChild(row);
+    });
+  }
+
+  searchEl.addEventListener("input", () => renderSessions(searchEl.value));
+  let pressInside = false;
+  overlay.addEventListener("mousedown", e => { pressInside = e.target === overlay; });
+  overlay.addEventListener("mouseup", e => {
+    if (pressInside && e.target === overlay) closeSessions();
+    pressInside = false;
+  });
+  document.addEventListener("keydown", e => {
+    if (e.key === "Escape" && !overlay.hidden) closeSessions();
+  });
+})();
