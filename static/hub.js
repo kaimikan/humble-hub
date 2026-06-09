@@ -465,15 +465,15 @@ function addItem(ev, kind) {
       cursor:pointer; font:inherit; font-size:1.05rem; line-height:1; padding:0 .25rem;
       align-self:center; }
     .jot-col li .row-menu-btn:hover { color:var(--ink); background:transparent; }
-    .row-menu { position:fixed; z-index:100; background:#f6edd6;
+    .row-menu { position:fixed; z-index:100; background:var(--paper, #f6edd6);
       border:1px solid var(--ink-soft); box-shadow:2px 3px 11px rgba(67,51,28,.35);
       border-radius:2px; display:flex; flex-direction:column; min-width:9.5rem; }
     .row-menu button { border:0; border-radius:0; background:transparent; text-align:left;
       color:var(--ink); font:inherit; font-size:.82rem; font-variant:small-caps;
       letter-spacing:.04em; padding:.42rem .75rem; cursor:pointer; }
     .row-menu button:hover { background:var(--ink); color:var(--parchment); }
-    .row-menu button.danger { color:#9a3b22; }
-    .row-menu button.danger:hover { background:#9a3b22; color:var(--parchment); }
+    .row-menu button.danger { color:var(--sanguine, #9a3b22); }
+    .row-menu button.danger:hover { background:var(--sanguine, #9a3b22); color:var(--parchment); }
     .jot-col li.empty-hint { justify-content:center; font-style:italic;
       color:var(--ink-faint); border-bottom:0; }`;
   document.head.appendChild(style);
@@ -481,7 +481,7 @@ function addItem(ev, kind) {
   const bar = document.createElement("div");
   bar.className = "todo-filter";
   // color-coded: all = neutral, active = ochre (pending), done = verdigris (complete)
-  [["all", "all", null], ["active", "active", "#8a6d1f"], ["done", "done", "#4f6b3a"]]
+  [["all", "all", null], ["active", "active", "var(--ochre, #8a6d1f)"], ["done", "done", "var(--verdigris, #4f6b3a)"]]
     .forEach(([val, label, color]) => {
       const b = document.createElement("button");
       b.className = "chip" + (val === todoFilter ? " active" : "");
@@ -1000,4 +1000,55 @@ setInterval(() => {
   bar.appendChild(mic);
 
   document.getElementById("drawer").appendChild(bar);
+})();
+
+
+// --- themes (T19): switchable skins over the CSS variable palette -----------
+// codex = the default parchment look; overrides live on body[data-theme].
+(() => {
+  const style = document.createElement("style");
+  style.textContent = `
+    body[data-theme="matrix"] {
+      --parchment:#050905; --paper:#0b140c; --ink:#a8ffbe; --ink-soft:#52d98b;
+      --ink-faint:#2e7d52; --lapis:#36e3a0; --sanguine:#ff5470;
+      --verdigris:#2ecf7a; --ochre:#9fe06a; --plum:#36b88f;
+      --bg-hi:#08120a; --bg-mid:#060d08; --bg-lo:#03140b;
+      --card-bg:rgba(8,30,16,.5); --card-hot:rgba(12,45,24,.8);
+      --input-bg:rgba(8,30,16,.6); color-scheme:dark; }
+    body[data-theme="matrix"] .card, body[data-theme="matrix"] #modal,
+    body[data-theme="matrix"] .sess-modal { box-shadow:0 0 14px rgba(46,207,122,.18); }
+    body[data-theme="dragon"] {
+      --parchment:#fff3da; --paper:#ffe9c2; --ink:#33250e; --ink-soft:#a65c00;
+      --ink-faint:#cf9544; --lapis:#1f4dd8; --sanguine:#f56f00;
+      --verdigris:#2eaf5d; --ochre:#e6a817; --plum:#8c4ddd;
+      --bg-hi:#ffe9bd; --bg-mid:#ffefcd; --bg-lo:#ffd98f;
+      --card-bg:rgba(255,255,255,.4); --card-hot:rgba(255,255,255,.75);
+      --input-bg:rgba(255,255,255,.5); }`;
+  document.head.appendChild(style);
+
+  const saved = localStorage.getItem("hubTheme") || "codex";
+  const apply = t => {
+    if (t === "codex") delete document.body.dataset.theme;
+    else document.body.dataset.theme = t;
+    localStorage.setItem("hubTheme", t);
+  };
+  apply(saved);
+
+  const sel = document.createElement("select");
+  sel.id = "theme-select";
+  sel.title = "theme";
+  [["codex", "theme: codex"], ["matrix", "theme: matrix"], ["dragon", "theme: dragon ball"]]
+    .forEach(([v, label]) => {
+      const o = document.createElement("option");
+      o.value = v; o.textContent = label;
+      sel.appendChild(o);
+    });
+  sel.value = saved;
+  sel.onchange = () => apply(sel.value);
+  const mode = document.getElementById("mode-select");
+  if (mode) {
+    sel.style.cssText = mode.style.cssText;
+    sel.className = mode.className;
+    mode.after(sel);
+  }
 })();

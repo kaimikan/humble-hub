@@ -92,7 +92,7 @@ def run(page):
     done_color = page.eval_on_selector(
         ".todo-filter .chip[data-val='done']",
         "el => el.style.getPropertyValue('--chip')")
-    check("done pill is color-coded", done_color.strip() == "#4f6b3a", done_color)
+    check("done pill is color-coded", "#4f6b3a" in done_color, done_color)
 
     # each row has checkbox + drag handle + ⋯ menu button
     row_ok = page.eval_on_selector(

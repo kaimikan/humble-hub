@@ -740,13 +740,18 @@ def index():
 <style>
   :root {{ color-scheme: light;
     --ink:#43331c; --ink-soft:#6e5a39; --ink-faint:#9c875f;
-    --parchment:#efe2c0; }}
+    --parchment:#efe2c0; --paper:#f6edd6;
+    --lapis:#2f5277; --sanguine:#9a3b22; --verdigris:#4f6b3a;
+    --ochre:#8a6d1f; --plum:#5a3d6e;
+    --bg-hi:#f7edd3; --bg-mid:#f2e6c6; --bg-lo:#e2d2a8;
+    --card-bg:rgba(255,250,235,.35); --card-hot:rgba(255,250,235,.7);
+    --input-bg:rgba(255,250,235,.5); }}
   body {{ color:var(--ink); font:16px/1.55 "EB Garamond", "Noto Serif", Georgia, serif;
     margin:0; height:100vh; overflow:hidden;
     background:
-      radial-gradient(ellipse at 15% 8%, #f7edd3 0%, transparent 55%),
-      radial-gradient(ellipse at 85% 95%, #e2d2a8 0%, transparent 55%),
-      radial-gradient(ellipse at 60% 40%, #f2e6c6 0%, transparent 70%),
+      radial-gradient(ellipse at 15% 8%, var(--bg-hi) 0%, transparent 55%),
+      radial-gradient(ellipse at 85% 95%, var(--bg-lo) 0%, transparent 55%),
+      radial-gradient(ellipse at 60% 40%, var(--bg-mid) 0%, transparent 70%),
       var(--parchment); }}
   /* the shelf is the scroll container, so its scrollbar sits at its own right
      edge — left of the drawer when one is open */
@@ -792,7 +797,7 @@ def index():
     scrollbar-width:thin; scrollbar-color:var(--ink-faint) transparent; }}
   #shelf {{ scrollbar-width:thin; scrollbar-color:var(--ink-faint) transparent; }}
   .jot-col li .txt {{ white-space:pre-wrap; overflow-wrap:anywhere; cursor:text; }}
-  .jot-col li:hover {{ background:rgba(255,250,235,.65); }}
+  .jot-col li:hover {{ background:var(--card-hot); }}
   .jot-col ul {{ list-style:none; margin:0; padding:0; }}
   .jot-col li {{ display:flex; align-items:baseline; gap:.5rem; padding:.18rem 0;
     font-size:.92rem; border-bottom:1px dotted rgba(156,135,95,.4); }}
@@ -800,8 +805,8 @@ def index():
   .jot-col li .txt {{ flex:1; }}
   .jot-col li .del {{ border:0; background:transparent; color:var(--ink-faint);
     cursor:pointer; font:inherit; padding:0 .2rem; }}
-  .jot-col li .del:hover {{ color:#9a3b22; background:transparent; }}
-  .jot-col input[type="checkbox"] {{ accent-color:#4f6b3a; }}
+  .jot-col li .del:hover {{ color:var(--sanguine); background:transparent; }}
+  .jot-col input[type="checkbox"] {{ accent-color:var(--verdigris); }}
   .jot-col form input[type="text"], .jot-col form input:not([type]) {{ width:100%;
     box-sizing:border-box; margin-top:.5rem; background:transparent;
     border:0; border-bottom:1px solid var(--ink-faint); color:var(--ink);
@@ -821,7 +826,7 @@ def index():
                   padding:0 .6em; color:var(--ink-soft); }}
   .controls {{ margin-top:1.1rem; display:flex; gap:.7rem; justify-content:center;
                align-items:center; flex-wrap:wrap; }}
-  #search {{ background:rgba(255,250,235,.5); border:1px solid var(--ink-soft);
+  #search {{ background:var(--input-bg); border:1px solid var(--ink-soft);
     border-radius:2px; color:var(--ink); font:inherit; font-size:.9rem;
     padding:.35rem .7rem; width:240px; }}
   #search::placeholder {{ color:var(--ink-faint); font-style:italic; }}
@@ -832,16 +837,16 @@ def index():
   /* hover and active both fill with the chip's pigment, text stays parchment */
   .chip:hover, .chip.active {{ background:var(--chip, var(--ink));
     border-color:var(--chip, var(--ink)); color:var(--parchment); }}
-  .chip[data-type="site"]  {{ --chip:#2f5277; }}
-  .chip[data-type="service"] {{ --chip:#5a3d6e; }}
-  .chip[data-type="app"]   {{ --chip:#9a3b22; }}
+  .chip[data-type="site"]  {{ --chip:var(--lapis); }}
+  .chip[data-type="service"] {{ --chip:var(--plum); }}
+  .chip[data-type="app"]   {{ --chip:var(--sanguine); }}
   /* service status dot + stop control */
   .svc-dot {{ font-size:.9rem; color:var(--ink-faint); }}
-  .svc-dot.on {{ color:#4f6b3a; }}
+  .svc-dot.on {{ color:var(--verdigris); }}
   .b-stop {{ color:var(--ink-faint); border-color:var(--ink-faint); padding:.3rem .5rem; }}
-  .b-stop:hover {{ background:#9a3b22; border-color:#9a3b22; color:var(--parchment); }}
-  .chip[data-type="code"]  {{ --chip:#8a6d1f; }}
-  .chip[data-type="notes"] {{ --chip:#4f6b3a; }}
+  .b-stop:hover {{ background:var(--sanguine); border-color:var(--sanguine); color:var(--parchment); }}
+  .chip[data-type="code"]  {{ --chip:var(--ochre); }}
+  .chip[data-type="notes"] {{ --chip:var(--verdigris); }}
   .chip[data-type="empty"] {{ --chip:#9c875f; }}
   /* side-drawer terminal — pushes the shelf aside rather than covering it */
   :root {{ --drawer-w: min(680px, 58vw); }}
@@ -859,17 +864,17 @@ def index():
     color:var(--ink); }}
   .d-head h2 {{ margin:0; flex:1; font-size:.98rem; font-weight:600;
     font-variant:small-caps; letter-spacing:.07em; }}
-  .d-head a, .d-head button {{ border:0; background:transparent; color:#2f5277;
+  .d-head a, .d-head button {{ border:0; background:transparent; color:var(--lapis);
     font:inherit; font-size:1rem; cursor:pointer; padding:.1rem .35rem;
     text-decoration:none; }}
-  .d-head a:hover, .d-head button:hover {{ color:#9a3b22; background:transparent; }}
+  .d-head a:hover, .d-head button:hover {{ color:var(--sanguine); background:transparent; }}
   #dterm {{ flex:1; min-height:0; padding:.3rem; position:relative; }}
   .term-host {{ position:absolute; inset:.3rem; display:none; }}
   .term-host.shown {{ display:block; }}
   /* status pills for live sessions */
   #pills {{ position:fixed; right:1.1rem; bottom:1.1rem; z-index:40;
     display:flex; flex-direction:column; gap:.5rem; align-items:flex-end; }}
-  .pill {{ background:#2f5277; color:var(--parchment); border:0; border-radius:999px;
+  .pill {{ background:var(--lapis); color:var(--parchment); border:0; border-radius:999px;
     padding:.45rem .95rem; font:inherit; font-size:.88rem; font-variant:small-caps;
     letter-spacing:.06em; cursor:pointer; box-shadow:2px 3px 10px rgba(67,51,28,.4);
     display:inline-flex; align-items:center; gap:.45rem; }}
@@ -883,7 +888,7 @@ def index():
   .card {{ border:1.5px solid var(--ink-soft); outline:1px solid var(--ink-faint);
     outline-offset:4px; border-radius:2px; padding:1rem 1.2rem;
     display:flex; flex-direction:column; gap:.45rem; position:relative;
-    background:rgba(255,250,235,.35); box-shadow:2px 3px 8px rgba(67,51,28,.18); }}
+    background:var(--card-bg); box-shadow:2px 3px 8px rgba(67,51,28,.18); }}
   /* rotated cards form stacking contexts — lift the hovered one so its
      dropdown isn't painted under later cards */
   .card:hover {{ z-index:10; }}
@@ -906,22 +911,22 @@ def index():
     display:inline-flex; align-items:center; box-sizing:border-box; }}
   button:hover, .btn:hover {{ background:var(--ink); color:var(--parchment); }}
   /* manuscript pigments: sanguine, lapis, verdigris */
-  .b-go     {{ color:#9a3b22; border-color:#9a3b22; }}
-  .b-go:hover     {{ background:#9a3b22; color:var(--parchment); }}
-  .b-claude {{ color:#2f5277; border-color:#2f5277; }}
-  .b-claude:hover {{ background:#2f5277; color:var(--parchment); }}
-  .b-files  {{ color:#4f6b3a; border-color:#4f6b3a; }}
-  .b-files:hover  {{ background:#4f6b3a; color:var(--parchment); }}
+  .b-go     {{ color:var(--sanguine); border-color:var(--sanguine); }}
+  .b-go:hover     {{ background:var(--sanguine); color:var(--parchment); }}
+  .b-claude {{ color:var(--lapis); border-color:var(--lapis); }}
+  .b-claude:hover {{ background:var(--lapis); color:var(--parchment); }}
+  .b-files  {{ color:var(--verdigris); border-color:var(--verdigris); }}
+  .b-files:hover  {{ background:var(--verdigris); color:var(--parchment); }}
   /* hover menu on the claude button */
   .menu {{ position:relative; display:inline-flex; }}
   .menu-items {{ display:none; position:absolute; left:0; top:100%; z-index:5;
-    min-width:11.5rem; flex-direction:column; background:#f6edd6;
+    min-width:11.5rem; flex-direction:column; background:var(--paper);
     border:1px solid var(--ink-soft); box-shadow:2px 3px 8px rgba(67,51,28,.25); }}
   .menu:hover .menu-items {{ display:flex; }}
   .menu-items.up {{ top:auto; bottom:100%; }}
   .menu-items a, .menu-items button {{ border:0; border-radius:0; text-align:left;
-    padding:.42rem .8rem; color:#2f5277; background:transparent; }}
-  .menu-items a:hover, .menu-items button:hover {{ background:#2f5277;
+    padding:.42rem .8rem; color:var(--lapis); background:transparent; }}
+  .menu-items a:hover, .menu-items button:hover {{ background:var(--lapis);
     color:var(--parchment); }}
 </style></head>
 <body>
