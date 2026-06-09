@@ -52,6 +52,11 @@ Then set `http://localhost:7700` as the browser homepage/new-tab page.
 
 ## v4
 
+- **Service launcher**: a project with a `hub.json` (`{"serve": "<cmd>",
+  "port": N}`) becomes a **service** (⚗) — ▶ open starts it as a transient
+  `hub-svc-<name>` user unit (survives hub restarts) and opens
+  `localhost:<port>`; ●/○ status dot, ■ stop. curated-cool-content and
+  little-lidl-list ship manifests.
 - **Persistent chat sessions**: every chat runs in a `hub_ptyd` daemon (a
   ~150-line stdlib dtach equivalent, `tools/hub_ptyd.py`) spawned as a
   transient systemd user unit — its own cgroup, so chats **survive
