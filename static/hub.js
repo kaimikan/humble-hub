@@ -756,3 +756,51 @@ setInterval(() => {
     if (e.key === "Escape" && !overlay.hidden) closeSessions();
   });
 })();
+
+// --- on-screen key toolbar for the drawer terminal (touch devices) ----------
+// Phone soft-keyboards have no arrow/Esc/Tab keys, so Claude Code's selection
+// prompts (↑/↓ + Enter) and multi-select forms (↑/↓ + Space + Enter) are
+// unusable from the phone. These buttons send the raw sequences to the active
+// session's pty. Shown only on coarse-pointer (touch) devices so the laptop
+// drawer stays clean.
+(() => {
+  const style = document.createElement("style");
+  style.textContent = `
+    .kbar { display:none; flex-wrap:wrap; gap:.3rem; padding:.4rem;
+      background:#1a1b26; border-top:1px solid #2a2b3c; }
+    @media (pointer: coarse) { .kbar { display:flex; } }
+    .kbar button { flex:0 0 auto; min-width:2.6rem; padding:.55rem .6rem;
+      font:1rem/1 "JetBrains Mono","Noto Sans Mono",monospace; background:#24283b;
+      color:#c0caf5; border:1px solid #3b4261; border-radius:4px; cursor:pointer;
+      user-select:none; touch-action:manipulation; }
+    .kbar button:active { background:#3b4261; }
+    .kbar .wide { min-width:3.6rem; font-variant:small-caps; letter-spacing:.04em; }`;
+  document.head.appendChild(style);
+
+  function sendActiveKey(seq) {
+    const s = sessions.get(active);
+    if (s && s.ws.readyState === 1) {
+      s.ws.send(JSON.stringify({ type: "input", data: seq }));
+      s.term.focus(); // keep the terminal (and soft keyboard) focused
+    }
+  }
+
+  // label, sequence, extra class
+  const KEYS = [
+    ["↑", "\x1b[A"], ["↓", "\x1b[B"], ["←", "\x1b[D"], ["→", "\x1b[C"],
+    ["⏎", "\r", "wide"], ["space", " ", "wide"], ["esc", "\x1b", "wide"],
+    ["tab", "\t", "wide"], ["⌃C", "\x03", "wide"],
+  ];
+  const bar = document.createElement("div");
+  bar.className = "kbar";
+  for (const [label, seq, cls] of KEYS) {
+    const b = document.createElement("button");
+    b.textContent = label;
+    if (cls) b.className = cls;
+    b.title = label === "space" ? "Space (toggle option)" : label;
+    b.addEventListener("pointerdown", e => e.preventDefault()); // don't steal focus
+    b.addEventListener("click", () => sendActiveKey(seq));
+    bar.appendChild(b);
+  }
+  document.getElementById("drawer").appendChild(bar);
+})();
