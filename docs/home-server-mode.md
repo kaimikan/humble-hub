@@ -33,6 +33,20 @@ may still turn off on idle; that's fine — it doesn't suspend the machine.
   here: the **phone** resolves the tailnet name via its own Tailscale client,
   so phone→laptop works regardless of the laptop's resolver setup.
 
+## Toggling it on/off (you don't want it always on)
+
+Home-server mode should only be on when you plan a phone session that day, so
+it's a toggle, not a permanent setting. Two ways, same engine:
+
+- **System-tray icon** (`tools/home-server-tray`, PyQt6): a coloured dot —
+  **green = ON (hosting)**, **grey = OFF (normal power)**. Left-click toggles;
+  right-click for an explicit on/off/quit menu. Autostarts at login.
+- **CLI** (`tools/home-server`): `home-server [on|off|toggle|status]`.
+
+Install both (user scope, no sudo): `./tools/install.sh`, then start the tray
+with `~/.local/bin/home-server-tray &` (or just re-login). "Off" restores KDE's
+default power behaviour (suspend on lid close); battery profile is never touched.
+
 ## Optional hardening — headless / login-screen case (needs sudo)
 
 PowerDevil only governs lid behaviour while you're logged into Plasma. If the
