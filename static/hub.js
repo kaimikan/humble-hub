@@ -805,14 +805,34 @@ setInterval(() => {
       color:#c0caf5; border:1px solid #3b4261; border-radius:4px; cursor:pointer;
       user-select:none; touch-action:manipulation; }
     .kbar button:active { background:#3b4261; }
-    .kbar .wide { min-width:3.6rem; font-variant:small-caps; letter-spacing:.04em; }`;
+    .kbar .wide { min-width:3.6rem; font-variant:small-caps; letter-spacing:.04em; }
+    .kbar .mic.rec { background:#7a2733; border-color:#f7768e; animation:micpulse 1.2s infinite; }
+    @keyframes micpulse { 50% { opacity:.55; } }
+    /* phone ergonomics: full-width drawer, bigger touch targets, hide
+       laptop-only actions (files/launch act on the laptop, not the phone) */
+    @media (max-width: 700px) { :root { --drawer-w: 100vw; } }
+    @media (pointer: coarse) {
+      .b-files, button.b-go { display: none; }
+      .d-head button, .d-head a { font-size: 1.3rem; padding: .25rem .55rem; }
+      .jot-open, .chip { padding: .42rem .85rem; }
+    }`;
   document.head.appendChild(style);
 
+  // hide "in konsole" menu entries on touch devices — konsole opens on the
+  // laptop, which is not where the phone user is
+  if (matchMedia("(pointer: coarse)").matches) {
+    document.querySelectorAll(".menu-items button").forEach(b => {
+      if (/konsole/i.test(b.textContent)) b.style.display = "none";
+    });
+  }
+
+  // NOTE: deliberately no term.focus() here — focusing xterm's hidden textarea
+  // pops the phone's soft keyboard open on every toolbar tap. The buttons'
+  // pointerdown preventDefault keeps existing focus (and keyboard state) as-is.
   function sendActiveKey(seq) {
     const s = sessions.get(active);
     if (s && s.ws.readyState === 1) {
       s.ws.send(JSON.stringify({ type: "input", data: seq }));
-      s.term.focus(); // keep the terminal (and soft keyboard) focused
     }
   }
 
@@ -833,5 +853,38 @@ setInterval(() => {
     b.addEventListener("click", () => sendActiveKey(seq));
     bar.appendChild(b);
   }
+
+  // mic — dictate straight into the chat via the browser's speech recognition,
+  // without opening the soft keyboard. Tap to start (red pulse), tap to stop.
+  // Final transcripts are typed into the pty; you still press ⏎ to send.
+  const MIC_LANG = "en-US";
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  const mic = document.createElement("button");
+  mic.className = "wide mic";
+  mic.textContent = "🎤";
+  mic.title = "dictate (browser speech recognition)";
+  let rec = null;
+  mic.addEventListener("pointerdown", e => e.preventDefault());
+  mic.addEventListener("click", () => {
+    if (!SR) { mic.disabled = true; mic.textContent = "🎤✕"; mic.title = "speech recognition not supported in this browser"; return; }
+    if (rec) { rec.stop(); return; }
+    rec = new SR();
+    rec.lang = MIC_LANG;
+    rec.continuous = true;
+    rec.interimResults = false;
+    rec.onresult = ev => {
+      let text = "";
+      for (let i = ev.resultIndex; i < ev.results.length; i++) {
+        if (ev.results[i].isFinal) text += ev.results[i][0].transcript;
+      }
+      if (text.trim()) sendActiveKey(text.trim() + " ");
+    };
+    rec.onend = () => { rec = null; mic.classList.remove("rec"); };
+    rec.onerror = () => {};
+    mic.classList.add("rec");
+    rec.start();
+  });
+  bar.appendChild(mic);
+
   document.getElementById("drawer").appendChild(bar);
 })();

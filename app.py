@@ -360,6 +360,8 @@ def terminal_page(name: str, resume: bool = False):
     user-select:none; touch-action:manipulation; }}
   #kbar button:active {{ background:#3b4261; }}
   #kbar .wide {{ min-width:3.6rem; font-variant:small-caps; letter-spacing:.04em; }}
+  #kbar .mic.rec {{ background:#7a2733; border-color:#f7768e; animation:micpulse 1.2s infinite; }}
+  @keyframes micpulse {{ 50% {{ opacity:.55; }} }}
 </style></head>
 <body>
   <header>
@@ -395,9 +397,11 @@ def terminal_page(name: str, resume: bool = False):
       ws.readyState === 1 && ws.send(JSON.stringify({{type:"resize", cols:term.cols, rows:term.rows}}));
     }}).observe(document.getElementById("term"));
 
-    // on-screen key toolbar (touch): arrows/Enter/Space/Esc/Tab/Ctrl-C → pty
+    // on-screen key toolbar (touch): arrows/Enter/Space/Esc/Tab/Ctrl-C → pty.
+    // No term.focus() after sends — refocusing xterm's hidden textarea pops
+    // the phone's soft keyboard open on every tap.
     const sendKey = seq => {{
-      if (ws.readyState === 1) {{ ws.send(JSON.stringify({{type:"input", data:seq}})); term.focus(); }}
+      if (ws.readyState === 1) ws.send(JSON.stringify({{type:"input", data:seq}}));
     }};
     const keys = [["↑","\\x1b[A"],["↓","\\x1b[B"],["←","\\x1b[D"],["→","\\x1b[C"],
       ["⏎","\\r","wide"],["space"," ","wide"],["esc","\\x1b","wide"],
@@ -410,6 +414,36 @@ def terminal_page(name: str, resume: bool = False):
       btn.addEventListener("click", () => sendKey(seq));
       kbar.appendChild(btn);
     }}
+
+    // mic — browser speech recognition typed straight into the pty;
+    // tap to start (red pulse), tap to stop, ⏎ still sends.
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    const mic = document.createElement("button");
+    mic.className = "wide mic";
+    mic.textContent = "🎤";
+    mic.title = "dictate (browser speech recognition)";
+    let rec = null;
+    mic.addEventListener("pointerdown", e => e.preventDefault());
+    mic.addEventListener("click", () => {{
+      if (!SR) {{ mic.disabled = true; mic.textContent = "🎤✕"; return; }}
+      if (rec) {{ rec.stop(); return; }}
+      rec = new SR();
+      rec.lang = "en-US";
+      rec.continuous = true;
+      rec.interimResults = false;
+      rec.onresult = ev => {{
+        let text = "";
+        for (let i = ev.resultIndex; i < ev.results.length; i++) {{
+          if (ev.results[i].isFinal) text += ev.results[i][0].transcript;
+        }}
+        if (text.trim()) sendKey(text.trim() + " ");
+      }};
+      rec.onend = () => {{ rec = null; mic.classList.remove("rec"); }};
+      rec.onerror = () => {{}};
+      mic.classList.add("rec");
+      rec.start();
+    }});
+    kbar.appendChild(mic);
   </script>
 </body></html>"""
 
