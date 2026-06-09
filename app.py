@@ -67,6 +67,14 @@ def git_info(path: Path) -> dict:
 
 def detect(path: Path) -> dict:
     """Classify a project and derive its available actions."""
+    manifest = path / "hub.json"
+    if manifest.is_file():  # explicit service manifest beats heuristics
+        try:
+            m = json.loads(manifest.read_text())
+            if m.get("serve") and m.get("port"):
+                return {"type": "service", "serve": m["serve"], "port": int(m["port"])}
+        except (json.JSONDecodeError, ValueError, TypeError):
+            pass  # malformed manifest → fall through to heuristics
     desktop_files = sorted(path.glob("*.desktop"))
     if (path / "index.html").is_file():
         return {"type": "site", "site": f"/sites/{path.name}/"}
@@ -143,6 +151,64 @@ def open_folder(name: str):
 @app.get("/api/projects")
 def api_projects():
     return scan()
+
+
+# --- service projects (hub.json: {"serve": "<cmd>", "port": N}) -------------
+# Server apps the hub can start on demand. Each runs as a transient systemd
+# user unit (hub-svc-<name>) — own cgroup, so it survives hub restarts, same
+# pattern as the pty daemons.
+
+
+def _port_open(port: int) -> bool:
+    import socket as so
+    s = so.socket(so.AF_INET, so.SOCK_STREAM)
+    s.settimeout(0.3)
+    try:
+        return s.connect_ex(("127.0.0.1", port)) == 0
+    finally:
+        s.close()
+
+
+@app.get("/api/services")
+def api_services():
+    return {p["name"]: _port_open(p["port"])
+            for p in scan() if p["type"] == "service"}
+
+
+@app.post("/api/projects/{name}/service/open")
+def service_open(name: str):
+    import shlex
+    import time
+    path = project_path(name)
+    info = detect(path)
+    if info.get("type") != "service":
+        raise HTTPException(400, f"{name} has no hub.json service manifest")
+    port, url = info["port"], f"http://localhost:{info['port']}"
+    if _port_open(port):
+        return {"ok": True, "url": url, "started": False}
+    argv = shlex.split(info["serve"])
+    if argv[0].startswith("."):  # resolve project-relative commands
+        argv[0] = str(path / argv[0])
+    env_path = f"{Path.home()}/.local/bin:{os.environ.get('PATH', '/usr/bin')}"
+    subprocess.run(
+        ["systemd-run", "--user", "--collect", "--quiet",
+         f"--unit=hub-svc-{name}", f"--working-directory={path}",
+         f"--setenv=PATH={env_path}", *argv],
+        check=True, capture_output=True, text=True)
+    for _ in range(100):  # wait for the port (max ~10 s)
+        if _port_open(port):
+            return {"ok": True, "url": url, "started": True}
+        time.sleep(0.1)
+    raise HTTPException(502, f"{name} did not open port {port} — check: "
+                             f"journalctl --user -u hub-svc-{name}")
+
+
+@app.post("/api/projects/{name}/service/stop")
+def service_stop(name: str):
+    project_path(name)
+    subprocess.run(["systemctl", "--user", "stop", f"hub-svc-{name}.service"],
+                   capture_output=True)
+    return {"ok": True}
 
 
 # --- notes & to-dos (file-backed, see data/notes.json) ---
@@ -594,13 +660,15 @@ def terminal_page(name: str, resume: bool = False, attach: str = "",
 # ---------------------------------------------------------------------------
 # Page
 
-TYPE_GLYPHS = {"site": "☉", "app": "⚙", "code": "✒", "notes": "✎", "empty": "◯"}
+TYPE_GLYPHS = {"site": "☉", "app": "⚙", "code": "✒", "notes": "✎", "empty": "◯",
+               "service": "⚗"}
 TYPE_LABELS = {
     "site": "site",
     "app": "app",
     "code": "code",
     "notes": "notes",
     "empty": "empty",
+    "service": "service",
 }
 
 
@@ -637,17 +705,23 @@ def card(p: dict) -> str:
         buttons.insert(0, f"""<a class="btn b-go" href="{p['site']}" target="_blank">▶ open site</a>""")
     if p["type"] == "app":
         buttons.insert(0, f"""<button class="b-go" onclick="act('{name}','launch')">▶ launch</button>""")
+    if p["type"] == "service":
+        buttons.insert(0, f"""<button class="b-go" onclick="openService('{name}')">▶ open</button>""")
+        buttons.append(f"""<button class="b-stop" onclick="stopService('{name}')"
+          title="stop the service">■</button>""")
     meta = html.escape(p["last_commit"]) if p.get("last_commit") else ""
     if p.get("dirty"):
         meta += " · ✱ wet ink"
     excerpt = html.escape(p.get("excerpt") or "")
     search_blob = html.escape(f"{p['name']} {p.get('excerpt') or ''}".lower())
+    svc_dot = (f"""<span class="svc-dot" data-svc="{name}" title="stopped">○</span>"""
+               if p["type"] == "service" else "")
     return f"""
     <div class="card" data-type="{p['type']}" data-text="{search_blob}">
       <div class="head">
         <span class="glyph">{glyph(p)}</span>
         <h2>{name}</h2>
-        <span class="kind">{TYPE_LABELS[p["type"]]}</span>
+        {svc_dot}<span class="kind">{TYPE_LABELS[p["type"]]}</span>
       </div>
       <p class="excerpt">{f'“{excerpt}”' if excerpt else ''}</p>
       <p class="meta">{meta}</p>
@@ -759,7 +833,13 @@ def index():
   .chip:hover, .chip.active {{ background:var(--chip, var(--ink));
     border-color:var(--chip, var(--ink)); color:var(--parchment); }}
   .chip[data-type="site"]  {{ --chip:#2f5277; }}
+  .chip[data-type="service"] {{ --chip:#5a3d6e; }}
   .chip[data-type="app"]   {{ --chip:#9a3b22; }}
+  /* service status dot + stop control */
+  .svc-dot {{ font-size:.9rem; color:var(--ink-faint); }}
+  .svc-dot.on {{ color:#4f6b3a; }}
+  .b-stop {{ color:var(--ink-faint); border-color:var(--ink-faint); padding:.3rem .5rem; }}
+  .b-stop:hover {{ background:#9a3b22; border-color:#9a3b22; color:var(--parchment); }}
   .chip[data-type="code"]  {{ --chip:#8a6d1f; }}
   .chip[data-type="notes"] {{ --chip:#4f6b3a; }}
   .chip[data-type="empty"] {{ --chip:#9c875f; }}
@@ -870,6 +950,7 @@ def index():
       <span id="filters">
         <button class="chip active" data-type="" onclick="pick(this)">all</button>
         <button class="chip" data-type="site" onclick="pick(this)">site</button>
+        <button class="chip" data-type="service" onclick="pick(this)">service</button>
         <button class="chip" data-type="app" onclick="pick(this)">app</button>
         <button class="chip" data-type="code" onclick="pick(this)">code</button>
         <button class="chip" data-type="notes" onclick="pick(this)">notes</button>

@@ -4,6 +4,46 @@ async function act(name, action) {
   await fetch(`/api/projects/${name}/${action}`, { method: "POST" });
 }
 
+// --- service projects (hub.json) ---------------------------------------------
+// ▶ open: pre-open the tab synchronously (popup rules), start the service if
+// needed, then point the tab at it.
+
+async function openService(name) {
+  const tab = window.open("about:blank", "_blank");
+  try {
+    const r = await fetch(`/api/projects/${encodeURIComponent(name)}/service/open`,
+                          { method: "POST" });
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.detail || r.statusText);
+    if (tab) tab.location = data.url;
+    refreshServiceDots();
+  } catch (e) {
+    if (tab) tab.close();
+    alert(`couldn't start ${name}: ${e.message}`);
+  }
+}
+
+async function stopService(name) {
+  await fetch(`/api/projects/${encodeURIComponent(name)}/service/stop`, { method: "POST" });
+  setTimeout(refreshServiceDots, 600);
+}
+
+async function refreshServiceDots() {
+  try {
+    const r = await fetch("/api/services");
+    if (!r.ok) return; // older server — dots stay static
+    const states = await r.json();
+    document.querySelectorAll(".svc-dot").forEach(dot => {
+      const on = !!states[dot.dataset.svc];
+      dot.classList.toggle("on", on);
+      dot.textContent = on ? "●" : "○";
+      dot.title = on ? "running" : "stopped";
+    });
+  } catch (e) { /* hub offline mid-refresh — ignore */ }
+}
+refreshServiceDots();
+setInterval(refreshServiceDots, 20000);
+
 // --- search + type filter ---------------------------------------------------
 
 let typeFilter = "";

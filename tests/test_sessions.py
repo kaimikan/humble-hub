@@ -37,7 +37,7 @@ def run(page):
     # /api/ptys 404s until the server restart that deploys it — expected noise
     page.on("console", lambda m: errors.append(m.text)
             if m.type == "error"
-            and "api/ptys" not in str(getattr(m, "location", "")) else None)
+            and not any(ep in str(getattr(m, "location", "")) for ep in ("api/ptys", "api/services")) else None)
 
     def route(r):
         u = r.request.url
