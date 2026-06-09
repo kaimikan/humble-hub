@@ -113,6 +113,26 @@ def run(page):
     check("switch flips back to to-do",
           page.eval_on_selector("#m-title", "el => el.textContent") == "to-do")
 
+    # --- search box --------------------------------------------------------
+    page.click(".todo-filter .chip[data-val='all']")
+    page.fill("#jot-search", "charlie")
+    check("search filters the to-do list", texts(page, "todos") == ["charlie"],
+          str(texts(page, "todos")))
+    page.fill("#jot-search", "zzz-nothing")
+    hint = page.eval_on_selector("#todos li.empty-hint", "el => el.textContent")
+    check("search shows a no-match hint", "nothing matches" in hint, hint)
+    page.fill("#jot-search", "")
+    check("clearing search restores the list",
+          texts(page, "todos") == ["alpha", "bravo-done", "charlie"],
+          str(texts(page, "todos")))
+    page.fill("#jot-search", "active-only")
+    page.click(".todo-filter .chip[data-val='active']")
+    page.fill("#jot-search", "bravo")
+    check("search composes with the active filter (done item hidden)",
+          texts(page, "todos") == [], str(texts(page, "todos")))
+    page.fill("#jot-search", "")
+    page.click(".todo-filter .chip[data-val='all']")
+
     # filter switching
     page.click(".todo-filter .chip[data-val='done']")
     check("done filter shows only finished", texts(page, "todos") == ["bravo-done"],

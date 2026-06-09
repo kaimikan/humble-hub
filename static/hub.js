@@ -114,6 +114,16 @@ function applyTodoFilter(value) {
   renderNotes();
 }
 
+// free-text search across both jot lists (composes with the to-do filter)
+let jotSearch = "";
+function matchesJotSearch(item) {
+  return !jotSearch || item.text.toLowerCase().includes(jotSearch);
+}
+function setJotSearch(value) {
+  jotSearch = value.trim().toLowerCase();
+  renderNotes();
+}
+
 function renderNotes() {
   for (const kind of ["todos", "ideas"]) {
     const ul = document.getElementById(kind);
@@ -128,6 +138,7 @@ function renderNotes() {
     notes[kind].forEach(it => { if (kind === "ideas" || !it.done) refNum.set(it, ++n); });
     notes[kind].forEach(item => {
       if (!matchesTodoFilter(kind, item)) return; // hidden by the to-do filter
+      if (!matchesJotSearch(item)) return;        // hidden by the search box
       shown++;
       const li = document.createElement("li");
       li.__item = item; // ref used by drag-commit + the row menu (indices shift)
@@ -174,8 +185,8 @@ function renderNotes() {
     if (shown === 0 && notes[kind].length) {
       const li = document.createElement("li");
       li.className = "empty-hint";
-      li.textContent = kind === "todos" && todoFilter === "done"
-        ? "nothing finished yet."
+      li.textContent = jotSearch ? `nothing matches “${jotSearch}”.`
+        : kind === "todos" && todoFilter === "done" ? "nothing finished yet."
         : kind === "todos" ? "all done — nothing pending." : "no ideas yet.";
       ul.appendChild(li);
     }
@@ -283,6 +294,9 @@ async function openJot(kind) {
   // re-fetch before showing — another writer (e.g. a Claude session editing
   // via the API) may have changed the file; a stale tab's save would clobber it
   await loadNotes();
+  jotSearch = "";
+  const js = document.getElementById("jot-search");
+  if (js) js.value = "";
   applyTodoFilter("active"); // always open the to-do list on the active view
   document.getElementById("overlay").hidden = false;
   document.getElementById("m-title").textContent = kind === "todos" ? "to-do" : "ideas";
@@ -448,6 +462,23 @@ function addItem(ev, kind) {
   switchBtn.onclick = () => switchJot();
   const mhead = document.querySelector("#modal .m-head");
   mhead.insertBefore(switchBtn, mhead.querySelector(".del"));
+
+  // search box — filters whichever list is shown, composes with the to-do filter
+  const search = document.createElement("input");
+  search.type = "search";
+  search.id = "jot-search";
+  search.placeholder = "search…";
+  search.oninput = () => setJotSearch(search.value);
+  const sStyle = document.createElement("style");
+  sStyle.textContent = `
+    #jot-search { width:100%; box-sizing:border-box; margin:.45rem 0 .15rem;
+      background:rgba(255,250,235,.5); border:1px solid var(--ink-faint);
+      border-radius:2px; color:var(--ink); font:inherit; font-size:.88rem;
+      padding:.3rem .6rem; outline:none; }
+    #jot-search:focus { border-color:var(--ink-soft); }
+    #jot-search::placeholder { color:var(--ink-faint); font-style:italic; }`;
+  document.head.appendChild(sStyle);
+  mhead.after(search);
 })();
 
 loadNotes();
