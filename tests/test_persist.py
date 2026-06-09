@@ -85,6 +85,16 @@ try:
         ok, _ = wait_for(ws, "got:zebra42")
         check("session runs and echoes the marker", ok)
 
+    # --- terminal-mode replay for late attachers -------------------------------
+    with connect(ws_url()) as ws:
+        send(ws, type="resize", rows=24, cols=80)
+        send(ws, type="input", data="printf '\\033[?1000h'\n")
+        wait_for(ws, "?1000h")  # let it flow through the daemon
+    with connect(ws_url()) as ws2:
+        ok, out = wait_for(ws2, "\x1b[?1000h", timeout=5)
+        check("DEC private modes are replayed to a late attacher", ok,
+              repr(out[:120]))
+
     # --- daemon independence --------------------------------------------------
     socks = list(PTY_DIR.glob("*.sock"))
     check("daemon socket exists", len(socks) == 1, str(socks))
@@ -132,8 +142,11 @@ finally:
     if server.poll() is None:
         server.terminate()
         server.wait()
+    # Stop ONLY this test's units. A bare 'hub-pty-*' here once killed the
+    # REAL drawer sessions — including the Claude that was running the test
+    # (twice!). The token namespaces the glob to test sessions alone.
     subprocess.run(["bash", "-c",
-                    "systemctl --user stop 'hub-pty-*' 2>/dev/null; true"],
+                    f"systemctl --user stop 'hub-pty-*{TOKEN}*' 2>/dev/null; true"],
                    capture_output=True)
     shutil.rmtree(PTY_DIR, ignore_errors=True)
 

@@ -598,29 +598,55 @@ function createSession(key, project, o) {
   return s;
 }
 
-function refit(s) {
+function refit(s, force = false) {
   if (!s || !s.host.offsetParent) return;
   s.fit.fit();
-  if (s.ws.readyState === 1) {
+  // only send real changes (the daemon treats a first same-size resize as
+  // "repaint for me"; repeating it would spam duplicate frames into
+  // scrollback). force=true re-syncs after another client resized the pty.
+  const changed = s.sentCols !== s.term.cols || s.sentRows !== s.term.rows;
+  if (s.ws.readyState === 1 && (changed || force || !s.everSized)) {
     s.ws.send(JSON.stringify({ type: "resize", cols: s.term.cols, rows: s.term.rows }));
+    s.sentCols = s.term.cols;
+    s.sentRows = s.term.rows;
+    s.everSized = true;
   }
 }
+
+// returning to this tab/window: another client (full page, phone) may have
+// resized the shared pty meanwhile — re-assert our size so the layout snaps
+// back instead of staying squished
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden && active) refit(sessions.get(active), true);
+});
+window.addEventListener("focus", () => { if (active) refit(sessions.get(active), true); });
 
 function activate(key) {
   active = key;
   const s = sessions.get(key);
   sessions.forEach(o => o.host.classList.toggle("shown", o.key === key));
   document.getElementById("d-title").textContent = s.label;
-  // ⤢ opens the SAME live session (same attach token) in a new tab — it
-  // mirrors the chat rather than spawning an unrelated one
+  // ⤢ expands the drawer to the full window width in place. The href still
+  // points at the same live session (same attach token), so middle-click /
+  // ctrl-click can mirror the chat in another tab when wanted.
   const full = document.getElementById("d-full");
   full.href = `/terminal/${encodeURIComponent(s.name)}?attach=${encodeURIComponent(s.token)}`;
   full.target = "_blank";
+  full.title = "expand to full width (middle-click: mirror in a new tab)";
+  full.onclick = e => { e.preventDefault(); toggleDrawerFull(); };
   drawerEl().classList.add("open");
   document.body.classList.add("drawer-open");
   if (s.status === "attention" || s.status === "ready") s.status = "working";
   renderPills();
   setTimeout(() => { refit(s); s.term.focus(); }, 240);
+}
+
+function toggleDrawerFull() {
+  const fullNow = document.body.classList.toggle("drawer-full");
+  const f = document.getElementById("d-full");
+  f.textContent = fullNow ? "⇲" : "⤢";
+  // reflow the terminal once the width transition settles
+  setTimeout(() => refit(sessions.get(active)), 260);
 }
 
 function minimizeDrawer() {
@@ -851,6 +877,10 @@ setInterval(() => {
     .kbar .mic.rec { background:#7a2733; border-color:#f7768e; animation:micpulse 1.2s infinite; }
     @keyframes micpulse { 50% { opacity:.55; } }
     .pill.s-detached .dot { background:#7aa2f7; }
+    /* ⤢ in-place full-width drawer */
+    #drawer { transition: transform .22s ease, width .22s ease; }
+    body.drawer-full #drawer { width: 100vw; }
+    body.drawer-full.drawer-open #pills { right: 1.1rem; }
     /* phone ergonomics: full-width drawer, bigger touch targets, hide
        laptop-only actions (files/launch act on the laptop, not the phone) */
     @media (max-width: 700px) { :root { --drawer-w: 100vw; } }

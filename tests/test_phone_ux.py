@@ -41,6 +41,22 @@ with sync_playwright() as p:
           pg.eval_on_selector(".kbar", "el => getComputedStyle(el).display") == "none")
     check("desktop: files buttons visible",
           pg.eval_on_selector(".b-files", "el => getComputedStyle(el).display") != "none")
+
+    # ⤢ toggles the drawer to full window width in place (no navigation)
+    pg.evaluate("""() => {
+      document.getElementById('drawer').classList.add('open');
+      document.body.classList.add('drawer-open');
+      window.toggleDrawerFull();
+    }""")
+    pg.wait_for_timeout(350)
+    check("⤢ expands the drawer to full width in place",
+          pg.evaluate("document.body.classList.contains('drawer-full')") and
+          pg.eval_on_selector("#drawer", "el => getComputedStyle(el).width") ==
+          pg.evaluate("window.innerWidth + 'px'"))
+    pg.evaluate("window.toggleDrawerFull()")
+    pg.wait_for_timeout(350)
+    check("⤢ toggles back to the side-drawer width",
+          not pg.evaluate("document.body.classList.contains('drawer-full')"))
     ctx.close()
 
     # --- mobile: toolbar + mic shown, laptop actions hidden ------------------
