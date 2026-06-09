@@ -16,6 +16,7 @@ import re
 import signal
 import struct
 import subprocess
+import sys
 import termios
 from pathlib import Path
 
@@ -253,6 +254,20 @@ MODE_ARGS = {
 }
 
 
+def build_argv(resume: bool = False, mode: str = "default", session: str = "") -> list:
+    """The claude command line for a new chat. HUB_CLAUDE_CMD overrides the
+    base command (tests run a plain shell instead of claude)."""
+    import shlex
+    base = shlex.split(os.environ.get("HUB_CLAUDE_CMD", "claude"))
+    if session:
+        resume_args = ["--resume", session]
+    elif resume:
+        resume_args = ["--resume"]
+    else:
+        resume_args = []
+    return [*base, *MODE_ARGS.get(mode, []), *resume_args]
+
+
 def spawn_claude(path: Path, resume: bool = False, mode: str = "default",
                  session: str = ""):
     """Start `claude` on a pty in the project dir. Returns (pid, master fd).
@@ -262,13 +277,7 @@ def spawn_claude(path: Path, resume: bool = False, mode: str = "default",
     """
     env = dict(os.environ, TERM="xterm-256color", COLORTERM="truecolor")
     env["PATH"] = f"{Path.home()}/.local/bin:{env.get('PATH', '/usr/bin')}"
-    if session:
-        resume_args = ["--resume", session]
-    elif resume:
-        resume_args = ["--resume"]
-    else:
-        resume_args = []
-    argv = ["claude", *MODE_ARGS.get(mode, []), *resume_args]
+    argv = build_argv(resume, mode, session)
     pid, fd = pty.fork()
     if pid == 0:  # child
         os.chdir(path)
@@ -278,11 +287,88 @@ def spawn_claude(path: Path, resume: bool = False, mode: str = "default",
     return pid, fd
 
 
+# --- persistent sessions (hub_ptyd) -----------------------------------------
+# Each chat runs inside tools/hub_ptyd.py, spawned as a transient systemd
+# *user* unit — its own cgroup, so it survives hub.service restarts. The hub
+# only bridges WebSocket ↔ the daemon's Unix socket; disconnecting detaches
+# (session lives on), an explicit kill frame ends it. HUB_PERSIST=0 restores
+# the old in-process ptys.
+
+PTY_DIR = Path(os.environ.get("HUB_PTY_DIR",
+                              Path.home() / ".local" / "state" / "hub" / "ptys"))
+PERSIST = os.environ.get("HUB_PERSIST", "1") != "0"
+
+
+def _sock_path(name: str, token: str) -> Path:
+    proj = "root" if name == "~" else name
+    safe = re.sub(r"[^A-Za-z0-9_.-]", "_", f"{proj}__{token}")
+    return PTY_DIR / f"{safe}.sock"
+
+
+def _sock_alive(sock: Path) -> bool:
+    if not sock.exists():
+        return False
+    import socket as so
+    s = so.socket(so.AF_UNIX, so.SOCK_STREAM)
+    try:
+        s.connect(str(sock))
+        return True
+    except OSError:
+        sock.unlink(missing_ok=True)  # stale socket from a crashed daemon
+        return False
+    finally:
+        s.close()
+
+
+def ensure_ptyd(name: str, path: Path, token: str, resume: bool, mode: str,
+                session: str) -> Path:
+    """Return the session's socket, spawning the daemon if it isn't running."""
+    import time
+    sock = _sock_path(name, token)
+    if _sock_alive(sock):
+        return sock
+    PTY_DIR.mkdir(parents=True, exist_ok=True)
+    env_path = f"{Path.home()}/.local/bin:{os.environ.get('PATH', '/usr/bin')}"
+    unit = f"hub-pty-{sock.stem}"
+    subprocess.run(
+        ["systemd-run", "--user", "--collect", "--quiet", f"--unit={unit}",
+         f"--working-directory={path}",
+         f"--setenv=PATH={env_path}", "--setenv=TERM=xterm-256color",
+         "--setenv=COLORTERM=truecolor",
+         sys.executable, str(HUB_DIR / "tools" / "hub_ptyd.py"), str(sock), "--",
+         *build_argv(resume, mode, session)],
+        check=True, capture_output=True, text=True)
+    for _ in range(100):  # wait for the daemon's socket (max ~5 s)
+        if sock.exists() and _sock_alive(sock):
+            return sock
+        time.sleep(0.05)
+    raise RuntimeError(f"pty daemon for {unit} did not come up")
+
+
+@app.get("/api/ptys")
+def api_ptys():
+    """Live persistent sessions — lets the UI offer reattach after a reload."""
+    out = []
+    if PTY_DIR.is_dir():
+        for sock in PTY_DIR.glob("*.sock"):
+            if not _sock_alive(sock):
+                continue
+            proj, _, token = sock.stem.partition("__")
+            out.append({"project": "~" if proj == "root" else proj,
+                        "token": token, "since": sock.stat().st_mtime})
+    out.sort(key=lambda s: s["since"])
+    return out
+
+
 @app.websocket("/ws/terminal/{name}")
 async def terminal_ws(ws: WebSocket, name: str, resume: bool = False,
-                      mode: str = "default", session: str = ""):
+                      mode: str = "default", session: str = "",
+                      attach: str = ""):
     path = project_path(name)
     await ws.accept()
+    if PERSIST and attach:
+        await _persist_ws(ws, name, path, attach, resume, mode, session)
+        return
     pid, fd = spawn_claude(path, resume, mode, session)
     loop = asyncio.get_running_loop()
     pty_data = asyncio.Queue()
@@ -319,6 +405,54 @@ async def terminal_ws(ws: WebSocket, name: str, resume: bool = False,
             pass
 
 
+async def _persist_ws(ws: WebSocket, name: str, path: Path, attach: str,
+                      resume: bool, mode: str, session: str) -> None:
+    """Bridge a WebSocket to a hub_ptyd session (attach/detach semantics).
+
+    Disconnect = detach: the session survives. A {"type":"kill"} frame ends
+    the session for real (drawer ✕). Multiple clients may attach at once —
+    drawer and full-page view mirror the same chat.
+    """
+    try:
+        sock = ensure_ptyd(name, path, attach, resume, mode, session)
+    except (RuntimeError, subprocess.CalledProcessError):
+        await ws.close(code=1011)
+        return
+    reader, writer = await asyncio.open_unix_connection(str(sock))
+
+    async def daemon_to_ws():
+        try:
+            while True:
+                head = await reader.readexactly(5)
+                payload = await reader.readexactly(struct.unpack(">I", head[1:5])[0])
+                if head[0:1] == b"o":
+                    await ws.send_bytes(payload)
+        except (asyncio.IncompleteReadError, ConnectionError, RuntimeError):
+            try:
+                await ws.close()
+            except RuntimeError:
+                pass
+
+    pump = asyncio.create_task(daemon_to_ws())
+    try:
+        while True:
+            msg = json.loads(await ws.receive_text())
+            if msg["type"] == "input":
+                data = msg["data"].encode()
+                writer.write(b"i" + struct.pack(">I", len(data)) + data)
+            elif msg["type"] == "resize":
+                payload = struct.pack(">HH", msg["rows"], msg["cols"])
+                writer.write(b"r" + struct.pack(">I", len(payload)) + payload)
+            elif msg["type"] == "kill":
+                writer.write(b"k" + struct.pack(">I", 0))
+            await writer.drain()
+    except (WebSocketDisconnect, RuntimeError, ConnectionError):
+        pass
+    finally:
+        pump.cancel()
+        writer.close()
+
+
 def _drain(fd: int, queue: asyncio.Queue, loop) -> None:
     try:
         data = os.read(fd, 65536)
@@ -332,10 +466,19 @@ def _drain(fd: int, queue: asyncio.Queue, loop) -> None:
 
 
 @app.get("/terminal/{name}", response_class=HTMLResponse)
-def terminal_page(name: str, resume: bool = False):
+def terminal_page(name: str, resume: bool = False, attach: str = "",
+                  mode: str = "default"):
     project_path(name)  # 404 unknown names
     safe = html.escape(name)
-    ws_query = "?resume=1" if resume else ""
+    import uuid
+    params = []
+    if PERSIST:  # no attach given → a fresh persistent session
+        params.append("attach=" + (attach or uuid.uuid4().hex[:12]))
+    if resume:
+        params.append("resume=1")
+    if mode != "default":
+        params.append(f"mode={mode}")
+    ws_query = ("?" + "&".join(params)) if params else ""
     return f"""<!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8"><title>{safe} — claude</title>

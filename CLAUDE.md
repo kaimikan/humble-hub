@@ -33,11 +33,27 @@ Constraints:
 
 - **NEVER `systemctl --user restart hub.service` without checking your own
   cgroup first** (`cat /proc/self/cgroup`). Claude sessions opened from the
-  hub's drawer run *inside* hub.service — restarting it kills every drawer
-  session, including, if you are one, yourself mid-command (this happened on
-  2026-06-08). If you are inside `hub.service`, ask the user to restart from
-  the shelf or a Konsole session instead. Static files (`static/`) and
-  `data/notes.json` are re-read per request and need no restart.
+  hub's drawer used to run *inside* hub.service — restarting killed every
+  drawer session, including, if you are one, yourself mid-command (happened
+  2026-06-08). Since 2026-06-10, drawer chats run in **hub_ptyd** daemons
+  (transient `hub-pty-*` user units, own cgroups) and *survive* restarts —
+  but sessions started before that deploy, and any non-attach fallback
+  session, still die with the service. Check `/api/ptys` / your cgroup before
+  advising a restart. Static files (`static/`) and `data/notes.json` are
+  re-read per request and need no restart.
+
+- **Persistent sessions**: `tools/hub_ptyd.py` holds each chat's pty and
+  serves it on a Unix socket under `~/.local/state/hub/ptys/` (framed
+  protocol: i/r/k in, o out; resize-to-same-size jiggles width to force a
+  SIGWINCH repaint on reattach). The hub bridges WS ↔ socket
+  (`?attach=<token>`); disconnect = detach, `{"type":"kill"}` (drawer ✕) ends
+  the session; multiple clients may attach (drawer + ⤢ full page mirror the
+  same chat). `GET /api/ptys` lists live sessions → reattach pills after a
+  reload. Env knobs: `HUB_PERSIST=0` restores in-process ptys,
+  `HUB_CLAUDE_CMD` overrides the command (tests use bash),
+  `HUB_PTY_DIR` relocates sockets. Lifecycle test:
+  `tests/test_persist.py` (its own uvicorn on :7799 — never touches the
+  live hub).
 
 - KDE Plasma on Wayland host: launched processes must inherit the session
   environment — the unit runs in `graphical-session.target` for that reason.

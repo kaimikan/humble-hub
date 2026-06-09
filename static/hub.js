@@ -532,12 +532,14 @@ function setStatus(s, status) {
 }
 
 // opt is a legacy boolean (resume picker) OR an options object:
-//   { resume: bool, session: "<id>" (resume a specific session), label: "<text>" }
+//   { resume: bool, session: "<id>" (resume a specific session),
+//     attach: "<token>" (reattach a live detached pty), label: "<text>" }
 function openDrawer(project, opt = false) {
   const o = (typeof opt === "boolean") ? { resume: opt } : (opt || {});
-  // resumed historical sessions are keyed by id so several from one project
-  // can coexist; fresh/picker chats keep keying by project (focus, don't dupe)
-  const key = o.session ? `${project}#${o.session}` : project;
+  // resumed/reattached sessions are keyed by their token so several from one
+  // project can coexist; fresh chats keep keying by project (focus, don't dupe)
+  const key = o.session ? `${project}#${o.session}`
+            : o.attach ? `${project}#${o.attach}` : project;
   let s = sessions.get(key);
   if (!s || s.ws.readyState > 1) s = createSession(key, project, o);
   activate(key);
@@ -560,13 +562,18 @@ function createSession(key, project, o) {
   const params = new URLSearchParams({ mode: chatMode });
   if (o.resume) params.set("resume", "1");
   if (o.session) params.set("session", o.session);
+  // every chat runs in a persistent pty (hub_ptyd) keyed by this token —
+  // disconnects detach instead of killing, and the full-page view can
+  // attach to the very same session
+  const token = o.attach || o.session || Math.random().toString(36).slice(2, 10);
+  params.set("attach", token);
   // wss when served over https (e.g. via Tailscale Serve)
   const wsProto = location.protocol === "https:" ? "wss" : "ws";
   const ws = new WebSocket(
     `${wsProto}://${location.host}/ws/terminal/${encodeURIComponent(project)}?${params}`);
   ws.binaryType = "arraybuffer";
 
-  const s = { key, name: project, label: o.label || disp(project),
+  const s = { key, name: project, token, label: o.label || disp(project),
     ws, term, fit, host, status: "working", lastOut: Date.now(), sawOutput: false };
   sessions.set(key, s);
 
@@ -604,7 +611,11 @@ function activate(key) {
   const s = sessions.get(key);
   sessions.forEach(o => o.host.classList.toggle("shown", o.key === key));
   document.getElementById("d-title").textContent = s.label;
-  document.getElementById("d-full").href = `/terminal/${encodeURIComponent(s.name)}`;
+  // ⤢ opens the SAME live session (same attach token) in a new tab — it
+  // mirrors the chat rather than spawning an unrelated one
+  const full = document.getElementById("d-full");
+  full.href = `/terminal/${encodeURIComponent(s.name)}?attach=${encodeURIComponent(s.token)}`;
+  full.target = "_blank";
   drawerEl().classList.add("open");
   document.body.classList.add("drawer-open");
   if (s.status === "attention" || s.status === "ready") s.status = "working";
@@ -622,6 +633,9 @@ function minimizeDrawer() {
 function closeActive() {
   const s = sessions.get(active);
   if (!s) return;
+  // ✕ means END the session — tell the pty daemon to kill it; a plain
+  // disconnect (refresh, navigation) detaches and the session lives on
+  if (s.ws.readyState === 1) s.ws.send(JSON.stringify({ type: "kill" }));
   s.ws.close();
   s.term.dispose();
   s.host.remove();
@@ -630,6 +644,22 @@ function closeActive() {
   if (next.done) minimizeDrawer();
   else activate(next.value);
 }
+
+// --- detached persistent sessions → reattach pills ---------------------------
+// After a page reload (or coming back on the phone) the client state is gone
+// but hub_ptyd sessions live on; offer them as pills.
+let detachedPtys = [];
+async function loadDetached() {
+  try {
+    const r = await fetch("/api/ptys");
+    const data = r.ok ? await r.json() : [];
+    detachedPtys = Array.isArray(data) ? data : [];
+  } catch (e) {
+    detachedPtys = []; // older server without /api/ptys — feature dormant
+  }
+  renderPills();
+}
+loadDetached();
 
 function renderPills() {
   const box = document.getElementById("pills");
@@ -647,6 +677,18 @@ function renderPills() {
     pill.onclick = () => s.status === "ended"
       ? (s.host.remove(), sessions.delete(s.key), renderPills())
       : activate(s.key);
+    box.appendChild(pill);
+  });
+  // live-but-detached ptys (e.g. after a page reload) — click to reattach
+  const attached = new Set([...sessions.values()].map(s => s.token));
+  detachedPtys.forEach(p => {
+    if (attached.has(p.token)) return;
+    const pill = document.createElement("button");
+    pill.className = "pill s-detached";
+    pill.innerHTML = `<span class="dot"></span>⟲ `;
+    pill.appendChild(document.createTextNode(disp(p.project)));
+    pill.title = "live detached session — click to reattach";
+    pill.onclick = () => openDrawer(p.project, { attach: p.token });
     box.appendChild(pill);
   });
 }
@@ -808,6 +850,7 @@ setInterval(() => {
     .kbar .wide { min-width:3.6rem; font-variant:small-caps; letter-spacing:.04em; }
     .kbar .mic.rec { background:#7a2733; border-color:#f7768e; animation:micpulse 1.2s infinite; }
     @keyframes micpulse { 50% { opacity:.55; } }
+    .pill.s-detached .dot { background:#7aa2f7; }
     /* phone ergonomics: full-width drawer, bigger touch targets, hide
        laptop-only actions (files/launch act on the laptop, not the phone) */
     @media (max-width: 700px) { :root { --drawer-w: 100vw; } }

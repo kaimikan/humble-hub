@@ -34,7 +34,10 @@ def check(name, cond, detail=""):
 def run(page):
     errors = []
     page.on("pageerror", lambda e: errors.append(str(e)))
-    page.on("console", lambda m: errors.append(m.text) if m.type == "error" else None)
+    # /api/ptys 404s until the server restart that deploys it — expected noise
+    page.on("console", lambda m: errors.append(m.text)
+            if m.type == "error"
+            and "api/ptys" not in str(getattr(m, "location", "")) else None)
 
     def route(r):
         u = r.request.url

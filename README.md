@@ -50,15 +50,18 @@ project one click from being used.
 
 Then set `http://localhost:7700` as the browser homepage/new-tab page.
 
-## Roadmap
+## v4
 
-- **Shared pty sessions (tmux-style)**: one persistent `claude` pty per
-  project owned by the hub server; every client (laptop browser, phone,
-  multiple tabs) *attaches* to the same pty instead of spawning a new
-  process. Laptop and phone become live mirrors of one conversation, the
-  chat survives browser closes, and a forgotten open client can no longer
-  fork the session — avoids the two-Claudes-diverging problem hit on
-  2026-06-08. Replaces the current spawn-per-WebSocket model in `app.py`
-  (`spawn_claude`/`terminal_ws`).
+- **Persistent chat sessions**: every chat runs in a `hub_ptyd` daemon (a
+  ~150-line stdlib dtach equivalent, `tools/hub_ptyd.py`) spawned as a
+  transient systemd user unit — its own cgroup, so chats **survive
+  hub.service restarts**, page reloads and tab closes. Disconnect detaches;
+  the drawer ✕ kills for real. Detached sessions reappear as ⟲ pills.
+  Multiple clients can attach to one session: the drawer's ⤢ now opens the
+  **same live chat** as a full page (new tab) instead of spawning an
+  unrelated one — laptop and phone become live mirrors of one conversation.
+  This delivered the tmux-style shared-pty roadmap item.
+
+## Roadmap
 - Later: a "today" panel — goals/mindful-living tie-in (possible radial
   Vitruvian centerpiece).
