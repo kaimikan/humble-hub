@@ -1,0 +1,44 @@
+#!/usr/bin/env bash
+# home-server — toggle "stay awake on AC with the lid closed" for hosting the
+# hub to the phone over Tailscale. Flips the KDE PowerDevil *AC* profile only;
+# battery behaviour is left untouched. Off = restore normal defaults (suspend
+# on lid close). Usage: home-server [on|off|toggle|status]   (default: status)
+set -euo pipefail
+
+FILE=powerdevilrc
+GROUP=(--file "$FILE" --group AC --group SuspendAndShutdown)
+
+reload() { systemctl --user restart plasma-powerdevil.service 2>/dev/null || true; }
+
+note() {
+    command -v notify-send >/dev/null 2>&1 && notify-send -a "home-server" "$1" "$2" || true
+}
+
+is_on() {
+    [ "$(kreadconfig6 "${GROUP[@]}" --key LidAction --default "")" = "0" ]
+}
+
+turn_on() {
+    kwriteconfig6 "${GROUP[@]}" --key LidAction 0          # 0 = do nothing
+    kwriteconfig6 "${GROUP[@]}" --key AutoSuspendAction 0  # 0 = never auto-suspend
+    reload
+    echo "home-server mode: ON — stays awake on AC with the lid closed"
+    note "Home-server mode ON" "Laptop stays awake on AC with the lid closed."
+}
+
+turn_off() {
+    # delete the keys → KDE reverts to defaults (lid close suspends on AC)
+    kwriteconfig6 "${GROUP[@]}" --key LidAction --delete 2>/dev/null || true
+    kwriteconfig6 "${GROUP[@]}" --key AutoSuspendAction --delete 2>/dev/null || true
+    reload
+    echo "home-server mode: OFF — normal power behaviour (suspends on lid close)"
+    note "Home-server mode OFF" "Normal power behaviour restored."
+}
+
+case "${1:-status}" in
+    on)     turn_on ;;
+    off)    turn_off ;;
+    toggle) if is_on; then turn_off; else turn_on; fi ;;
+    status) if is_on; then echo "home-server mode: ON"; else echo "home-server mode: OFF"; fi ;;
+    *)      echo "usage: home-server [on|off|toggle|status]" >&2; exit 2 ;;
+esac

@@ -1,0 +1,104 @@
+#!/usr/bin/env python3
+"""System-tray toggle for home-server mode (stay awake on AC, lid closed).
+
+A coloured dot in the system tray: green = ON (hosting the hub), grey = OFF
+(normal power). Left-click toggles; right-click for an explicit on/off/quit
+menu. All power logic lives in the `home-server` CLI — this just calls it and
+reflects the state, polling every 10s so a CLI toggle keeps the dot in sync.
+
+KDE Plasma 6 / Wayland: uses Qt's StatusNotifierItem via QSystemTrayIcon.
+"""
+import os
+import subprocess
+import sys
+
+from PyQt6.QtCore import Qt, QTimer
+from PyQt6.QtGui import QAction, QColor, QIcon, QPainter, QPixmap
+from PyQt6.QtWidgets import QApplication, QMenu, QSystemTrayIcon
+
+HOME_SERVER = os.path.expanduser("~/.local/bin/home-server")
+ON_COLOR = "#4f9e3a"   # verdigris-green = hosting
+OFF_COLOR = "#9c875f"  # muted ink = normal power
+
+
+def run(*args) -> str:
+    try:
+        return subprocess.run([HOME_SERVER, *args], capture_output=True,
+                              text=True, timeout=20).stdout.strip()
+    except Exception:
+        return ""
+
+
+def is_on() -> bool:
+    return run("status").upper().endswith("ON")
+
+
+def make_icon(on: bool) -> QIcon:
+    pm = QPixmap(64, 64)
+    pm.fill(Qt.GlobalColor.transparent)
+    p = QPainter(pm)
+    p.setRenderHint(QPainter.RenderHint.Antialiasing)
+    p.setBrush(QColor(ON_COLOR if on else OFF_COLOR))
+    p.setPen(QColor(0, 0, 0, 90))
+    p.drawEllipse(8, 8, 48, 48)
+    p.end()
+    return QIcon(pm)
+
+
+class Tray:
+    def __init__(self, app: QApplication):
+        self.app = app
+        self.tray = QSystemTrayIcon()
+        self.menu = QMenu()
+        self.status_action = QAction("…")
+        self.status_action.setEnabled(False)
+        self.act_on = QAction("Turn ON (host the hub)")
+        self.act_off = QAction("Turn OFF")
+        self.act_quit = QAction("Quit indicator")
+        self.act_on.triggered.connect(lambda: self.set_state(True))
+        self.act_off.triggered.connect(lambda: self.set_state(False))
+        self.act_quit.triggered.connect(app.quit)
+        self.menu.addAction(self.status_action)
+        self.menu.addSeparator()
+        self.menu.addAction(self.act_on)
+        self.menu.addAction(self.act_off)
+        self.menu.addSeparator()
+        self.menu.addAction(self.act_quit)
+        self.tray.setContextMenu(self.menu)
+        self.tray.activated.connect(self.on_activated)
+        self.refresh()
+        self.tray.show()
+        self.timer = QTimer()
+        self.timer.timeout.connect(self.refresh)
+        self.timer.start(10000)
+
+    def on_activated(self, reason):
+        if reason == QSystemTrayIcon.ActivationReason.Trigger:  # left click
+            self.set_state(not is_on())
+
+    def set_state(self, on: bool):
+        run("on" if on else "off")
+        self.refresh()
+
+    def refresh(self):
+        on = is_on()
+        self.tray.setIcon(make_icon(on))
+        label = "Home-server: ON (hosting)" if on else "Home-server: OFF"
+        self.tray.setToolTip(label)
+        self.status_action.setText(label)
+        self.act_on.setEnabled(not on)
+        self.act_off.setEnabled(on)
+
+
+def main() -> int:
+    app = QApplication(sys.argv)
+    app.setQuitOnLastWindowClosed(False)
+    if not QSystemTrayIcon.isSystemTrayAvailable():
+        print("no system tray available", file=sys.stderr)
+        return 1
+    Tray(app)
+    return app.exec()
+
+
+if __name__ == "__main__":
+    sys.exit(main())

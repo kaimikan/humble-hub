@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Home-server indicator
+Comment=Tray toggle: keep the laptop awake on AC (lid closed) to host the hub
+Exec=/home/kaimikan/.local/bin/home-server-tray
+Icon=network-server
+Categories=Utility;
+X-GNOME-Autostart-enabled=true
+X-KDE-autostart-phase=2
