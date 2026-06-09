@@ -43,9 +43,16 @@ it's a toggle, not a permanent setting. Two ways, same engine:
   right-click for an explicit on/off/quit menu. Autostarts at login.
 - **CLI** (`tools/home-server`): `home-server [on|off|toggle|status]`.
 
-Install both (user scope, no sudo): `./tools/install.sh`, then start the tray
-with `~/.local/bin/home-server-tray &` (or just re-login). "Off" restores KDE's
-default power behaviour (suspend on lid close); battery profile is never touched.
+Install both (user scope, no sudo): `./tools/install.sh`. The tray normally
+starts at login via the autostart entry (independent of `hub.service`). "Off"
+restores KDE's default power behaviour (suspend on lid close); battery profile
+is never touched.
+
+> **Gotcha:** if you start the tray *manually* mid-session, launch it **detached
+> from `hub.service`** — otherwise restarting the hub kills it:
+> `systemd-run --user --scope /home/kaimikan/.local/bin/home-server-tray &`
+> (or simply re-login to let autostart handle it). Don't `Popen`/`&` it from a
+> hub-spawned shell, which lives inside the `hub.service` cgroup.
 
 ## Optional hardening — headless / login-screen case (needs sudo)
 
