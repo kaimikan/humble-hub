@@ -44,6 +44,9 @@ async function refreshServiceDots() {
       dot.textContent = on ? "●" : "○";
       dot.title = on ? "running" : "stopped";
     });
+    document.querySelectorAll(".b-stop").forEach(b => {
+      b.style.display = states[b.dataset.stop] ? "" : "none";
+    });
   } catch (e) { /* hub offline mid-refresh — ignore */ }
 }
 refreshServiceDots();
@@ -542,6 +545,11 @@ function setChatMode(mode) {
 const modeSelect = document.getElementById("mode-select");
 if (modeSelect) modeSelect.value = chatMode;
 
+const CHAT_ICON = '<svg class="i" viewBox="0 0 24 24" aria-hidden="true">'
+  + '<path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9'
+  + 'L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5'
+  + 'a8.48 8.48 0 0 1 8 8v.5z"/></svg>';
+
 const sessions = new Map();
 let active = null; // key of the session shown in the drawer, or null when hidden
 
@@ -644,7 +652,8 @@ function createSession(key, project, o) {
 }
 
 function refit(s, force = false) {
-  if (!s || !s.host.offsetParent) return;
+  if (!s) return;
+  if (!s.host.offsetParent) { s.pendingFit = true; return; } // hidden — retry on activate
   s.fit.fit();
   // only send real changes (the daemon treats a first same-size resize as
   // "repaint for me"; repeating it would spam duplicate frames into
@@ -683,7 +692,12 @@ function activate(key) {
   document.body.classList.add("drawer-open");
   if (s.status === "attention" || s.status === "ready") s.status = "working";
   renderPills();
-  setTimeout(() => { refit(s); s.term.focus(); }, 240);
+  setTimeout(() => {
+    refit(s, s.pendingFit);  // force a resize if a fit was skipped while hidden
+    s.pendingFit = false;
+    try { s.term.refresh(0, s.term.rows - 1); } catch (e) {}
+    s.term.focus();
+  }, 240);
 }
 
 function toggleDrawerFull() {
@@ -740,7 +754,7 @@ function renderPills() {
     const pill = document.createElement("button");
     pill.className = `pill s-${s.status}`;
     const short = s.label.length > 26 ? s.label.slice(0, 25) + "…" : s.label;
-    pill.innerHTML = `<span class="dot"></span>🗨 `;
+    pill.innerHTML = `<span class="dot"></span>${CHAT_ICON} `;
     pill.appendChild(document.createTextNode(short)); // label may be arbitrary text
     pill.title = ({ working: "working…", ready: "ready for you",
                    attention: "needs your input", ended: "session ended" }[s.status] || "")
@@ -1014,6 +1028,7 @@ setInterval(() => {
   const style = document.createElement("style");
   style.textContent = `
     body[data-theme="matrix"] {
+      --font-family:"JetBrains Mono","Hack","Noto Sans Mono",monospace;
       --parchment:#050905; --paper:#0b140c; --ink:#a8ffbe; --ink-soft:#52d98b;
       --ink-faint:#2e7d52; --lapis:#36e3a0; --sanguine:#ff5470;
       --verdigris:#2ecf7a; --ochre:#9fe06a; --plum:#36b88f;
@@ -1023,6 +1038,7 @@ setInterval(() => {
     body[data-theme="matrix"] .card, body[data-theme="matrix"] #modal,
     body[data-theme="matrix"] .sess-modal { box-shadow:0 0 14px rgba(46,207,122,.18); }
     body[data-theme="dragon"] {
+      --font-family:"Trebuchet MS","DejaVu Sans",Verdana,sans-serif;
       --parchment:#fff3da; --paper:#ffe9c2; --ink:#33250e; --ink-soft:#a65c00;
       --ink-faint:#cf9544; --lapis:#1f4dd8; --sanguine:#f56f00;
       --verdigris:#2eaf5d; --ochre:#e6a817; --plum:#8c4ddd;
@@ -1041,9 +1057,12 @@ setInterval(() => {
 
   // 🎨 top-right palette button → modal with live-preview swatches per theme
   const PREVIEWS = {
-    codex:  { bg: "#efe2c0", ink: "#43331c", dots: ["#2f5277", "#9a3b22", "#4f6b3a", "#8a6d1f"] },
-    matrix: { bg: "#050905", ink: "#a8ffbe", dots: ["#36e3a0", "#ff5470", "#2ecf7a", "#9fe06a"] },
-    dragon: { bg: "#fff3da", ink: "#33250e", dots: ["#1f4dd8", "#f56f00", "#2eaf5d", "#e6a817"] },
+    codex:  { bg: "#efe2c0", ink: "#43331c", dots: ["#2f5277", "#9a3b22", "#4f6b3a", "#8a6d1f"],
+              font: "'EB Garamond','Noto Serif',Georgia,serif" },
+    matrix: { bg: "#050905", ink: "#a8ffbe", dots: ["#36e3a0", "#ff5470", "#2ecf7a", "#9fe06a"],
+              font: "'JetBrains Mono','Hack','Noto Sans Mono',monospace" },
+    dragon: { bg: "#fff3da", ink: "#33250e", dots: ["#1f4dd8", "#f56f00", "#2eaf5d", "#e6a817"],
+              font: "'Trebuchet MS','DejaVu Sans',Verdana,sans-serif" },
   };
   const pStyle = document.createElement("style");
   pStyle.textContent = `
@@ -1051,7 +1070,7 @@ setInterval(() => {
       background:var(--paper, #f6edd6); border:1px solid var(--ink-soft);
       border-radius:50%; width:2.4rem; height:2.4rem; font-size:1.15rem;
       cursor:pointer; box-shadow:1px 2px 7px rgba(67,51,28,.3); padding:0; }
-    #theme-btn:hover { background:var(--ink); }
+    #theme-btn:hover { background:var(--ink); color:var(--parchment); }
     .theme-overlay { position:fixed; inset:0; background:rgba(40,30,15,.45);
       z-index:80; display:flex; align-items:flex-start; justify-content:center;
       padding-top:14vh; }
@@ -1059,12 +1078,16 @@ setInterval(() => {
     .theme-modal { background:var(--parchment); border:1.5px solid var(--ink-soft);
       outline:1px solid var(--ink-faint); outline-offset:4px; border-radius:2px;
       padding:1rem 1.2rem; box-shadow:3px 5px 18px rgba(40,30,15,.45);
-      display:flex; gap:.9rem; }
+      display:flex; flex-direction:column; gap:.7rem; }
+    .theme-modal h3 { margin:0; font-size:1rem; font-weight:600;
+      font-variant:small-caps; letter-spacing:.08em; color:var(--ink); }
+    .theme-row { display:flex; gap:.9rem; }
     .theme-card { width:9rem; border:1.5px solid var(--ink-faint); border-radius:3px;
       overflow:hidden; cursor:pointer; background:transparent; padding:0;
-      font:inherit; text-align:center; }
-    .theme-card:hover { border-color: var(--ink); }
-    .theme-card.current { border-color:var(--ink); outline:2px solid var(--ink-soft); }
+      font:inherit; text-align:center; box-sizing:border-box; }
+    .theme-card:hover { box-shadow:0 3px 10px rgba(0,0,0,.4); transform:translateY(-1px); }
+    .theme-card.current { border-color:transparent; outline:2.5px solid var(--ink-soft); }
+    .theme-card.current .t-name::before { content:"✓ "; }
     .theme-card .swatch { height:5.2rem; display:flex; flex-direction:column;
       align-items:center; justify-content:center; gap:.45rem; }
     .theme-card .aa { font-size:1.5rem; font-weight:600; }
@@ -1079,25 +1102,39 @@ setInterval(() => {
   overlay.hidden = true;
   const modal = document.createElement("div");
   modal.className = "theme-modal";
+  modal.innerHTML = "<h3>themes</h3>";
+  const row = document.createElement("div");
+  row.className = "theme-row";
   for (const [t, pv] of Object.entries(PREVIEWS)) {
     const card = document.createElement("button");
     card.className = "theme-card";
     card.dataset.theme = t;
+    // every part of the card renders in ITS theme (bg, ink, font) — not the
+    // currently active one
     card.innerHTML = `
-      <span class="swatch" style="background:${pv.bg}">
+      <span class="swatch" style="background:${pv.bg}; font-family:${pv.font}">
         <span class="aa" style="color:${pv.ink}">Aa</span>
         <span class="dots">${pv.dots.map(c => `<span style="background:${c}"></span>`).join("")}</span>
       </span>
-      <span class="t-name">${t === "dragon" ? "dragon ball" : t}</span>`;
+      <span class="t-name" style="background:${pv.bg}; color:${pv.ink};
+        font-family:${pv.font}; border-top:1px solid rgba(128,128,128,.35)">
+        ${t === "dragon" ? "dragon ball" : t}</span>`;
     card.onclick = () => apply(t);
-    modal.appendChild(card);
+    row.appendChild(card);
   }
+  modal.appendChild(row);
   overlay.appendChild(modal);
   document.body.appendChild(overlay);
 
   const btn = document.createElement("button");
   btn.id = "theme-btn";
-  btn.textContent = "🎨";
+  btn.innerHTML = '<svg class="i" viewBox="0 0 24 24" aria-hidden="true" style="width:1.25em;height:1.25em">'
+    + '<path d="M12 22a10 10 0 1 1 10-10c0 1.7-1.3 3-3 3h-2.6a2 2 0 0 0-1.5 3.3'
+    + 'c.3.4.5.8.5 1.2a2.3 2.3 0 0 1-2.4 2.5Z"/>'
+    + '<circle cx="7.5" cy="11.5" r="1.2" fill="currentColor" stroke="none"/>'
+    + '<circle cx="10.5" cy="7.5" r="1.2" fill="currentColor" stroke="none"/>'
+    + '<circle cx="15" cy="7.5" r="1.2" fill="currentColor" stroke="none"/>'
+    + '<circle cx="17.5" cy="11.5" r="1.2" fill="currentColor" stroke="none"/></svg>';
   btn.title = "themes";
   btn.onclick = () => { overlay.hidden = !overlay.hidden; };
   document.body.appendChild(btn);

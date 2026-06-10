@@ -104,11 +104,6 @@ def scan() -> list:
     return projects
 
 
-# Serve static-site projects (e.g. wow-world-wiki) straight from the hub.
-for _p in scan():
-    if _p["type"] == "site":
-        app.mount(f"/sites/{_p['name']}", StaticFiles(directory=_p["path"], html=True))
-
 app.mount("/static", StaticFiles(directory=HUB_DIR / "static"))
 
 
@@ -123,6 +118,29 @@ def project_path(name: str) -> Path:
     if not path.is_dir() or SKIP.match(name) or "/" in name:
         raise HTTPException(404, f"no such project: {name}")
     return path
+
+
+# Static-site projects served dynamically — a freshly created/cloned site
+# project works immediately, no hub restart (mounts froze the list at boot).
+@app.get("/sites/{name}")
+def site_root(name: str):
+    from fastapi.responses import RedirectResponse
+    project_path(name)
+    return RedirectResponse(f"/sites/{name}/", status_code=308)
+
+
+@app.get("/sites/{name}/{path:path}")
+def serve_site(name: str, path: str = ""):
+    from fastapi.responses import FileResponse
+    base = project_path(name).resolve()
+    target = (base / path).resolve() if path else base / "index.html"
+    if target.is_dir():
+        target = target / "index.html"
+    if not str(target).startswith(str(base) + os.sep):
+        raise HTTPException(403, "path escapes the project")
+    if not target.is_file():
+        raise HTTPException(404, f"no such file in {name}: {path}")
+    return FileResponse(target)
 
 
 @app.post("/api/projects/{name}/terminal")
@@ -672,6 +690,13 @@ def terminal_page(name: str, resume: bool = False, attach: str = "",
 # ---------------------------------------------------------------------------
 # Page
 
+# inline chat icon (stroke = currentColor) — replaces the 🗨 emoji
+CHAT_SVG = ('<svg class="i" viewBox="0 0 24 24" aria-hidden="true">'
+            '<path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7'
+            ' 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8'
+            ' 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/>'
+            '</svg>')
+
 TYPE_GLYPHS = {"site": "☉", "app": "⚙", "code": "✒", "notes": "✎", "empty": "◯",
                "service": "⚗"}
 TYPE_LABELS = {
@@ -700,7 +725,7 @@ def card(p: dict) -> str:
     name = html.escape(p["name"])
     buttons = [
         f"""<div class="menu">
-          <button class="b-claude" onclick="openDrawer('{name}')">🗨 claude ▾</button>
+          <button class="b-claude" onclick="openDrawer('{name}')">{CHAT_SVG} claude ▾</button>
           <div class="menu-items">
             <button onclick="openDrawer('{name}')">fresh chat</button>
             <button onclick="openDrawer('{name}', true)">resume chat</button>
@@ -719,8 +744,9 @@ def card(p: dict) -> str:
         buttons.insert(0, f"""<button class="b-go" onclick="act('{name}','launch')">▶ launch</button>""")
     if p["type"] == "service":
         buttons.insert(0, f"""<button class="b-go" onclick="openService('{name}')">▶ open</button>""")
-        buttons.append(f"""<button class="b-stop" onclick="stopService('{name}')"
-          title="stop the service">■</button>""")
+        buttons.append(f"""<button class="b-stop" data-stop="{name}"
+          onclick="stopService('{name}')" title="stop the service"
+          style="display:none">■</button>""")
     meta = html.escape(p["last_commit"]) if p.get("last_commit") else ""
     if p.get("dirty"):
         meta += " · ✱ wet ink"
@@ -751,6 +777,7 @@ def index():
 <link rel="stylesheet" href="/static/vendor/xterm.min.css">
 <style>
   :root {{ color-scheme: light;
+    --font-family:"EB Garamond", "Noto Serif", Georgia, serif;
     --ink:#43331c; --ink-soft:#6e5a39; --ink-faint:#9c875f;
     --parchment:#efe2c0; --paper:#f6edd6;
     --lapis:#2f5277; --sanguine:#9a3b22; --verdigris:#4f6b3a;
@@ -758,7 +785,7 @@ def index():
     --bg-hi:#f7edd3; --bg-mid:#f2e6c6; --bg-lo:#e2d2a8;
     --card-bg:rgba(255,250,235,.35); --card-hot:rgba(255,250,235,.7);
     --input-bg:rgba(255,250,235,.5); }}
-  body {{ color:var(--ink); font:16px/1.55 "EB Garamond", "Noto Serif", Georgia, serif;
+  body {{ color:var(--ink); font:16px/1.55 var(--font-family);
     margin:0; height:100vh; overflow:hidden;
     background:
       radial-gradient(ellipse at 15% 8%, var(--bg-hi) 0%, transparent 55%),
@@ -853,6 +880,9 @@ def index():
   .chip[data-type="service"] {{ --chip:var(--plum); }}
   .chip[data-type="app"]   {{ --chip:var(--sanguine); }}
   /* service status dot + stop control */
+  svg.i {{ width:1em; height:1em; vertical-align:-.12em;
+    fill:none; stroke:currentColor; stroke-width:2;
+    stroke-linecap:round; stroke-linejoin:round; }}
   .svc-dot {{ font-size:.9rem; color:var(--ink-faint); }}
   .svc-dot.on {{ color:var(--verdigris); }}
   .b-stop {{ color:var(--ink-faint); border-color:var(--ink-faint); padding:.3rem .5rem; }}
@@ -948,7 +978,7 @@ def index():
     <hr class="rule">
     <div class="controls">
       <div class="menu">
-        <button class="b-claude" onclick="openDrawer('~')">🗨 root claude ▾</button>
+        <button class="b-claude" onclick="openDrawer('~')">{CHAT_SVG} root claude ▾</button>
         <div class="menu-items">
           <button onclick="openDrawer('~')">fresh chat</button>
           <button onclick="openDrawer('~', true)">resume chat</button>
