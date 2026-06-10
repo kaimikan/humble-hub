@@ -1068,9 +1068,10 @@ setInterval(() => {
   pStyle.textContent = `
     #theme-btn { position:fixed; top:.9rem; right:1.1rem; z-index:45;
       background:var(--paper, #f6edd6); border:1px solid var(--ink-soft);
-      border-radius:50%; width:2.4rem; height:2.4rem; font-size:1.15rem;
-      cursor:pointer; box-shadow:1px 2px 7px rgba(67,51,28,.3); padding:0; }
-    #theme-btn:hover { background:var(--ink); color:var(--parchment); }
+      border-radius:50%; width:2.4rem; height:2.4rem; cursor:pointer;
+      box-shadow:1px 2px 7px rgba(67,51,28,.3); padding:0;
+      display:flex; align-items:center; justify-content:center; }
+    #theme-btn:hover { background:var(--ink); color:var(--parchment); border-color:var(--ink); }
     .theme-overlay { position:fixed; inset:0; background:rgba(40,30,15,.45);
       z-index:80; display:flex; align-items:flex-start; justify-content:center;
       padding-top:14vh; }
@@ -1082,11 +1083,16 @@ setInterval(() => {
     .theme-modal h3 { margin:0; font-size:1rem; font-weight:600;
       font-variant:small-caps; letter-spacing:.08em; color:var(--ink); }
     .theme-row { display:flex; gap:.9rem; }
-    .theme-card { width:9rem; border:1.5px solid var(--ink-faint); border-radius:3px;
+    /* cards must be theme-idempotent: neutral chrome, and explicit overrides
+       for every global button style (hover bg, padding, small-caps, border) */
+    .theme-card { width:9rem; border:1.5px solid rgba(128,128,128,.45); border-radius:3px;
       overflow:hidden; cursor:pointer; background:transparent; padding:0;
-      font:inherit; text-align:center; box-sizing:border-box; }
-    .theme-card:hover { box-shadow:0 3px 10px rgba(0,0,0,.4); transform:translateY(-1px); }
-    .theme-card.current { border-color:transparent; outline:2.5px solid var(--ink-soft); }
+      font:inherit; font-variant:normal; letter-spacing:normal;
+      text-align:center; box-sizing:border-box; line-height:1.4; }
+    .theme-card:hover { background:transparent; color:inherit;
+      box-shadow:0 3px 10px rgba(0,0,0,.45); transform:translateY(-1px);
+      border-color:rgba(128,128,128,.8); }
+    .theme-card.current { border-color:transparent; outline:2.5px solid rgba(128,128,128,.85); }
     .theme-card.current .t-name::before { content:"✓ "; }
     .theme-card .swatch { height:5.2rem; display:flex; flex-direction:column;
       align-items:center; justify-content:center; gap:.45rem; }
