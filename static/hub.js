@@ -984,13 +984,18 @@ setInterval(() => {
        native scrollbar) — so take full ownership of touch on the terminal */
     .xterm, .xterm-viewport { touch-action: none; }
     @media (max-width: 700px) {
+      /* the drawer is already full-width on phones — ⤢ expand is meaningless */
+      #d-full { display: none; }
       header h1 { font-size: clamp(.95rem, 4.2vw, 1.25rem);
         letter-spacing: .1em; white-space: normal; padding: 0 2.4rem; }
       #shelf { padding: 1.2rem .8rem; }
       .rule { width: 85%; }
     }
     @media (pointer: coarse) {
-      .b-files, button.b-go { display: none; }
+      /* hide LAPTOP-side card actions only — scoped to .card, because the
+         jot delete-confirm 'remove' button also carries b-go (phone bug:
+         only 'keep' was visible) */
+      .card .b-files, .card button.b-go { display: none; }
       .d-head button, .d-head a { font-size: 1.3rem; padding: .25rem .55rem; }
       .jot-open, .chip { padding: .42rem .85rem; }
     }`;

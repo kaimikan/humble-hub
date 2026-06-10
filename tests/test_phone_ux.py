@@ -79,6 +79,13 @@ with sync_playwright() as p:
         "els => els.filter(b => /konsole/i.test(b.textContent))"
         ".every(b => b.style.display === 'none')")
     check("mobile: 'in konsole' menu items hidden", konsole_hidden)
+    # the delete-confirm 'remove' button also carries b-go — it must NOT be
+    # swept up by the card-action hiding (phone bug 2026-06-10)
+    check("mobile: jot delete 'remove' button stays visible",
+          pg.eval_on_selector("#confirm .b-go",
+                              "el => getComputedStyle(el).display") != "none")
+    check("mobile: ⤢ expand hidden (drawer is already full-width)",
+          pg.eval_on_selector("#d-full", "el => getComputedStyle(el).display") == "none")
     check("mobile: drawer is full-width",
           pg.evaluate("getComputedStyle(document.getElementById('drawer')).width") ==
           pg.evaluate("window.innerWidth + 'px'"),
