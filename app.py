@@ -205,10 +205,22 @@ def service_open(name: str):
 
 @app.post("/api/projects/{name}/service/stop")
 def service_stop(name: str):
-    project_path(name)
+    """Stop the service however it was started: the hub's transient unit if
+    one exists, otherwise (manually-launched instance) kill by port."""
+    import time
+    path = project_path(name)
+    info = detect(path)
     subprocess.run(["systemctl", "--user", "stop", f"hub-svc-{name}.service"],
                    capture_output=True)
-    return {"ok": True}
+    if info.get("type") != "service":
+        return {"ok": True, "stopped": True}
+    for _ in range(8):  # give the unit a moment to release the port
+        if not _port_open(info["port"]):
+            return {"ok": True, "stopped": True}
+        time.sleep(0.25)
+    subprocess.run(["fuser", "-k", f"{info['port']}/tcp"], capture_output=True)
+    time.sleep(0.6)
+    return {"ok": True, "stopped": not _port_open(info["port"])}
 
 
 # --- notes & to-dos (file-backed, see data/notes.json) ---

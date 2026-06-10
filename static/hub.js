@@ -24,8 +24,13 @@ async function openService(name) {
 }
 
 async function stopService(name) {
-  await fetch(`/api/projects/${encodeURIComponent(name)}/service/stop`, { method: "POST" });
-  setTimeout(refreshServiceDots, 600);
+  const dot = document.querySelector(`.svc-dot[data-svc="${name}"]`);
+  if (dot) { dot.textContent = "◌"; dot.title = "stopping…"; } // instant feedback
+  const r = await fetch(`/api/projects/${encodeURIComponent(name)}/service/stop`,
+                        { method: "POST" });
+  const data = await r.json().catch(() => ({}));
+  refreshServiceDots();
+  if (data.stopped === false) alert(`${name}: still listening — check journalctl --user -u hub-svc-${name}`);
 }
 
 async function refreshServiceDots() {
@@ -1026,29 +1031,79 @@ setInterval(() => {
       --input-bg:rgba(255,255,255,.5); }`;
   document.head.appendChild(style);
 
-  const saved = localStorage.getItem("hubTheme") || "codex";
   const apply = t => {
     if (t === "codex") delete document.body.dataset.theme;
     else document.body.dataset.theme = t;
     localStorage.setItem("hubTheme", t);
+    document.querySelectorAll(".theme-card").forEach(c =>
+      c.classList.toggle("current", c.dataset.theme === t));
   };
-  apply(saved);
 
-  const sel = document.createElement("select");
-  sel.id = "theme-select";
-  sel.title = "theme";
-  [["codex", "theme: codex"], ["matrix", "theme: matrix"], ["dragon", "theme: dragon ball"]]
-    .forEach(([v, label]) => {
-      const o = document.createElement("option");
-      o.value = v; o.textContent = label;
-      sel.appendChild(o);
-    });
-  sel.value = saved;
-  sel.onchange = () => apply(sel.value);
-  const mode = document.getElementById("mode-select");
-  if (mode) {
-    sel.style.cssText = mode.style.cssText;
-    sel.className = mode.className;
-    mode.after(sel);
+  // 🎨 top-right palette button → modal with live-preview swatches per theme
+  const PREVIEWS = {
+    codex:  { bg: "#efe2c0", ink: "#43331c", dots: ["#2f5277", "#9a3b22", "#4f6b3a", "#8a6d1f"] },
+    matrix: { bg: "#050905", ink: "#a8ffbe", dots: ["#36e3a0", "#ff5470", "#2ecf7a", "#9fe06a"] },
+    dragon: { bg: "#fff3da", ink: "#33250e", dots: ["#1f4dd8", "#f56f00", "#2eaf5d", "#e6a817"] },
+  };
+  const pStyle = document.createElement("style");
+  pStyle.textContent = `
+    #theme-btn { position:fixed; top:.9rem; right:1.1rem; z-index:45;
+      background:var(--paper, #f6edd6); border:1px solid var(--ink-soft);
+      border-radius:50%; width:2.4rem; height:2.4rem; font-size:1.15rem;
+      cursor:pointer; box-shadow:1px 2px 7px rgba(67,51,28,.3); padding:0; }
+    #theme-btn:hover { background:var(--ink); }
+    .theme-overlay { position:fixed; inset:0; background:rgba(40,30,15,.45);
+      z-index:80; display:flex; align-items:flex-start; justify-content:center;
+      padding-top:14vh; }
+    .theme-overlay[hidden] { display:none; }
+    .theme-modal { background:var(--parchment); border:1.5px solid var(--ink-soft);
+      outline:1px solid var(--ink-faint); outline-offset:4px; border-radius:2px;
+      padding:1rem 1.2rem; box-shadow:3px 5px 18px rgba(40,30,15,.45);
+      display:flex; gap:.9rem; }
+    .theme-card { width:9rem; border:1.5px solid var(--ink-faint); border-radius:3px;
+      overflow:hidden; cursor:pointer; background:transparent; padding:0;
+      font:inherit; text-align:center; }
+    .theme-card:hover { border-color: var(--ink); }
+    .theme-card.current { border-color:var(--ink); outline:2px solid var(--ink-soft); }
+    .theme-card .swatch { height:5.2rem; display:flex; flex-direction:column;
+      align-items:center; justify-content:center; gap:.45rem; }
+    .theme-card .aa { font-size:1.5rem; font-weight:600; }
+    .theme-card .dots { display:flex; gap:.35rem; }
+    .theme-card .dots span { width:.7rem; height:.7rem; border-radius:50%; display:inline-block; }
+    .theme-card .t-name { display:block; padding:.3rem 0; font-variant:small-caps;
+      letter-spacing:.06em; font-size:.85rem; color:var(--ink); }`;
+  document.head.appendChild(pStyle);
+
+  const overlay = document.createElement("div");
+  overlay.className = "theme-overlay";
+  overlay.hidden = true;
+  const modal = document.createElement("div");
+  modal.className = "theme-modal";
+  for (const [t, pv] of Object.entries(PREVIEWS)) {
+    const card = document.createElement("button");
+    card.className = "theme-card";
+    card.dataset.theme = t;
+    card.innerHTML = `
+      <span class="swatch" style="background:${pv.bg}">
+        <span class="aa" style="color:${pv.ink}">Aa</span>
+        <span class="dots">${pv.dots.map(c => `<span style="background:${c}"></span>`).join("")}</span>
+      </span>
+      <span class="t-name">${t === "dragon" ? "dragon ball" : t}</span>`;
+    card.onclick = () => apply(t);
+    modal.appendChild(card);
   }
+  overlay.appendChild(modal);
+  document.body.appendChild(overlay);
+
+  const btn = document.createElement("button");
+  btn.id = "theme-btn";
+  btn.textContent = "🎨";
+  btn.title = "themes";
+  btn.onclick = () => { overlay.hidden = !overlay.hidden; };
+  document.body.appendChild(btn);
+
+  overlay.addEventListener("click", e => { if (e.target === overlay) overlay.hidden = true; });
+  document.addEventListener("keydown", e => { if (e.key === "Escape") overlay.hidden = true; });
+
+  apply(localStorage.getItem("hubTheme") || "codex");
 })();
