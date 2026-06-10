@@ -694,7 +694,11 @@ function activate(key) {
   document.body.classList.add("drawer-open");
   if (s.status === "attention" || s.status === "ready") s.status = "working";
   renderPills();
-  if (!s.opened) { s.term.open(s.host); s.opened = true; } // host is visible now
+  if (!s.opened) {
+    s.term.open(s.host);
+    s.opened = true;
+    attachTouchScroll(s.host); // phone: swipes become wheel events claude understands
+  }
   // fit when layout has actually settled (two consecutive frames with the
   // same non-zero width) instead of a fixed timer — cold loads lay out late
   const settle = (tries = 0, lastW = -1) => {
@@ -716,6 +720,26 @@ function toggleDrawerFull() {
   f.textContent = fullNow ? "⇲" : "⤢";
   // reflow the terminal once the width transition settles
   setTimeout(() => refit(sessions.get(active)), 260);
+}
+
+// TUIs (claude code) have no native scrollback to pan, so finger swipes do
+// nothing on a phone. Translate vertical swipes into wheel events — xterm.js
+// forwards those to the app as scroll (mouse-reporting) sequences.
+function attachTouchScroll(host) {
+  let lastY = null;
+  host.addEventListener("touchstart", e => { lastY = e.touches[0].clientY; }, { passive: true });
+  host.addEventListener("touchmove", e => {
+    if (lastY === null) return;
+    const y = e.touches[0].clientY, dy = lastY - y;
+    if (Math.abs(dy) >= 10) {
+      lastY = y;
+      const target = host.querySelector(".xterm-viewport") || host;
+      target.dispatchEvent(new WheelEvent("wheel",
+        { deltaY: dy * 2.5, bubbles: true, cancelable: true }));
+    }
+    e.preventDefault(); // we own touch here — no native pan fighting
+  }, { passive: false });
+  host.addEventListener("touchend", () => { lastY = null; }, { passive: true });
 }
 
 function minimizeDrawer() {
@@ -956,9 +980,12 @@ setInterval(() => {
     /* Android: 100vh hides behind the browser chrome — dvh tracks it */
     #drawer { height: 100dvh; }
     .kbar { padding-bottom: max(.4rem, env(safe-area-inset-bottom)); }
-    .xterm-viewport { touch-action: pan-y; }
+    /* we translate touch swipes to wheel events ourselves (TUIs have no
+       native scrollbar) — so take full ownership of touch on the terminal */
+    .xterm, .xterm-viewport { touch-action: none; }
     @media (max-width: 700px) {
-      header h1 { font-size: 1.25rem; letter-spacing: .16em; }
+      header h1 { font-size: clamp(.95rem, 4.2vw, 1.25rem);
+        letter-spacing: .1em; white-space: normal; padding: 0 2.4rem; }
       #shelf { padding: 1.2rem .8rem; }
       .rule { width: 85%; }
     }
@@ -1017,7 +1044,16 @@ setInterval(() => {
   let rec = null;
   mic.addEventListener("pointerdown", e => e.preventDefault());
   mic.addEventListener("click", () => {
-    if (!SR) { mic.disabled = true; mic.textContent = "🎤✕"; mic.title = "speech recognition not supported in this browser"; return; }
+    if (!SR) {
+      mic.disabled = true; mic.textContent = "🎤✕";
+      mic.title = "speech recognition not supported in this browser";
+      alert("This browser has no speech recognition (Firefox doesn't support it) — use Chrome, or the keyboard mic key.");
+      return;
+    }
+    if (!window.isSecureContext) {
+      alert("Mic needs a secure page — open the hub via the https tailnet URL (kai-laptop.tail….ts.net), not plain http.");
+      return;
+    }
     if (rec) { rec.stop(); return; }
     rec = new SR();
     rec.lang = MIC_LANG;
@@ -1031,7 +1067,14 @@ setInterval(() => {
       if (text.trim()) sendActiveKey(text.trim() + " ");
     };
     rec.onend = () => { rec = null; mic.classList.remove("rec"); };
-    rec.onerror = () => {};
+    rec.onerror = ev => {
+      mic.title = "mic error: " + ev.error;
+      if (!mic.dataset.warned) {
+        mic.dataset.warned = "1";
+        alert("Mic error: " + ev.error +
+              (ev.error === "not-allowed" ? " — allow microphone for this site in the browser." : ""));
+      }
+    };
     mic.classList.add("rec");
     rec.start();
   });

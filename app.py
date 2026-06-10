@@ -601,6 +601,7 @@ def terminal_page(name: str, resume: bool = False, attach: str = "",
   #kbar button:active {{ background:#3b4261; }}
   #kbar .wide {{ min-width:3.6rem; font-variant:small-caps; letter-spacing:.04em; }}
   #kbar .mic.rec {{ background:#7a2733; border-color:#f7768e; animation:micpulse 1.2s infinite; }}
+  .xterm, .xterm-viewport {{ touch-action:none; }}
   @keyframes micpulse {{ 50% {{ opacity:.55; }} }}
 </style></head>
 <body>
@@ -655,6 +656,23 @@ def terminal_page(name: str, resume: bool = False, attach: str = "",
       kbar.appendChild(btn);
     }}
 
+    // phone: translate vertical swipes into wheel events (TUIs have no
+    // native scrollback for finger panning)
+    let _ty = null;
+    const termEl = document.getElementById("term");
+    termEl.addEventListener("touchstart", e => {{ _ty = e.touches[0].clientY; }}, {{passive:true}});
+    termEl.addEventListener("touchmove", e => {{
+      if (_ty === null) return;
+      const y = e.touches[0].clientY, dy = _ty - y;
+      if (Math.abs(dy) >= 10) {{
+        _ty = y;
+        const t = termEl.querySelector(".xterm-viewport") || termEl;
+        t.dispatchEvent(new WheelEvent("wheel", {{deltaY: dy * 2.5, bubbles: true, cancelable: true}}));
+      }}
+      e.preventDefault();
+    }}, {{passive:false}});
+    termEl.addEventListener("touchend", () => {{ _ty = null; }}, {{passive:true}});
+
     // mic — browser speech recognition typed straight into the pty;
     // tap to start (red pulse), tap to stop, ⏎ still sends.
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -665,7 +683,10 @@ def terminal_page(name: str, resume: bool = False, attach: str = "",
     let rec = null;
     mic.addEventListener("pointerdown", e => e.preventDefault());
     mic.addEventListener("click", () => {{
-      if (!SR) {{ mic.disabled = true; mic.textContent = "🎤✕"; return; }}
+      if (!SR) {{ mic.disabled = true; mic.textContent = "🎤✕";
+        alert("This browser has no speech recognition (Firefox doesn't) — use Chrome."); return; }}
+      if (!window.isSecureContext) {{
+        alert("Mic needs a secure page — use the https tailnet URL, not plain http."); return; }}
       if (rec) {{ rec.stop(); return; }}
       rec = new SR();
       rec.lang = "en-US";
@@ -679,7 +700,11 @@ def terminal_page(name: str, resume: bool = False, attach: str = "",
         if (text.trim()) sendKey(text.trim() + " ");
       }};
       rec.onend = () => {{ rec = null; mic.classList.remove("rec"); }};
-      rec.onerror = () => {{}};
+      rec.onerror = ev => {{
+        if (!mic.dataset.warned) {{ mic.dataset.warned = "1";
+          alert("Mic error: " + ev.error +
+                (ev.error === "not-allowed" ? " — allow microphone for this site." : "")); }}
+      }};
       mic.classList.add("rec");
       rec.start();
     }});
