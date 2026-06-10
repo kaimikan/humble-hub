@@ -610,7 +610,9 @@ function createSession(key, project, o) {
   });
   const fit = new FitAddon.FitAddon();
   term.loadAddon(fit);
-  term.open(host);
+  // term.open() is deferred to activate(): opening into a hidden host breaks
+  // the renderer on cold loads (the Ctrl+Shift+R blank-drawer bug). xterm
+  // buffers writes before open, so early ws output is safe.
 
   const params = new URLSearchParams({ mode: chatMode });
   if (o.resume) params.set("resume", "1");
@@ -692,12 +694,20 @@ function activate(key) {
   document.body.classList.add("drawer-open");
   if (s.status === "attention" || s.status === "ready") s.status = "working";
   renderPills();
-  setTimeout(() => {
-    refit(s, s.pendingFit);  // force a resize if a fit was skipped while hidden
+  if (!s.opened) { s.term.open(s.host); s.opened = true; } // host is visible now
+  // fit when layout has actually settled (two consecutive frames with the
+  // same non-zero width) instead of a fixed timer — cold loads lay out late
+  const settle = (tries = 0, lastW = -1) => {
+    const w = s.host.clientWidth;
+    if ((w === 0 || w !== lastW) && tries < 60) {
+      return requestAnimationFrame(() => settle(tries + 1, w));
+    }
+    refit(s, true);
     s.pendingFit = false;
     try { s.term.refresh(0, s.term.rows - 1); } catch (e) {}
     s.term.focus();
-  }, 240);
+  };
+  requestAnimationFrame(() => settle());
 }
 
 function toggleDrawerFull() {
@@ -943,6 +953,15 @@ setInterval(() => {
     /* phone ergonomics: full-width drawer, bigger touch targets, hide
        laptop-only actions (files/launch act on the laptop, not the phone) */
     @media (max-width: 700px) { :root { --drawer-w: 100vw; } }
+    /* Android: 100vh hides behind the browser chrome — dvh tracks it */
+    #drawer { height: 100dvh; }
+    .kbar { padding-bottom: max(.4rem, env(safe-area-inset-bottom)); }
+    .xterm-viewport { touch-action: pan-y; }
+    @media (max-width: 700px) {
+      header h1 { font-size: 1.25rem; letter-spacing: .16em; }
+      #shelf { padding: 1.2rem .8rem; }
+      .rule { width: 85%; }
+    }
     @media (pointer: coarse) {
       .b-files, button.b-go { display: none; }
       .d-head button, .d-head a { font-size: 1.3rem; padding: .25rem .55rem; }
@@ -1082,7 +1101,9 @@ setInterval(() => {
       display:flex; flex-direction:column; gap:.7rem; }
     .theme-modal h3 { margin:0; font-size:1rem; font-weight:600;
       font-variant:small-caps; letter-spacing:.08em; color:var(--ink); }
-    .theme-row { display:flex; gap:.9rem; }
+    .theme-row { display:flex; gap:.9rem; flex-wrap:wrap; justify-content:center; }
+    .theme-overlay { padding-left:.6rem; padding-right:.6rem; }
+    .theme-modal { max-width:94vw; box-sizing:border-box; }
     /* cards must be theme-idempotent: neutral chrome, and explicit overrides
        for every global button style (hover bg, padding, small-caps, border) */
     .theme-card { width:9rem; border:1.5px solid rgba(128,128,128,.45); border-radius:3px;

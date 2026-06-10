@@ -581,7 +581,7 @@ def terminal_page(name: str, resume: bool = False, attach: str = "",
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="stylesheet" href="/static/vendor/xterm.min.css">
 <style>
-  body {{ margin:0; height:100vh; display:flex; flex-direction:column;
+  body {{ margin:0; height:100vh; height:100dvh; display:flex; flex-direction:column;
     background:#efe2c0; font:15px "EB Garamond", "Noto Serif", Georgia, serif; }}
   header {{ display:flex; align-items:center; gap:.8rem; padding:.45rem .9rem;
     color:#43331c; border-bottom:1.5px solid #6e5a39; }}
@@ -591,6 +591,7 @@ def terminal_page(name: str, resume: bool = False, attach: str = "",
   #term {{ flex:1; padding:.4rem; background:#1a1b26; }}
   /* on-screen key toolbar — touch devices only (phone) */
   #kbar {{ display:none; flex-wrap:wrap; gap:.3rem; padding:.4rem;
+    padding-bottom:max(.4rem, env(safe-area-inset-bottom));
     background:#1a1b26; border-top:1px solid #2a2b3c; }}
   @media (pointer: coarse) {{ #kbar {{ display:flex; }} }}
   #kbar button {{ flex:0 0 auto; min-width:2.6rem; padding:.55rem .6rem;
