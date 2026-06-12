@@ -20,7 +20,7 @@ import sys
 import termios
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -258,6 +258,65 @@ def put_notes(doc: dict):
     NOTES_FILE.parent.mkdir(exist_ok=True)
     NOTES_FILE.write_text(json.dumps(doc, ensure_ascii=False, indent=1))
     return {"ok": True}
+
+
+# --- phone dictation (T32) ---------------------------------------------------
+# The phone records audio (MediaRecorder over the https tailnet proxy) and
+# POSTs the blob here; Babi's whisper daemon transcribes it locally — the same
+# engine and socket as the desktop hotkeys, nothing leaves the laptop. ffmpeg
+# converts whatever container the browser produced (webm/opus on Chrome,
+# ogg/opus on Firefox) into the raw s16le/16kHz/mono stream whisperd expects.
+
+WHISPER_SOCK = Path(os.environ.get("XDG_RUNTIME_DIR", "/tmp")) / "whisper-dictation.sock"
+
+
+@app.post("/api/dictate")
+async def dictate(request: Request, lang: str = "en"):
+    if lang not in ("en", "bg"):
+        raise HTTPException(400, "lang must be 'en' or 'bg'")
+    if not WHISPER_SOCK.is_socket():
+        raise HTTPException(503, "whisper-dictation.service is not running on the laptop")
+    blob = await request.body()
+    if not blob:
+        raise HTTPException(400, "empty audio")
+    if len(blob) > 32 * 1024 * 1024:
+        raise HTTPException(413, "audio too large (32 MB cap ≈ many minutes of opus)")
+
+    import tempfile
+    with tempfile.NamedTemporaryFile(prefix="hub-dictate-", delete=False) as src:
+        src.write(blob)
+    raw = src.name + ".raw"
+    try:
+        ff = await asyncio.create_subprocess_exec(
+            "ffmpeg", "-y", "-i", src.name, "-f", "s16le", "-ar", "16000", "-ac", "1", raw,
+            stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.DEVNULL)
+        if await ff.wait() != 0:
+            raise HTTPException(400, "ffmpeg could not decode the audio")
+
+        def ask_whisper() -> str:
+            import socket as so
+            s = so.socket(so.AF_UNIX, so.SOCK_STREAM)
+            s.settimeout(120)  # first request may sit behind a model (re)load
+            try:
+                s.connect(str(WHISPER_SOCK))
+                s.sendall(f"{raw}\t{lang}\n".encode())
+                chunks = []
+                while chunk := s.recv(65536):
+                    chunks.append(chunk)
+                return b"".join(chunks).decode()
+            finally:
+                s.close()
+
+        text = await asyncio.to_thread(ask_whisper)
+    except OSError as exc:
+        raise HTTPException(502, f"whisper daemon error: {exc}")
+    finally:
+        for p in (src.name, raw):
+            try:
+                os.unlink(p)
+            except OSError:
+                pass
+    return {"text": text}
 
 
 # --- conversation manager (v3) ---------------------------------------------

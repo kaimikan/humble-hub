@@ -28,6 +28,7 @@ import signal
 import socket
 import struct
 import sys
+import time
 
 # DEC private mode set/reset (e.g. mouse tracking, alt screen, bracketed
 # paste). Programs emit these once at startup, so late-attaching clients
@@ -61,6 +62,7 @@ def main() -> int:
     # still pending (only that one earns a repaint jiggle)
     clients: dict[socket.socket, dict] = {}
     cur_size = (0, 0)
+    restore_at = None  # (deadline, rows, cols): second half of a repaint jiggle
     modes: dict[bytes, bool] = {}  # DEC private modes the program has set
     mode_carry = b""               # tail bytes in case a sequence splits reads
     shutting_down = False
@@ -111,7 +113,10 @@ def main() -> int:
 
     running = True
     while running:
-        for key, _ in sel.select(timeout=1.0):
+        timeout = 1.0
+        if restore_at:
+            timeout = min(timeout, max(0.0, restore_at[0] - time.monotonic()))
+        for key, _ in sel.select(timeout=timeout):
             if key.data == "server":
                 conn, _addr = server.accept()
                 conn.setblocking(True)
@@ -158,18 +163,29 @@ def main() -> int:
                     elif typ == "r" and ln >= 4:
                         rows, cols = struct.unpack(">HH", payload[:4])
                         if (rows, cols) != cur_size:
+                            restore_at = None  # a real resize wins
                             winsize(rows, cols)
                             cur_size = (rows, cols)
                         elif state["fresh"] and cols > 1:
-                            # reattach at the unchanged size: jiggle width once
-                            # so the program repaints for this client. Never
-                            # jiggle on later same-size resizes — each repaint
-                            # dumps a duplicate frame into scrollback.
+                            # reattach at the unchanged size: shrink now,
+                            # restore a beat later (see loop bottom). The two
+                            # halves MUST be spaced out — back-to-back winsize
+                            # calls coalesce into one SIGWINCH at the final
+                            # (unchanged) size, which size-comparing TUIs
+                            # (ink/Claude) ignore entirely: the reattaching
+                            # client then sees only the replayed empty alt
+                            # screen — the blank-drawer bug. Never jiggle on
+                            # later same-size resizes — each repaint dumps a
+                            # duplicate frame into scrollback.
                             winsize(rows, cols - 1)
-                            winsize(rows, cols)
+                            restore_at = (time.monotonic() + 0.12, rows, cols)
                         state["fresh"] = False
                     elif typ == "k":
                         shutdown()
+        if restore_at and time.monotonic() >= restore_at[0]:
+            _, rows, cols = restore_at
+            restore_at = None
+            winsize(rows, cols)
         # reap the child if it died; selector timeout makes this prompt
         try:
             done, _ = os.waitpid(pid, os.WNOHANG)

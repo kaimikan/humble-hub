@@ -1050,51 +1050,78 @@ setInterval(() => {
     bar.appendChild(b);
   }
 
-  // mic — dictate straight into the chat via the browser's speech recognition,
-  // without opening the soft keyboard. Tap to start (red pulse), tap to stop.
-  // Final transcripts are typed into the pty; you still press ⏎ to send.
-  const MIC_LANG = "en-US";
-  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  // mic — dictate via the laptop's local Whisper (Babi's engine): record with
+  // MediaRecorder, POST the blob to /api/dictate, the transcript is typed into
+  // the pty (you still press ⏎ to send). Works in Firefox, nothing goes to a
+  // cloud recognizer. Tap = English ([voice]) · hold ≈½s = Bulgarian ([глас]).
+  // Tap again to stop; ⋯ shows while the laptop transcribes.
+  const MIC_PREFIX = { en: "[voice] ", bg: "[глас] " };
   const mic = document.createElement("button");
   mic.className = "wide mic";
   mic.textContent = "🎤";
-  mic.title = "dictate (browser speech recognition)";
-  let rec = null;
-  mic.addEventListener("pointerdown", e => e.preventDefault());
-  mic.addEventListener("click", () => {
-    if (!SR) {
-      mic.disabled = true; mic.textContent = "🎤✕";
-      mic.title = "speech recognition not supported in this browser";
-      alert("This browser has no speech recognition (Firefox doesn't support it) — use Chrome, or the keyboard mic key.");
-      return;
-    }
-    if (!window.isSecureContext) {
+  mic.title = "dictate via local Whisper — tap EN · hold BG";
+  let rec = null, busy = false, holdTimer = null, stopOnUp = false;
+
+  async function startRec(lang) {
+    if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia) {
       alert("Mic needs a secure page — open the hub via the https tailnet URL (kai-laptop.tail….ts.net), not plain http.");
       return;
     }
-    if (rec) { rec.stop(); return; }
-    rec = new SR();
-    rec.lang = MIC_LANG;
-    rec.continuous = true;
-    rec.interimResults = false;
-    rec.onresult = ev => {
-      let text = "";
-      for (let i = ev.resultIndex; i < ev.results.length; i++) {
-        if (ev.results[i].isFinal) text += ev.results[i][0].transcript;
-      }
-      if (text.trim()) sendActiveKey(text.trim() + " ");
-    };
-    rec.onend = () => { rec = null; mic.classList.remove("rec"); };
-    rec.onerror = ev => {
-      mic.title = "mic error: " + ev.error;
-      if (!mic.dataset.warned) {
-        mic.dataset.warned = "1";
-        alert("Mic error: " + ev.error +
-              (ev.error === "not-allowed" ? " — allow microphone for this site in the browser." : ""));
+    let stream;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    } catch (err) {
+      alert("Mic error: " + err.name +
+            (err.name === "NotAllowedError" ? " — allow microphone for this site in the browser." : ""));
+      return;
+    }
+    rec = new MediaRecorder(stream);
+    const chunks = [];
+    rec.ondataavailable = ev => { if (ev.data.size) chunks.push(ev.data); };
+    rec.onstop = async () => {
+      stream.getTracks().forEach(t => t.stop());
+      const blob = new Blob(chunks, { type: rec.mimeType || "audio/webm" });
+      rec = null; busy = true;
+      mic.classList.remove("rec");
+      mic.textContent = "⋯";
+      try {
+        const res = await fetch("/api/dictate?lang=" + lang, { method: "POST", body: blob });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.detail || ("HTTP " + res.status));
+        const text = (data.text || "").trim();
+        if (text) sendActiveKey(MIC_PREFIX[lang] + text + " ");
+        else mic.title = "heard nothing — try again";
+      } catch (err) {
+        alert("Dictation failed: " + err.message);
+      } finally {
+        busy = false;
+        mic.textContent = "🎤";
       }
     };
     mic.classList.add("rec");
+    mic.textContent = lang === "bg" ? "🎤бг" : "🎤en";
     rec.start();
+  }
+
+  mic.addEventListener("contextmenu", e => e.preventDefault()); // long-press menu
+  mic.addEventListener("pointerdown", e => {
+    e.preventDefault(); // don't steal focus (keeps the soft keyboard closed)
+    if (busy) return;
+    if (rec) { stopOnUp = true; return; }
+    holdTimer = setTimeout(() => { holdTimer = null; startRec("bg"); }, 550);
+  });
+  mic.addEventListener("pointerup", e => {
+    e.preventDefault();
+    if (stopOnUp) {
+      stopOnUp = false;
+      if (rec && rec.state === "recording") rec.stop();
+      return;
+    }
+    if (holdTimer) { clearTimeout(holdTimer); holdTimer = null; startRec("en"); }
+    // no timer and not stopping ⇒ the hold already started a BG recording — leave it running
+  });
+  mic.addEventListener("pointercancel", () => {
+    clearTimeout(holdTimer); holdTimer = null; stopOnUp = false;
   });
   bar.appendChild(mic);
 
