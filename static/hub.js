@@ -636,6 +636,19 @@ function createSession(key, project, o) {
   ws.onmessage = e => {
     const data = new Uint8Array(e.data);
     term.write(data);
+    // first-output render kick: a freshly opened terminal sometimes paints
+    // nothing until a resize forces renderer re-layout (the 'blank until ⤢'
+    // bug). One invisible cols-jiggle replicates what expanding did.
+    if (!s.kicked) {
+      s.kicked = true;
+      setTimeout(() => {
+        try {
+          const c = s.term.cols, r = s.term.rows;
+          if (c > 2) { s.term.resize(c - 1, r); s.term.resize(c, r); }
+          s.term.refresh(0, s.term.rows - 1);
+        } catch (err) {}
+      }, 200);
+    }
     s.lastOut = Date.now();
     s.sawOutput = true;
     if (data.includes(7)) setStatus(s, "attention");
