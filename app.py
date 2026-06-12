@@ -425,7 +425,11 @@ def ensure_ptyd(name: str, path: Path, token: str, resume: bool, mode: str,
         return sock
     PTY_DIR.mkdir(parents=True, exist_ok=True)
     env_path = f"{Path.home()}/.local/bin:{os.environ.get('PATH', '/usr/bin')}"
-    unit = f"hub-pty-{sock.stem}"
+    # Tests (which set HUB_PTY_DIR) get a distinct unit prefix so their cleanup
+    # can NEVER glob-match real sessions — a bare 'hub-pty-*' stop has killed
+    # the live Claude running the tests three separate times.
+    prefix = "hub-pty-test" if os.environ.get("HUB_PTY_DIR") else "hub-pty"
+    unit = f"{prefix}-{sock.stem}"
     subprocess.run(
         ["systemd-run", "--user", "--collect", "--quiet", f"--unit={unit}",
          f"--working-directory={path}",
