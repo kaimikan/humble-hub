@@ -1053,77 +1053,63 @@ setInterval(() => {
   // mic — dictate via the laptop's local Whisper (Babi's engine): record with
   // MediaRecorder, POST the blob to /api/dictate, the transcript is typed into
   // the pty (you still press ⏎ to send). Works in Firefox, nothing goes to a
-  // cloud recognizer. Tap = English ([voice]) · hold ≈½s = Bulgarian ([глас]).
-  // Tap again to stop; ⋯ shows while the laptop transcribes.
+  // cloud recognizer. One button per language (explicit beats a hold gesture):
+  // 🎤en → [voice], 🎤бг → [глас]. Tap to start, tap to stop — tapping either
+  // button stops a running recording; ⋯ shows while the laptop transcribes.
   const MIC_PREFIX = { en: "[voice] ", bg: "[глас] " };
-  const mic = document.createElement("button");
-  mic.className = "wide mic";
-  mic.textContent = "🎤";
-  mic.title = "dictate via local Whisper — tap EN · hold BG";
-  let rec = null, busy = false, holdTimer = null, stopOnUp = false;
+  let rec = null, busy = false;
 
-  async function startRec(lang) {
-    if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia) {
-      alert("Mic needs a secure page — open the hub via the https tailnet URL (kai-laptop.tail….ts.net), not plain http.");
-      return;
-    }
-    let stream;
-    try {
-      stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    } catch (err) {
-      alert("Mic error: " + err.name +
-            (err.name === "NotAllowedError" ? " — allow microphone for this site in the browser." : ""));
-      return;
-    }
-    rec = new MediaRecorder(stream);
-    const chunks = [];
-    rec.ondataavailable = ev => { if (ev.data.size) chunks.push(ev.data); };
-    rec.onstop = async () => {
-      stream.getTracks().forEach(t => t.stop());
-      const blob = new Blob(chunks, { type: rec.mimeType || "audio/webm" });
-      rec = null; busy = true;
-      mic.classList.remove("rec");
-      mic.textContent = "⋯";
-      try {
-        const res = await fetch("/api/dictate?lang=" + lang, { method: "POST", body: blob });
-        const data = await res.json().catch(() => ({}));
-        if (!res.ok) throw new Error(data.detail || ("HTTP " + res.status));
-        const text = (data.text || "").trim();
-        if (text) sendActiveKey(MIC_PREFIX[lang] + text + " ");
-        else mic.title = "heard nothing — try again";
-      } catch (err) {
-        alert("Dictation failed: " + err.message);
-      } finally {
-        busy = false;
-        mic.textContent = "🎤";
+  function makeMic(lang, label) {
+    const btn = document.createElement("button");
+    btn.className = "wide mic";
+    btn.textContent = label;
+    btn.title = `dictate in ${lang === "bg" ? "Bulgarian" : "English"} via local Whisper`;
+    btn.addEventListener("pointerdown", e => e.preventDefault()); // don't steal focus (keeps the soft keyboard closed)
+    btn.addEventListener("click", async () => {
+      if (busy) return;
+      if (rec) { if (rec.state === "recording") rec.stop(); return; }
+      if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia) {
+        alert("Mic needs a secure page — open the hub via the https tailnet URL (kai-laptop.tail….ts.net), not plain http.");
+        return;
       }
-    };
-    mic.classList.add("rec");
-    mic.textContent = lang === "bg" ? "🎤бг" : "🎤en";
-    rec.start();
+      let stream;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      } catch (err) {
+        alert("Mic error: " + err.name +
+              (err.name === "NotAllowedError" ? " — allow microphone for this site in the browser." : ""));
+        return;
+      }
+      rec = new MediaRecorder(stream);
+      const chunks = [];
+      rec.ondataavailable = ev => { if (ev.data.size) chunks.push(ev.data); };
+      rec.onstop = async () => {
+        stream.getTracks().forEach(t => t.stop());
+        const blob = new Blob(chunks, { type: rec.mimeType || "audio/webm" });
+        rec = null; busy = true;
+        btn.classList.remove("rec");
+        btn.textContent = "⋯";
+        try {
+          const res = await fetch("/api/dictate?lang=" + lang, { method: "POST", body: blob });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) throw new Error(data.detail || ("HTTP " + res.status));
+          const text = (data.text || "").trim();
+          if (text) sendActiveKey(MIC_PREFIX[lang] + text + " ");
+          else btn.title = "heard nothing — try again";
+        } catch (err) {
+          alert("Dictation failed: " + err.message);
+        } finally {
+          busy = false;
+          btn.textContent = label;
+        }
+      };
+      btn.classList.add("rec");
+      rec.start();
+    });
+    bar.appendChild(btn);
   }
-
-  mic.addEventListener("contextmenu", e => e.preventDefault()); // long-press menu
-  mic.addEventListener("pointerdown", e => {
-    e.preventDefault(); // don't steal focus (keeps the soft keyboard closed)
-    if (busy) return;
-    if (rec) { stopOnUp = true; return; }
-    holdTimer = setTimeout(() => { holdTimer = null; startRec("bg"); }, 550);
-  });
-  mic.addEventListener("pointerup", e => {
-    e.preventDefault();
-    if (stopOnUp) {
-      stopOnUp = false;
-      if (rec && rec.state === "recording") rec.stop();
-      return;
-    }
-    if (holdTimer) { clearTimeout(holdTimer); holdTimer = null; startRec("en"); }
-    // no timer and not stopping ⇒ the hold already started a BG recording — leave it running
-  });
-  mic.addEventListener("pointercancel", () => {
-    clearTimeout(holdTimer); holdTimer = null; stopOnUp = false;
-  });
-  bar.appendChild(mic);
+  makeMic("en", "🎤en");
+  makeMic("bg", "🎤бг");
 
   document.getElementById("drawer").appendChild(bar);
 })();
