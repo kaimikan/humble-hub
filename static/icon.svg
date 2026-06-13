@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <!-- the humble hub — a hand-inked hub-and-spokes mark: a central node with
+       spokes radiating to six project nodes. Sepia ink on parchment, da Vinci
+       codex aesthetic. Full-bleed parchment so it works as a maskable /
+       home-screen icon; the mark stays inside the maskable safe zone. -->
+  <defs>
+    <radialGradient id="pg" cx="38%" cy="30%" r="80%">
+      <stop offset="0%" stop-color="#f6edd6"/>
+      <stop offset="100%" stop-color="#e7d6ad"/>
+    </radialGradient>
+  </defs>
+  <rect width="64" height="64" rx="13" fill="url(#pg)"/>
+
+  <!-- spokes: slightly varied widths for a hand-inked feel; drawn under nodes -->
+  <g stroke="#43331c" stroke-linecap="round" fill="none">
+    <path d="M32 32 L52 32"        stroke-width="2.5"/>
+    <path d="M32 32 L42 49.3"      stroke-width="2.2"/>
+    <path d="M32 32 L22 49.3"      stroke-width="2.6"/>
+    <path d="M32 32 L12 32"        stroke-width="2.3"/>
+    <path d="M32 32 L22 14.7"      stroke-width="2.4"/>
+    <path d="M32 32 L42 14.7"      stroke-width="2.2"/>
+  </g>
+
+  <!-- project nodes (outer) -->
+  <g fill="#43331c">
+    <circle cx="52" cy="32"   r="3.1"/>
+    <circle cx="42" cy="49.3" r="3.3"/>
+    <circle cx="22" cy="49.3" r="3.0"/>
+    <circle cx="12" cy="32"   r="3.2"/>
+    <circle cx="22" cy="14.7" r="3.1"/>
+    <circle cx="42" cy="14.7" r="3.3"/>
+  </g>
+
+  <!-- the hub (centre): ink ring + filled core -->
+  <circle cx="32" cy="32" r="6.4" fill="#f6edd6" stroke="#43331c" stroke-width="2.4"/>
+  <circle cx="32" cy="32" r="2.7" fill="#9a3b22"/>
+</svg>

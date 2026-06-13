@@ -1,0 +1,37 @@
+#!/bin/bash
+# open-hub — focus the humble hub if a browser window already shows it,
+# otherwise open it in Firefox. KDE Wayland: window focus is done by a
+# one-shot KWin script (no kdotool needed); its FOUND/MISSING result is
+# read back from the journal.
+URL="http://localhost:7700"
+MARKER="HUBFOCUS$$"
+
+js=$(mktemp /tmp/open-hub-XXXXXX.js)
+trap 'rm -f "$js"' EXIT
+cat > "$js" <<EOF
+let found = false;
+for (const w of workspace.windowList()) {
+    if (w.caption.toLowerCase().includes("the humble hub")) {
+        workspace.activeWindow = w;
+        found = true;
+        break;
+    }
+}
+print("$MARKER:" + (found ? "FOUND" : "MISSING"));
+EOF
+
+name="open-hub-$$"
+result=""
+id=$(busctl --user call org.kde.KWin /Scripting org.kde.kwin.Scripting \
+        loadScript ss "$js" "$name" 2>/dev/null | awk '{print $2}')
+if [ -n "$id" ]; then
+    busctl --user call org.kde.KWin "/Scripting/Script$id" org.kde.kwin.Script run 2>/dev/null
+    sleep 0.3
+    busctl --user call org.kde.KWin "/Scripting/Script$id" org.kde.kwin.Script stop 2>/dev/null
+    result=$(journalctl --user -q --since "5 seconds ago" --no-pager 2>/dev/null \
+                | grep -o "$MARKER:[A-Z]*" | tail -1)
+fi
+
+if [ "$result" != "$MARKER:FOUND" ]; then
+    exec firefox "$URL"
+fi

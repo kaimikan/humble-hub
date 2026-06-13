@@ -663,6 +663,8 @@ def terminal_page(name: str, resume: bool = False, attach: str = "",
 <html lang="en"><head>
 <meta charset="utf-8"><title>{safe} — claude</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="/static/favicon.ico" sizes="any">
+<link rel="icon" href="/static/icon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="/static/vendor/xterm.min.css">
 <style>
   body {{ margin:0; height:100vh; height:100dvh; display:flex; flex-direction:column;
@@ -884,6 +886,11 @@ def index():
 <html lang="en"><head>
 <meta charset="utf-8"><title>the humble hub</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="/static/favicon.ico" sizes="any">
+<link rel="icon" href="/static/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/static/apple-touch-icon.png">
+<link rel="manifest" href="/static/manifest.webmanifest">
+<meta name="theme-color" content="#43331c">
 <link rel="stylesheet" href="/static/vendor/xterm.min.css">
 <style>
   :root {{ color-scheme: light;

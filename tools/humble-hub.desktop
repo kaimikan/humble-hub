@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Humble Hub
+Comment=Open the humble hub start page (focuses it if already open)
+Exec=/home/kaimikan/.local/bin/open-hub
+Icon=humble-hub
+Categories=Network;Utility;
+StartupNotify=false
