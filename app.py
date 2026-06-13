@@ -666,25 +666,40 @@ def terminal_page(name: str, resume: bool = False, attach: str = "",
 <link rel="icon" href="/static/favicon.ico" sizes="any">
 <link rel="icon" href="/static/icon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="/static/vendor/xterm.min.css">
+<script src="/static/themes.js"></script>
+<script>
+  // skin the page chrome from the saved hub theme's TERMINAL palette (always
+  // dark) before first paint — no flash. The terminal itself is themed below.
+  (function(){{
+    var k = resolveTheme(localStorage.getItem('hubTheme') || 'codex');
+    var d = THEME[k].term, r = document.documentElement.style;
+    r.setProperty('--t-bg', d.bg); r.setProperty('--t-fg', d.fg);
+    r.setProperty('--t-panel', _shade(d.bg, 10)); r.setProperty('--t-border', _shade(d.bg, 20));
+    r.setProperty('--t-accent', d.ansi[12] || d.ansi[4]); r.setProperty('--t-faint', d.ansi[8]);
+    r.setProperty('--t-font', THEME[k].font);
+  }})();
+</script>
 <style>
   body {{ margin:0; height:100vh; height:100dvh; display:flex; flex-direction:column;
-    background:#efe2c0; font:15px "EB Garamond", "Noto Serif", Georgia, serif; }}
+    background:var(--t-bg,#1a1b26); color:var(--t-fg,#c0caf5);
+    font:15px var(--t-font, "EB Garamond","Noto Serif",Georgia,serif); }}
   header {{ display:flex; align-items:center; gap:.8rem; padding:.45rem .9rem;
-    color:#43331c; border-bottom:1.5px solid #6e5a39; }}
-  header a {{ color:#2f5277; text-decoration:none; }}
+    color:var(--t-fg,#c0caf5); border-bottom:1.5px solid var(--t-border,#2a2b3c); }}
+  header a {{ color:var(--t-accent,#7aa2f7); text-decoration:none; }}
   header h1 {{ margin:0; font-size:1rem; font-weight:600; font-variant:small-caps;
     letter-spacing:.08em; flex:1; }}
-  #term {{ flex:1; padding:.4rem; background:#1a1b26; }}
+  header .sub {{ font-style:italic; font-size:.85rem; color:var(--t-faint,#565f89); }}
+  #term {{ flex:1; padding:.4rem; background:var(--t-bg,#1a1b26); }}
   /* on-screen key toolbar — touch devices only (phone) */
   #kbar {{ display:none; flex-wrap:wrap; gap:.3rem; padding:.4rem;
     padding-bottom:max(.4rem, env(safe-area-inset-bottom));
-    background:#1a1b26; border-top:1px solid #2a2b3c; }}
+    background:var(--t-bg,#1a1b26); border-top:1px solid var(--t-border,#2a2b3c); }}
   @media (pointer: coarse) {{ #kbar {{ display:flex; }} }}
   #kbar button {{ flex:0 0 auto; min-width:2.6rem; padding:.55rem .6rem;
-    font:1rem/1 "JetBrains Mono","Noto Sans Mono",monospace; background:#24283b;
-    color:#c0caf5; border:1px solid #3b4261; border-radius:4px; cursor:pointer;
+    font:1rem/1 "JetBrains Mono","Noto Sans Mono",monospace; background:var(--t-panel,#24283b);
+    color:var(--t-fg,#c0caf5); border:1px solid var(--t-border,#3b4261); border-radius:4px; cursor:pointer;
     user-select:none; touch-action:manipulation; }}
-  #kbar button:active {{ background:#3b4261; }}
+  #kbar button:active {{ background:var(--t-border,#3b4261); }}
   #kbar .wide {{ min-width:3.6rem; font-variant:small-caps; letter-spacing:.04em; }}
   #kbar .mic.rec {{ background:#7a2733; border-color:#f7768e; animation:micpulse 1.2s infinite; }}
   .xterm, .xterm-viewport {{ touch-action:none; }}
@@ -694,7 +709,7 @@ def terminal_page(name: str, resume: bool = False, attach: str = "",
   <header>
     <a href="/" title="back to the humble hub">⌂ hub</a>
     <h1>{safe}</h1>
-    <span style="font-style:italic; font-size:.85rem; color:#6e5a39">claude code</span>
+    <span class="sub">claude code</span>
   </header>
   <div id="term"></div>
   <div id="kbar"></div>
@@ -704,13 +719,26 @@ def terminal_page(name: str, resume: bool = False, attach: str = "",
     const term = new Terminal({{
       fontFamily: "'JetBrains Mono', 'Hack', 'Noto Sans Mono', monospace",
       fontSize: 14, cursorBlink: true, customGlyphs: true,
-      theme: {{ background: "#1a1b26", foreground: "#c0caf5" }},
+      theme: xtermTheme(resolveTheme(localStorage.getItem("hubTheme") || "codex")),
     }});
     const fit = new FitAddon.FitAddon();
     term.loadAddon(fit);
     term.open(document.getElementById("term"));
     fit.fit();
     term.focus();
+
+    // live-sync the theme if it's changed on the hub in another tab
+    window.addEventListener("storage", e => {{
+      if (e.key !== "hubTheme") return;
+      const k = resolveTheme(e.newValue || "codex");
+      term.options.theme = xtermTheme(k);
+      term.refresh(0, term.rows - 1);
+      const d = THEME[k].term, r = document.documentElement.style;
+      r.setProperty("--t-bg", d.bg); r.setProperty("--t-fg", d.fg);
+      r.setProperty("--t-panel", _shade(d.bg, 10)); r.setProperty("--t-border", _shade(d.bg, 20));
+      r.setProperty("--t-accent", d.ansi[12] || d.ansi[4]); r.setProperty("--t-faint", d.ansi[8]);
+      r.setProperty("--t-font", THEME[k].font);
+    }});
 
     const wsProto = location.protocol === "https:" ? "wss" : "ws";
     const ws = new WebSocket(`${{wsProto}}://${{location.host}}/ws/terminal/{safe}{ws_query}`);
@@ -1164,5 +1192,6 @@ def index():
 
   <script src="/static/vendor/xterm.min.js"></script>
   <script src="/static/vendor/addon-fit.min.js"></script>
+  <script src="/static/themes.js"></script>
   <script src="/static/hub.js"></script>
 </body></html>"""
