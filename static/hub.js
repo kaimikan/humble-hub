@@ -354,7 +354,10 @@ async function openJot(kind) {
   const sw = document.getElementById("jot-switch");
   if (sw) sw.textContent = kind === "todos" ? "→ ideas" : "→ to-do";
   cancelDelete();
-  document.getElementById(`${kind}-input`).focus();
+  // on phones, auto-focusing the add-input pops the soft keyboard and shoves
+  // the list off-screen before you can read it — only autofocus on desktop
+  if (!matchMedia("(pointer: coarse)").matches)
+    document.getElementById(`${kind}-input`).focus();
 }
 
 // one-click jump to the other list (to-do ⇄ ideas) from the modal header
@@ -1017,7 +1020,8 @@ setInterval(() => {
     /* T38: global dictation mics — phone only, float bottom-left */
     /* floating mics: above the jot(60)/session(70) modals, below the theme
        picker(80). Hidden while the drawer is open — the kbar mics serve there. */
-    #micbar { display:none; position:fixed; left:1.05rem; bottom:1.05rem; z-index:75; gap:.4rem; }
+    #micbar { display:none; position:fixed; left:1.05rem; bottom:1.05rem; z-index:75;
+      flex-direction:column; gap:.4rem; }
     @media (pointer: coarse) { #micbar { display:flex; } }
     body.drawer-open #micbar { display:none; }
     #micbar .mic { font:1rem/1 "JetBrains Mono","Noto Sans Mono",monospace;
@@ -1275,6 +1279,11 @@ setInterval(() => {
       display:flex; flex-direction:column; gap:.7rem; }
     .theme-modal h3 { margin:0; font-size:1rem; font-weight:600;
       font-variant:small-caps; letter-spacing:.08em; color:var(--ink); }
+    .theme-modal .m-head { display:flex; align-items:center; gap:.5rem; }
+    .theme-modal .m-head h3 { flex:1; }
+    .theme-modal .t-close { border:0; background:transparent; color:var(--ink-soft);
+      cursor:pointer; padding:.2rem .3rem; font:inherit; }
+    .theme-modal .t-close:hover { color:var(--sanguine); background:transparent; }
     /* fixed 5 columns so 10 themes lay out as an even 5×2 grid */
     .theme-row { display:grid; grid-template-columns:repeat(5, 1fr); gap:.9rem; }
     @media (max-width:600px) { .theme-row { grid-template-columns:repeat(3, 1fr); } }
@@ -1310,7 +1319,8 @@ setInterval(() => {
   overlay.hidden = true;
   const modal = document.createElement("div");
   modal.className = "theme-modal";
-  modal.innerHTML = "<h3>themes</h3>";
+  modal.innerHTML = '<div class="m-head"><h3>themes</h3>'
+    + '<button class="t-close" title="close">' + ICON_CLOSE + "</button></div>";
   const row = document.createElement("div");
   row.className = "theme-row";
   for (const k of THEME_ORDER) {
@@ -1350,6 +1360,7 @@ setInterval(() => {
   document.body.appendChild(btn);
 
   overlay.addEventListener("click", e => { if (e.target === overlay) overlay.hidden = true; });
+  modal.querySelector(".t-close").onclick = () => { overlay.hidden = true; };
   document.addEventListener("keydown", e => { if (e.key === "Escape") overlay.hidden = true; });
 
   // resolveTheme (themes.js) maps renamed/unknown keys to a current one
