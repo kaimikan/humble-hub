@@ -467,7 +467,7 @@ function addItem(ev, kind) {
     .jot-col li .drag-handle { cursor:grab; color:var(--ink-faint); font-size:.9rem;
       line-height:1; touch-action:none; user-select:none; }
     .jot-col li .drag-handle:hover { color:var(--ink-soft); }
-    .jot-col li.dragging { opacity:.65; background:rgba(255,250,235,.95);
+    .jot-col li.dragging { opacity:.65; background:var(--card-hot);
       box-shadow:1px 2px 9px rgba(67,51,28,.3); }
     .jot-col li .row-menu-btn { border:0; background:transparent; color:var(--ink-faint);
       cursor:pointer; font:inherit; font-size:1.05rem; line-height:1; padding:0 .25rem;
@@ -520,7 +520,7 @@ function addItem(ev, kind) {
   const sStyle = document.createElement("style");
   sStyle.textContent = `
     #jot-search { width:100%; box-sizing:border-box; margin:.45rem 0 .15rem;
-      background:rgba(255,250,235,.5); border:1px solid var(--ink-faint);
+      background:var(--input-bg); border:1px solid var(--ink-faint);
       border-radius:2px; color:var(--ink); font:inherit; font-size:.88rem;
       padding:.3rem .6rem; outline:none; }
     #jot-search:focus { border-color:var(--ink-soft); }
@@ -858,7 +858,7 @@ setInterval(() => {
     .sess-modal .m-head { display:flex; align-items:center; margin-bottom:.5rem; }
     .sess-modal .m-head h3 { margin:0; flex:1; font-size:1rem; font-weight:600;
       font-variant:small-caps; letter-spacing:.08em; color:var(--ink); }
-    #sess-search { width:100%; box-sizing:border-box; background:rgba(255,250,235,.5);
+    #sess-search { width:100%; box-sizing:border-box; background:var(--input-bg);
       border:1px solid var(--ink-soft); border-radius:2px; color:var(--ink); font:inherit;
       font-size:.9rem; padding:.35rem .6rem; margin-bottom:.5rem; }
     #sess-search::placeholder { color:var(--ink-faint); font-style:italic; }
@@ -868,7 +868,7 @@ setInterval(() => {
        text left-aligned regardless of project-name length */
     .sess-row { display:flex; flex-direction:column; align-items:flex-start; gap:.28rem;
       padding:.5rem .35rem; border-bottom:1px dotted rgba(156,135,95,.4); cursor:pointer; }
-    .sess-row:hover { background:rgba(255,250,235,.7); }
+    .sess-row:hover { background:var(--card-hot); }
     .sess-row .s-main { width:100%; min-width:0; }
     .sess-row .s-title { display:block; color:var(--ink); font-size:.92rem;
       white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
@@ -1146,6 +1146,9 @@ setInterval(() => {
     activeTheme = t;
     if (t === "codex") delete document.body.dataset.theme;
     else document.body.dataset.theme = t;
+    // the drawer + #dterm padding frame the terminal — match its bg so there's
+    // no off-theme dark border around the canvas
+    document.documentElement.style.setProperty("--term-bg", THEME[t].term.bg);
     localStorage.setItem("hubTheme", t);
     document.querySelectorAll(".theme-card").forEach(c =>
       c.classList.toggle("current", c.dataset.theme === t));
@@ -1178,16 +1181,18 @@ setInterval(() => {
       display:flex; flex-direction:column; gap:.7rem; }
     .theme-modal h3 { margin:0; font-size:1rem; font-weight:600;
       font-variant:small-caps; letter-spacing:.08em; color:var(--ink); }
-    .theme-row { display:flex; gap:.9rem; flex-wrap:wrap; justify-content:center; }
+    /* fixed 5 columns so 10 themes lay out as an even 5×2 grid */
+    .theme-row { display:grid; grid-template-columns:repeat(5, 1fr); gap:.9rem; }
+    @media (max-width:600px) { .theme-row { grid-template-columns:repeat(3, 1fr); } }
     .theme-overlay { padding-left:.6rem; padding-right:.6rem; }
-    .theme-modal { max-width:94vw; box-sizing:border-box; max-height:82vh; overflow:auto; }
+    .theme-modal { width:min(52rem, 94vw); box-sizing:border-box; max-height:82vh; overflow:auto; }
     /* cards must be theme-idempotent: neutral chrome, and explicit overrides
        for every global button style (hover bg, padding, small-caps, border) */
     /* override the global button rule (inline-flex/row + align:center), which
        otherwise lays the swatch and name side by side and leaves the name strip
        floating in the modal's background. Stack them so the whole card is its
        own theme, top to bottom. */
-    .theme-card { width:9rem; border:1.5px solid rgba(128,128,128,.45); border-radius:3px;
+    .theme-card { width:auto; border:1.5px solid rgba(128,128,128,.45); border-radius:3px;
       overflow:hidden; cursor:pointer; padding:0;
       display:flex; flex-direction:column; align-items:stretch;
       font:inherit; font-variant:normal; letter-spacing:normal;

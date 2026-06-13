@@ -949,10 +949,16 @@ def index():
     font-variant:small-caps; letter-spacing:.06em; padding:.3rem .75rem;
     cursor:pointer; }}
   .jot-open:hover {{ background:var(--ink); color:var(--parchment); }}
-  #mode-select {{ background:transparent; border:1px solid var(--ink-faint);
-    border-radius:2px; color:var(--ink-soft); font:inherit; font-size:.82rem;
-    font-variant:small-caps; letter-spacing:.05em; padding:.28rem .4rem;
-    cursor:pointer; }}
+  /* match the jot buttons: strip the native select chrome, add a themed caret */
+  .sel-wrap {{ position:relative; display:inline-flex; align-items:center; }}
+  .sel-wrap::after {{ content:"▾"; position:absolute; right:.55rem; pointer-events:none;
+    color:var(--ink-soft); font-size:.7rem; }}
+  #mode-select {{ -webkit-appearance:none; appearance:none;
+    background:transparent; border:1px solid var(--ink-soft); border-radius:2px;
+    color:var(--ink); font:inherit; font-size:.84rem; font-variant:small-caps;
+    letter-spacing:.06em; padding:.3rem 1.5rem .3rem .75rem; cursor:pointer; }}
+  #mode-select:hover {{ background:var(--ink); color:var(--parchment); }}
+  #mode-select option {{ background:var(--paper); color:var(--ink); }}
   #overlay {{ position:fixed; inset:0; background:rgba(67,51,28,.4); z-index:60;
     display:flex; align-items:flex-start; justify-content:center;
     padding-top:11vh; }}
@@ -1040,7 +1046,7 @@ def index():
   body.drawer-open #shelf {{ margin-right:var(--drawer-w); }}
   body.drawer-open #pills {{ right:calc(var(--drawer-w) + 1.1rem); }}
   #drawer {{ position:fixed; top:0; right:0; height:100vh; width:var(--drawer-w);
-    background:#1a1b26; border-left:2px solid var(--ink-soft);
+    background:var(--term-bg, #1a1b26); border-left:2px solid var(--ink-soft);
     box-shadow:-4px 0 18px rgba(67,51,28,.4); transform:translateX(105%);
     transition:transform .22s ease; display:flex; flex-direction:column; z-index:50; }}
   #drawer.open {{ transform:none; }}
@@ -1055,7 +1061,8 @@ def index():
     font:inherit; font-size:1rem; cursor:pointer; padding:.1rem .35rem;
     text-decoration:none; }}
   .d-head a:hover, .d-head button:hover {{ color:var(--sanguine); background:transparent; }}
-  #dterm {{ flex:1; min-height:0; padding:.3rem; position:relative; }}
+  #dterm {{ flex:1; min-height:0; padding:.3rem; position:relative;
+    background:var(--term-bg, #1a1b26); }}
   .term-host {{ position:absolute; inset:.3rem; display:none; }}
   .term-host.shown {{ display:block; }}
   /* status pills for live sessions */
@@ -1081,7 +1088,7 @@ def index():
   .card:hover {{ z-index:10; }}
   .card:nth-child(odd) {{ transform:rotate(-.35deg); }}
   .card:nth-child(even) {{ transform:rotate(.3deg); }}
-  .head {{ display:flex; align-items:baseline; gap:.6rem; }}
+  .head {{ display:flex; align-items:center; gap:.6rem; }}
   .glyph {{ font-size:1.45rem; line-height:1; }}
   .card h2 {{ margin:0; font-size:1.12rem; font-weight:600; flex:1;
               font-variant:small-caps; letter-spacing:.05em; }}
@@ -1130,12 +1137,13 @@ def index():
           <button onclick="act('~','terminal')">in konsole</button>
         </div>
       </div>
-      <select id="mode-select" title="permission mode for newly opened chats"
+      <span class="sel-wrap"><select id="mode-select"
+             title="permission mode for newly opened chats"
              onchange="setChatMode(this.value)">
         <option value="default">mode: default</option>
         <option value="accept-edits">mode: accept edits</option>
         <option value="plan">mode: plan</option>
-      </select>
+      </select></span>
       <button class="jot-open" onclick="openJot('todos')">✎ to-do <span id="todos-count"></span></button>
       <button class="jot-open" onclick="openJot('ideas')">✎ ideas <span id="ideas-count"></span></button>
       <input id="search" type="search" placeholder="search…" oninput="refilter()">
