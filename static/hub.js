@@ -1163,8 +1163,13 @@ setInterval(() => {
       background:var(--paper, #f6edd6); border:1px solid var(--ink-soft);
       border-radius:50%; width:2.4rem; height:2.4rem; cursor:pointer;
       box-shadow:1px 2px 7px rgba(67,51,28,.3); padding:0;
+      transition:right .22s ease;
       display:flex; align-items:center; justify-content:center; }
     #theme-btn:hover { background:var(--ink); color:var(--parchment); border-color:var(--ink); }
+    /* slide the palette button left of the side drawer so it stays reachable;
+       when the drawer is full-window the terminal owns the screen — hide it */
+    body.drawer-open #theme-btn { right:calc(var(--drawer-w) + 1.1rem); }
+    body.drawer-full #theme-btn { display:none; }
     .theme-overlay { position:fixed; inset:0; background:rgba(40,30,15,.45);
       z-index:80; display:flex; align-items:flex-start; justify-content:center;
       padding-top:14vh; }
@@ -1180,11 +1185,16 @@ setInterval(() => {
     .theme-modal { max-width:94vw; box-sizing:border-box; }
     /* cards must be theme-idempotent: neutral chrome, and explicit overrides
        for every global button style (hover bg, padding, small-caps, border) */
+    /* override the global button rule (inline-flex/row + align:center), which
+       otherwise lays the swatch and name side by side and leaves the name strip
+       floating in the modal's background. Stack them so the whole card is its
+       own theme, top to bottom. */
     .theme-card { width:9rem; border:1.5px solid rgba(128,128,128,.45); border-radius:3px;
-      overflow:hidden; cursor:pointer; background:transparent; padding:0;
+      overflow:hidden; cursor:pointer; padding:0;
+      display:flex; flex-direction:column; align-items:stretch;
       font:inherit; font-variant:normal; letter-spacing:normal;
       text-align:center; box-sizing:border-box; line-height:1.4; }
-    .theme-card:hover { background:transparent; color:inherit;
+    .theme-card:hover { color:inherit;
       box-shadow:0 3px 10px rgba(0,0,0,.45); transform:translateY(-1px);
       border-color:rgba(128,128,128,.8); }
     .theme-card.current { border-color:transparent; outline:2.5px solid rgba(128,128,128,.85); }
@@ -1211,7 +1221,8 @@ setInterval(() => {
     card.className = "theme-card";
     card.dataset.theme = t;
     // every part of the card renders in ITS theme (bg, ink, font) — not the
-    // currently active one
+    // currently active one; the card's own bg fills behind the stack
+    card.style.background = pv.bg;
     card.innerHTML = `
       <span class="swatch" style="background:${pv.bg}; font-family:${pv.font}">
         <span class="aa" style="color:${pv.ink}">Aa</span>
