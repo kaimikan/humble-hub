@@ -36,14 +36,43 @@ app = FastAPI(title="hub")
 
 
 def readme_excerpt(path: Path) -> str:
+    """The README's first prose paragraph (markdown intact — rendered later)."""
     readme = path / "README.md"
     if not readme.is_file():
         return ""
+    para: list[str] = []
     for line in readme.read_text(errors="replace").splitlines():
-        line = line.strip()
-        if line and not line.startswith(("#", "<", "!", "-", "|")):
-            return line
-    return ""
+        s = line.strip()
+        if not s:
+            if para:
+                break          # blank line ends the first paragraph
+            continue
+        if s.startswith(("#", "<", "!", "|", "```", "- ", "* ", "+ ", "> ")):
+            if para:
+                break          # a heading/list/quote after prose ends it
+            continue           # …or skip it while still looking for prose
+        para.append(s)
+    return " ".join(para)
+
+
+_MD_LINK = re.compile(r"\[([^\]]+)\]\((https?://[^\s)]+)\)")
+_MD_BOLD = re.compile(r"\*\*([^*]+)\*\*")
+_MD_ITALIC = re.compile(r"(?<![\w*])[*_]([^*_\s][^*_]*)[*_](?![\w*])")
+_MD_CODE = re.compile(r"`([^`]+)`")
+
+
+def md_inline(text: str) -> str:
+    """Render a safe subset of inline markdown (link/bold/italic/code).
+
+    Everything is HTML-escaped first, then our own tags are layered on — so
+    README text can never inject markup; links are restricted to http(s)."""
+    out = html.escape(text)
+    out = _MD_LINK.sub(
+        lambda m: f'<a href="{m.group(2)}" target="_blank" rel="noopener">{m.group(1)}</a>', out)
+    out = _MD_BOLD.sub(r"<strong>\1</strong>", out)
+    out = _MD_ITALIC.sub(r"<em>\1</em>", out)
+    out = _MD_CODE.sub(r"<code>\1</code>", out)
+    return out
 
 
 def git_info(path: Path) -> dict:
@@ -920,7 +949,7 @@ def card(p: dict) -> str:
     meta = html.escape(p["last_commit"]) if p.get("last_commit") else ""
     if p.get("dirty"):
         meta += " · ✱ wet ink"
-    excerpt = html.escape(p.get("excerpt") or "")
+    excerpt = md_inline(p.get("excerpt") or "")
     search_blob = html.escape(f"{p['name']} {p.get('excerpt') or ''}".lower())
     svc_dot = (f"""<span class="svc-dot" data-svc="{name}" title="stopped">{icon("dot")}</span>"""
                if p.get("serve") else "")
@@ -1121,7 +1150,12 @@ def index():
               font-variant:small-caps; letter-spacing:.05em; }}
   .kind {{ font-style:italic; color:var(--ink-faint); font-size:.82rem; }}
   .excerpt {{ margin:0; font-style:italic; color:var(--ink-soft); font-size:.92rem;
-              min-height:2.8em; }}
+              min-height:2.8em; display:-webkit-box; -webkit-line-clamp:4;
+              -webkit-box-orient:vertical; overflow:hidden; }}
+  .excerpt a {{ color:var(--lapis); text-decoration:underline; }}
+  .excerpt strong {{ font-style:normal; font-weight:700; color:var(--ink); }}
+  .excerpt code {{ font-style:normal; font-family:"JetBrains Mono","Noto Sans Mono",monospace;
+              font-size:.85em; background:var(--input-bg); padding:0 .25em; border-radius:2px; }}
   .meta {{ margin:0; color:var(--ink-faint); font-size:.78rem; }}
   /* pinned to the card bottom so every panel's buttons align across the row */
   .actions {{ display:flex; gap:.55rem; margin-top:auto; padding-top:.6rem; flex-wrap:wrap;

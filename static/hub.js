@@ -91,14 +91,14 @@ function clearFilters() {
 const emptyState = (() => {
   const style = document.createElement("style");
   style.textContent = `
-    #empty-state { text-align:center; font-style:italic; color:#6e5a39;
+    #empty-state { text-align:center; font-style:italic; color:var(--ink-soft);
       margin:2.6rem auto; }
     #empty-state p { margin:0 0 .8rem; }
-    #empty-state button { background:transparent; border:1px solid #6e5a39;
-      border-radius:2px; color:#43331c; font:inherit; font-size:.85rem;
+    #empty-state button { background:transparent; border:1px solid var(--ink-soft);
+      border-radius:2px; color:var(--ink); font:inherit; font-size:.85rem;
       font-variant:small-caps; letter-spacing:.06em; padding:.32rem .8rem;
       cursor:pointer; font-style:normal; }
-    #empty-state button:hover { background:#43331c; color:#efe2c0; }`;
+    #empty-state button:hover { background:var(--ink); color:var(--parchment); }`;
   document.head.appendChild(style);
   const el = document.createElement("div");
   el.id = "empty-state";
