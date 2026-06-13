@@ -1001,6 +1001,21 @@ setInterval(() => {
     .kbar .wide { min-width:3.6rem; font-variant:small-caps; letter-spacing:.04em; }
     .kbar .mic.rec { background:#7a2733; border-color:#f7768e; animation:micpulse 1.2s infinite; }
     @keyframes micpulse { 50% { opacity:.55; } }
+    /* T38: global dictation mics — phone only, float bottom-left */
+    #micbar { display:none; position:fixed; left:1.05rem; bottom:1.05rem; z-index:46; gap:.4rem; }
+    @media (pointer: coarse) { #micbar { display:flex; } }
+    #micbar .mic { font:1rem/1 "JetBrains Mono","Noto Sans Mono",monospace;
+      background:var(--paper, #24283b); color:var(--ink, #c0caf5);
+      border:1px solid var(--ink-soft, #3b4261); border-radius:999px;
+      padding:.5rem .7rem; cursor:pointer; box-shadow:1px 2px 7px rgba(0,0,0,.3);
+      user-select:none; touch-action:manipulation; }
+    #micbar .mic.rec { background:#7a2733; color:#fff; border-color:#f7768e;
+      animation:micpulse 1.2s infinite; }
+    #hub-toast { position:fixed; left:50%; bottom:4.6rem; transform:translateX(-50%) translateY(.8rem);
+      background:var(--ink, #1a1b26); color:var(--parchment, #efe2c0); font-size:.85rem;
+      padding:.5rem .9rem; border-radius:6px; box-shadow:1px 2px 10px rgba(0,0,0,.4);
+      opacity:0; pointer-events:none; transition:opacity .2s ease, transform .2s ease; z-index:90; }
+    #hub-toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
     .pill.s-detached .dot { background:#7aa2f7; }
     /* ⤢ in-place full-width drawer */
     #drawer { transition: transform .22s ease, width .22s ease; }
@@ -1069,34 +1084,78 @@ setInterval(() => {
     bar.appendChild(b);
   }
 
-  // mic — dictate via the laptop's local Whisper (Babi's engine): record with
-  // MediaRecorder, POST the blob to /api/dictate, the transcript is typed into
-  // the pty (you still press ⏎ to send). Works in Firefox, nothing goes to a
-  // cloud recognizer. One button per language (explicit beats a hold gesture):
-  // 🎤en → [voice], 🎤бг → [глас]. Tap to start, tap to stop — tapping either
-  // button stops a running recording; ⋯ shows while the laptop transcribes.
-  const MIC_PREFIX = { en: "[voice] ", bg: "[глас] " };
-  let rec = null, busy = false;
+  document.getElementById("drawer").appendChild(bar);
 
+  // --- T38: global dictation mics (phone) --------------------------------
+  // The two language mics now live OUTSIDE the terminal so you can dictate into
+  // ANY field on the phone, not just the chat. Pipeline is unchanged
+  // (MediaRecorder → /api/dictate → local Whisper; Firefox-friendly, nothing
+  // leaves the laptop). The transcript is routed by the MOST-RECENT focus:
+  //   a text field → inserted at the cursor (fires `input` so search/jot react)
+  //   the active terminal → sent with the [voice]/[глас] prefix (as before)
+  //   nothing focused → copied to the clipboard with a toast.
+  const MIC_PREFIX = { en: "[voice] ", bg: "[глас] " };
+
+  // remember the last dictation target — a text field, or the terminal
+  let lastTarget = null;
+  document.addEventListener("focusin", e => {
+    const t = e.target;
+    if (t.closest && t.closest(".term-host")) lastTarget = { kind: "term" };
+    else if (t.matches && !t.closest(".kbar") &&
+             t.matches("textarea, input:not([type]), input[type=text], input[type=search]"))
+      lastTarget = { kind: "field", el: t };
+  });
+
+  function toast(msg) {
+    let el = document.getElementById("hub-toast");
+    if (!el) { el = document.createElement("div"); el.id = "hub-toast"; document.body.appendChild(el); }
+    el.textContent = msg;
+    el.classList.add("show");
+    clearTimeout(toast._t);
+    toast._t = setTimeout(() => el.classList.remove("show"), 2600);
+  }
+
+  function insertAtCursor(el, text) {
+    const s = el.selectionStart ?? el.value.length, e = el.selectionEnd ?? el.value.length;
+    el.value = el.value.slice(0, s) + text + el.value.slice(e);
+    el.selectionStart = el.selectionEnd = s + text.length;
+    el.dispatchEvent(new Event("input", { bubbles: true })); // search refilter / jot grow
+    el.focus();
+  }
+
+  function deliverDictation(lang, text) {
+    const f = lastTarget?.kind === "field" ? lastTarget.el : null;
+    if (f && f.isConnected && f.offsetParent !== null) {
+      insertAtCursor(f, text);
+      return;
+    }
+    if ((lastTarget?.kind === "term" || !lastTarget) && active &&
+        drawerEl().classList.contains("open")) {
+      sendActiveKey(MIC_PREFIX[lang] + text + " ");
+      return;
+    }
+    (navigator.clipboard?.writeText(text) ?? Promise.reject())
+      .then(() => toast("copied — paste anywhere"))
+      .catch(() => toast("nothing focused — and clipboard blocked"));
+  }
+
+  let rec = null, busy = false;
   function makeMic(lang, label) {
     const btn = document.createElement("button");
-    btn.className = "wide mic";
+    btn.className = "mic";
     btn.textContent = label;
     btn.title = `dictate in ${lang === "bg" ? "Bulgarian" : "English"} via local Whisper`;
-    btn.addEventListener("pointerdown", e => e.preventDefault()); // don't steal focus (keeps the soft keyboard closed)
+    btn.addEventListener("pointerdown", e => e.preventDefault()); // keep focus/keyboard as-is
     btn.addEventListener("click", async () => {
       if (busy) return;
       if (rec) { if (rec.state === "recording") rec.stop(); return; }
       if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia) {
-        alert("Mic needs a secure page — open the hub via the https tailnet URL (kai-laptop.tail….ts.net), not plain http.");
-        return;
+        toast("mic needs the https tailnet URL (not plain http)"); return;
       }
       let stream;
-      try {
-        stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      } catch (err) {
-        alert("Mic error: " + err.name +
-              (err.name === "NotAllowedError" ? " — allow microphone for this site in the browser." : ""));
+      try { stream = await navigator.mediaDevices.getUserMedia({ audio: true }); }
+      catch (err) {
+        toast("mic: " + err.name + (err.name === "NotAllowedError" ? " — allow the microphone" : ""));
         return;
       }
       rec = new MediaRecorder(stream);
@@ -1106,31 +1165,26 @@ setInterval(() => {
         stream.getTracks().forEach(t => t.stop());
         const blob = new Blob(chunks, { type: rec.mimeType || "audio/webm" });
         rec = null; busy = true;
-        btn.classList.remove("rec");
-        btn.textContent = "⋯";
+        btn.classList.remove("rec"); btn.textContent = "⋯";
         try {
           const res = await fetch("/api/dictate?lang=" + lang, { method: "POST", body: blob });
           const data = await res.json().catch(() => ({}));
           if (!res.ok) throw new Error(data.detail || ("HTTP " + res.status));
           const text = (data.text || "").trim();
-          if (text) sendActiveKey(MIC_PREFIX[lang] + text + " ");
-          else btn.title = "heard nothing — try again";
-        } catch (err) {
-          alert("Dictation failed: " + err.message);
-        } finally {
-          busy = false;
-          btn.textContent = label;
-        }
+          if (text) deliverDictation(lang, text);
+          else toast("heard nothing — try again");
+        } catch (err) { toast("dictation failed: " + err.message); }
+        finally { busy = false; btn.textContent = label; }
       };
-      btn.classList.add("rec");
-      rec.start();
+      btn.classList.add("rec"); rec.start();
     });
-    bar.appendChild(btn);
+    return btn;
   }
-  makeMic("en", "🎤en");
-  makeMic("bg", "🎤бг");
 
-  document.getElementById("drawer").appendChild(bar);
+  const micbar = document.createElement("div");
+  micbar.id = "micbar";
+  micbar.append(makeMic("en", "🎤en"), makeMic("bg", "🎤бг"));
+  document.body.appendChild(micbar);
 })();
 
 
