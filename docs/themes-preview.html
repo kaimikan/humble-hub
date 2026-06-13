@@ -1,0 +1,298 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>humble hub — theme worlds (decision board)</title>
+<style>
+  :root { --pageink:#dcdce0; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:#202024; color:var(--pageink);
+    font:15px/1.5 system-ui, "Segoe UI", "Noto Sans", sans-serif; padding:2rem 1.4rem 5rem; }
+  main { max-width: 1180px; margin:0 auto; }
+  h1 { font-size:1.6rem; margin:0 0 .3rem; }
+  .lede { color:#9a9aa2; margin:0 0 1.6rem; max-width:70ch; }
+  .legend { display:flex; gap:1.2rem; flex-wrap:wrap; margin:0 0 2rem; font-size:.85rem; color:#b8b8c0; }
+  .legend b { color:#fff; }
+  .group-h { font-size:.8rem; text-transform:uppercase; letter-spacing:.14em;
+    color:#7d7d88; border-bottom:1px solid #34343a; padding-bottom:.4rem; margin:2.4rem 0 1.1rem; }
+
+  .world { border:1px solid #36363d; border-radius:10px; overflow:hidden; margin-bottom:1.5rem;
+    background:#26262b; }
+  .world > .bar { display:flex; align-items:baseline; gap:.7rem; flex-wrap:wrap;
+    padding:.7rem 1rem; background:#2d2d33; border-bottom:1px solid #36363d; }
+  .world .name { font-weight:700; font-size:1.05rem; color:#fff; }
+  .world .tag { font-size:.7rem; text-transform:uppercase; letter-spacing:.08em;
+    padding:.12rem .5rem; border-radius:99px; }
+  .tag.dark { background:#1d2535; color:#8fb3ff; }
+  .tag.light { background:#3a3320; color:#ffd98a; }
+  .tag.ok { background:#1f3a26; color:#86e0a0; }
+  .tag.cand { background:#3a2440; color:#e3a6f5; }
+  .tag.extra { background:#33343a; color:#aab; }
+  .world .note { color:#9a9aa2; font-size:.85rem; flex:1; min-width:14rem; }
+
+  .stage { display:flex; gap:0; flex-wrap:wrap; }
+  .hub-mock, .term-mock { flex:1 1 360px; min-width:300px; padding:1.1rem; }
+  .hub-mock { background:var(--bg); color:var(--ink); font-family:var(--font); }
+
+  .hub-mock .hh { font-variant:small-caps; letter-spacing:.14em; font-size:.95rem;
+    color:var(--ink); opacity:.85; margin:0 0 .7rem; }
+  .hub-mock .chips { display:flex; gap:.4rem; margin-bottom:.8rem; flex-wrap:wrap; }
+  .hub-mock .chip { font-size:.7rem; padding:.18rem .55rem; border-radius:99px;
+    border:1px solid var(--ink-faint); color:var(--ink-soft); }
+  .hub-mock .chip.on { background:var(--verdigris); color:var(--bg); border-color:transparent; }
+  .card { background:var(--paper); border:1px solid var(--ink-faint); border-radius:6px;
+    padding:.8rem .9rem; }
+  .card .head { display:flex; align-items:center; gap:.5rem; margin-bottom:.4rem; }
+  .card .glyph { color:var(--ochre); }
+  .card h3 { margin:0; font-size:.95rem; font-variant:small-caps; letter-spacing:.05em;
+    color:var(--ink); flex:1; }
+  .card .kind { font-style:italic; color:var(--ink-faint); font-size:.78rem; }
+  .card .ex { margin:.1rem 0 .5rem; font-style:italic; color:var(--ink-soft); font-size:.85rem; }
+  .card .meta { margin:0 0 .7rem; color:var(--ink-faint); font-size:.74rem; }
+  .acts { display:flex; gap:.45rem; flex-wrap:wrap; }
+  .btn { font-size:.76rem; padding:.25rem .6rem; border-radius:3px; background:transparent;
+    border:1px solid currentColor; font-variant:small-caps; letter-spacing:.05em; }
+  .btn.go { color:var(--sanguine); } .btn.cl { color:var(--lapis); }
+  .btn.fi { color:var(--verdigris); } .btn.gh { color:var(--ink-soft); }
+
+  .term-mock { background:#17171a; }
+  .term-win { border-radius:6px; overflow:hidden; border:1px solid rgba(255,255,255,.08);
+    font-family:"JetBrains Mono","DejaVu Sans Mono",monospace; font-size:12.5px; line-height:1.5; }
+  .term-win .tbar { padding:.3rem .6rem; font-size:.72rem; display:flex; gap:.4rem; align-items:center; }
+  .term-win .tbar .dot { width:.55rem; height:.55rem; border-radius:50%; }
+  .term-body { padding:.7rem .8rem; white-space:pre-wrap; }
+
+  .palettes { display:flex; gap:1.4rem; flex-wrap:wrap; padding:.7rem 1rem 1rem;
+    border-top:1px solid #36363d; background:#222227; }
+  .pal h4 { margin:0 0 .35rem; font-size:.7rem; text-transform:uppercase; letter-spacing:.1em; color:#8a8a93; }
+  .sw { display:flex; gap:.25rem; flex-wrap:wrap; }
+  .sw i { width:1.45rem; height:1.45rem; border-radius:3px; display:block;
+    border:1px solid rgba(255,255,255,.12); }
+  .ansi i { width:1.2rem; height:1.2rem; }
+
+  .ideas { border:1px solid #36363d; border-radius:10px; padding:1.2rem 1.4rem; background:#26262b;
+    margin-top:2.6rem; }
+  .ideas h2 { margin:0 0 .3rem; font-size:1.2rem; }
+  .ideas h3 { margin:1.2rem 0 .3rem; font-size:.95rem; color:#cfcfe6; }
+  .ideas ul { margin:.2rem 0; padding-left:1.2rem; }
+  .ideas li { margin:.3rem 0; color:#c4c4cc; }
+  .ideas b { color:#fff; }
+  code { background:#34343c; padding:.05rem .3rem; border-radius:3px; font-size:.85em; }
+</style>
+</head>
+<body>
+<main>
+  <h1>humble hub — theme worlds</h1>
+  <p class="lede">Each theme as a matched <b>world</b>: the hub chrome (left) and the Claude
+  terminal it would pair with (right), showing a real diff + syntax so you can judge ANSI
+  legibility — the thing that's impossible to see in a swatch alone. Light hub themes keep a
+  dark terminal by design. Palettes (hub + the terminal's 16 ANSI colours) sit under each.</p>
+  <div class="legend">
+    <span><b>core</b> — the four we agreed on</span>
+    <span><b>5th-theme candidates</b> — pick one (or more)</span>
+    <span><b>further exploration</b> — extra possibilities</span>
+  </div>
+  <div id="board"></div>
+
+  <div class="ideas">
+    <h2>Ideas &amp; optimisations to explore</h2>
+    <p style="color:#9a9aa2;margin:.2rem 0 0">Since we're reworking the theme layer anyway —
+    things worth folding in:</p>
+
+    <h3>The core mechanism (prerequisite for all of this)</h3>
+    <ul>
+      <li><b>Wire the terminal into <code>apply()</code>.</b> Today the xterm theme is hardcoded;
+      the whole "matched world" idea rests on <code>apply()</code> also setting
+      <code>term.options.theme</code> (bg/fg + the 16 ANSI) per theme, on every live terminal.</li>
+      <li><b>One source of truth.</b> Define each world once as <code>{ hub:{…}, term:{…} }</code>
+      and generate both the CSS variables and the xterm theme from it — no drift between the
+      preview swatches and the real thing.</li>
+    </ul>
+
+    <h3>Quality-of-life</h3>
+    <ul>
+      <li><b>Follow the OS.</b> Default to <code>prefers-color-scheme</code> on first visit
+      (dark→lapis, light→codex) before falling back to the saved choice.</li>
+      <li><b>Group the picker</b> by light / dark, and show a tiny terminal chip on each card so
+      the matched pairing is visible at a glance.</li>
+      <li><b>Respect <code>prefers-reduced-motion</code></b> — the card hover lift / transitions.</li>
+      <li><b>A high-contrast / colourblind-safe variant</b> (Nord and Catppuccin both ship
+      daltonised palettes we could borrow) for accessibility.</li>
+    </ul>
+
+    <h3>Consistency clean-ups noticed while here</h3>
+    <ul>
+      <li><b>Accent semantics.</b> The pigments mean things (<code>--lapis</code>=claude,
+      <code>--sanguine</code>=go/launch, <code>--verdigris</code>=files). Keep that mapping stable
+      across themes so muscle memory survives a theme switch.</li>
+      <li><b>Contrast budget.</b> A couple of current themes ride low ink/​bg contrast
+      (matrix faint text, dragon ochre on cream). Worth a quick WCAG pass per theme.</li>
+      <li><b>Scrollbars &amp; selection</b> currently ignore the theme — small but they break the
+      illusion; easy to theme via the existing variables.</li>
+    </ul>
+
+    <h3>Playful, optional</h3>
+    <ul>
+      <li><b>Auto-by-time</b> — warm (codex) by day, dark (lapis) at night.</li>
+      <li><b>"Surprise me"</b> shuffle in the picker.</li>
+      <li><b>The Amber-CRT world below</b> is included as a deliberate cautionary example: a
+      monochrome terminal looks gorgeous but the diff colours collapse — proof of why accent
+      separation matters.</li>
+    </ul>
+  </div>
+</main>
+
+<script>
+const THEMES = [
+  // ---- core ---------------------------------------------------------------
+  { key:"codex", name:"codex", group:"core", mode:"light", note:"the default — da Vinci parchment; warm-dark terminal.",
+    hub:{ bg:"#efe2c0", paper:"#f6edd6", ink:"#43331c", inkSoft:"#6e5a39", inkFaint:"#9c875f",
+      lapis:"#2f5277", sanguine:"#9a3b22", verdigris:"#4f6b3a", ochre:"#8a6d1f", plum:"#5a3d6e",
+      font:"'EB Garamond','Noto Serif',Georgia,serif" },
+    term:{ bg:"#2b2620", fg:"#e8dcc0", ansi:["#3a332a","#c1554a","#7a8c4a","#c2922e","#4f7aa6","#9a6a9e","#5a9a92","#e8dcc0","#5a5048","#d96e5e","#9bb05a","#d9aa44","#6f97c2","#b487b8","#76b3aa","#fff4dc"] } },
+
+  { key:"lapis", name:"lapis (Tokyo Night)", group:"core", mode:"dark", note:"matches the current terminal exactly — bluish, the flagship pairing.",
+    hub:{ bg:"#1a1b26", paper:"#24283b", ink:"#c0caf5", inkSoft:"#9aa5ce", inkFaint:"#565f89",
+      lapis:"#7aa2f7", sanguine:"#f7768e", verdigris:"#9ece6a", ochre:"#e0af68", plum:"#bb9af7",
+      font:"system-ui,'Segoe UI',sans-serif" },
+    term:{ bg:"#1a1b26", fg:"#c0caf5", ansi:["#15161e","#f7768e","#9ece6a","#e0af68","#7aa2f7","#bb9af7","#7dcfff","#a9b1d6","#414868","#f7768e","#9ece6a","#e0af68","#7aa2f7","#bb9af7","#7dcfff","#c0caf5"] } },
+
+  { key:"matrix", name:"matrix", group:"core", mode:"dark", note:"green phosphor; terminal greens kept apart from red/blue for diff legibility.",
+    hub:{ bg:"#050905", paper:"#0b140c", ink:"#a8ffbe", inkSoft:"#52d98b", inkFaint:"#2e7d52",
+      lapis:"#36e3a0", sanguine:"#ff5470", verdigris:"#2ecf7a", ochre:"#9fe06a", plum:"#36b88f",
+      font:"'JetBrains Mono','Hack',monospace" },
+    term:{ bg:"#050d07", fg:"#a8ffbe", ansi:["#0a160d","#ff5470","#36e3a0","#9fe06a","#2ee6c0","#7df0b0","#5affd0","#c8ffd8","#163a24","#ff7088","#5affb8","#b6f07a","#56f0d2","#9bf6c4","#86ffe0","#e6fff0"] } },
+
+  { key:"dragon", name:"dragon ball", group:"core", mode:"light", note:"cream + cobalt/orange; dark DBZ terminal.",
+    hub:{ bg:"#fff3da", paper:"#ffe9c2", ink:"#33250e", inkSoft:"#a65c00", inkFaint:"#cf9544",
+      lapis:"#1f4dd8", sanguine:"#f56f00", verdigris:"#2eaf5d", ochre:"#e6a817", plum:"#8c4ddd",
+      font:"'Trebuchet MS','DejaVu Sans',Verdana,sans-serif" },
+    term:{ bg:"#1a1410", fg:"#ffe9c2", ansi:["#2a1f15","#f5503c","#2eaf5d","#e6a817","#2f6df0","#c266ff","#2bb0c8","#ffe9c2","#4a3520","#ff6e54","#46c873","#ffbe3a","#5a8cff","#d488ff","#4cc8de","#fff4dc"] } },
+
+  // ---- 5th-theme candidates ----------------------------------------------
+  { key:"nord", name:"nord", group:"cand", mode:"dark", note:"arctic blue-grey; canonical ANSI keeps the terminal crisp. Proven — least 'ours'.",
+    hub:{ bg:"#2e3440", paper:"#3b4252", ink:"#d8dee9", inkSoft:"#abb2c0", inkFaint:"#6b7488",
+      lapis:"#88c0d0", sanguine:"#bf616a", verdigris:"#a3be8c", ochre:"#ebcb8b", plum:"#b48ead",
+      font:"system-ui,'Segoe UI',sans-serif" },
+    term:{ bg:"#2e3440", fg:"#d8dee9", ansi:["#3b4252","#bf616a","#a3be8c","#ebcb8b","#81a1c1","#b48ead","#88c0d0","#e5e9f0","#4c566a","#bf616a","#a3be8c","#ebcb8b","#81a1c1","#b48ead","#8fbcbb","#eceff4"] } },
+
+  { key:"graphite", name:"graphite", group:"cand", mode:"dark", note:"custom near-monochrome + one steel accent. The truest 'greyish slick', fully ours.",
+    hub:{ bg:"#23272e", paper:"#2b3036", ink:"#c6ccd4", inkSoft:"#8d97a3", inkFaint:"#5c646e",
+      lapis:"#6f8aa6", sanguine:"#c98a8a", verdigris:"#9bb89b", ochre:"#c9bd97", plum:"#b39ec2",
+      font:"system-ui,'Segoe UI',sans-serif" },
+    term:{ bg:"#1f2329", fg:"#c6ccd4", ansi:["#2b3036","#c98a8a","#9bb89b","#c9bd97","#8aa6c9","#b39ec2","#8fbcbe","#c6ccd4","#3a4049","#d99e9e","#aecaae","#d8cda6","#9db8d8","#c2add0","#9fccce","#e0e4ea"] } },
+
+  { key:"zenburn", name:"zenburn", group:"cand", mode:"dark", note:"warm muted low-contrast — soft charcoal, dusty olive/rose. Greyish but warm.",
+    hub:{ bg:"#3f3f3f", paper:"#4a4a4a", ink:"#dcdccc", inkSoft:"#b0b0a0", inkFaint:"#80806f",
+      lapis:"#8cd0d3", sanguine:"#cc9393", verdigris:"#7f9f7f", ochre:"#d0bf8f", plum:"#dc8cc3",
+      font:"system-ui,'Segoe UI',sans-serif" },
+    term:{ bg:"#3f3f3f", fg:"#dcdccc", ansi:["#4d4d4d","#cc9393","#7f9f7f","#d0bf8f","#8cd0d3","#dc8cc3","#93e0e3","#dcdccc","#6a6a6a","#dca3a3","#8fb28f","#e0cfa0","#9cdfe2","#ec9cd0","#a3eef0","#ffffff"] } },
+
+  { key:"frappe", name:"catppuccin frappé", group:"cand", mode:"dark", note:"muted pastel on slate — modern, soft. Greyish base, gently colourful accents.",
+    hub:{ bg:"#303446", paper:"#414559", ink:"#c6d0f5", inkSoft:"#a5adce", inkFaint:"#737994",
+      lapis:"#8caaee", sanguine:"#e78284", verdigris:"#a6d189", ochre:"#e5c890", plum:"#ca9ee6",
+      font:"system-ui,'Segoe UI',sans-serif" },
+    term:{ bg:"#303446", fg:"#c6d0f5", ansi:["#51576d","#e78284","#a6d189","#e5c890","#8caaee","#f4b8e4","#81c8be","#b5bfe2","#626880","#e78284","#a6d189","#e5c890","#8caaee","#f4b8e4","#81c8be","#a5adce"] } },
+
+  // ---- further exploration ------------------------------------------------
+  { key:"gruvbox", name:"gruvbox", group:"extra", mode:"dark", note:"warm retro earth tones — a cosy alternative if the greys feel too cool.",
+    hub:{ bg:"#282828", paper:"#32302f", ink:"#ebdbb2", inkSoft:"#a89984", inkFaint:"#7c6f64",
+      lapis:"#83a598", sanguine:"#fb4934", verdigris:"#b8bb26", ochre:"#fabd2f", plum:"#d3869b",
+      font:"system-ui,'Segoe UI',sans-serif" },
+    term:{ bg:"#282828", fg:"#ebdbb2", ansi:["#282828","#cc241d","#98971a","#d79921","#458588","#b16286","#689d6a","#a89984","#928374","#fb4934","#b8bb26","#fabd2f","#83a598","#d3869b","#8ec07c","#ebdbb2"] } },
+
+  { key:"rosepine", name:"rosé pine", group:"extra", mode:"dark", note:"muted dusk — rose, iris, pine. Soft and a touch romantic.",
+    hub:{ bg:"#191724", paper:"#1f1d2e", ink:"#e0def4", inkSoft:"#908caa", inkFaint:"#6e6a86",
+      lapis:"#31748f", sanguine:"#eb6f92", verdigris:"#9ccfd8", ochre:"#f6c177", plum:"#c4a7e7",
+      font:"system-ui,'Segoe UI',sans-serif" },
+    term:{ bg:"#191724", fg:"#e0def4", ansi:["#26233a","#eb6f92","#31748f","#f6c177","#9ccfd8","#c4a7e7","#ebbcba","#e0def4","#6e6a86","#eb6f92","#31748f","#f6c177","#9ccfd8","#c4a7e7","#ebbcba","#e0def4"] } },
+
+  { key:"amber", name:"amber CRT", group:"extra", mode:"dark", note:"monochrome amber — included to SHOW the trap: stunning, but the diff colours collapse.",
+    hub:{ bg:"#1a1206", paper:"#241a0a", ink:"#ffb000", inkSoft:"#c88600", inkFaint:"#7a5200",
+      lapis:"#ffc24a", sanguine:"#ff7a00", verdigris:"#ffd070", ochre:"#ffcf7a", plum:"#ff9430",
+      font:"'JetBrains Mono','Hack',monospace" },
+    term:{ bg:"#150f04", fg:"#ffb000", ansi:["#2a1e08","#ff6a00","#ffb000","#ffc24a","#d89000","#ff8a2a","#ffcf7a","#ffe0a0","#4a3614","#ff8a3a","#ffc24a","#ffd070","#e8a020","#ffa050","#ffdf9a","#fff0cc"] } },
+];
+
+const groupTitles = { core:"Core — the four we agreed on", cand:"5th-theme candidates — pick one (or more)", extra:"Further exploration — extra possibilities" };
+
+function termBody(a, fg) {
+  const c = (t, i) => `<span style="color:${i==null?fg:a[i]}">${t}</span>`;
+  return [
+    c("❯ harden the token signing", null),
+    c("● ", 2) + c("Updated ", null) + c("src/auth.ts", 6),
+    c("  // rotate the signing key hourly", 8),
+    c("export", 5) + " " + c("function", 4) + " " + c("sign", 2) + "(" + c("user", 3) + ") {",
+    c("-   return token", 1),
+    c("+   return jwt.sign(payload, ", 2) + c("key", 3) + c(")", 2),
+    "    algo: " + c('"HS256"', 6) + ", ttl: " + c("1800", 3),
+    "}",
+    c("accept edits on", 8) + c(" · ", null) + c("⏎ to send", 8),
+  ].join("\n");
+}
+
+const board = document.getElementById("board");
+let curGroup = null;
+for (const t of THEMES) {
+  if (t.group !== curGroup) {
+    curGroup = t.group;
+    const h = document.createElement("div");
+    h.className = "group-h";
+    h.textContent = groupTitles[t.group];
+    board.appendChild(h);
+  }
+  const h = t.hub, tm = t.term;
+  const vars = `--bg:${h.bg};--paper:${h.paper};--ink:${h.ink};--ink-soft:${h.inkSoft};`
+    + `--ink-faint:${h.inkFaint};--lapis:${h.lapis};--sanguine:${h.sanguine};`
+    + `--verdigris:${h.verdigris};--ochre:${h.ochre};--plum:${h.plum};--font:${h.font}`;
+  const tagClass = { core:"ok", cand:"cand", extra:"extra" }[t.group];
+  const tagText = { core:"core", cand:"candidate", extra:"explore" }[t.group];
+  const hubSw = [["bg",h.bg],["paper",h.paper],["ink",h.ink],["lapis",h.lapis],
+    ["sanguine",h.sanguine],["verdigris",h.verdigris],["ochre",h.ochre],["plum",h.plum]];
+
+  const el = document.createElement("section");
+  el.className = "world";
+  el.innerHTML = `
+    <div class="bar">
+      <span class="name">${t.name}</span>
+      <span class="tag ${t.mode}">${t.mode}</span>
+      <span class="tag ${tagClass}">${tagText}</span>
+      <span class="note">${t.note}</span>
+    </div>
+    <div class="stage">
+      <div class="hub-mock" style="${vars}">
+        <p class="hh">the humble hub</p>
+        <div class="chips"><span class="chip on">all</span><span class="chip">site</span>
+          <span class="chip">notes</span><span class="chip">code</span></div>
+        <div class="card">
+          <div class="head"><span class="glyph">❧</span><h3>babble-building</h3>
+            <span class="kind">notes</span></div>
+          <p class="ex">“Exploring ways to operate the PC by voice.”</p>
+          <p class="meta">2026-06-13 · ✱ wet ink</p>
+          <div class="acts"><span class="btn cl">claude ▾</span><span class="btn fi">files</span>
+            <span class="btn go">▶ open</span><span class="btn gh">github</span></div>
+        </div>
+      </div>
+      <div class="term-mock">
+        <div class="term-win" style="background:${tm.bg};color:${tm.fg}">
+          <div class="tbar" style="background:${tm.ansi[0]};color:${tm.fg}">
+            <span class="dot" style="background:${tm.ansi[1]}"></span>
+            <span class="dot" style="background:${tm.ansi[3]}"></span>
+            <span class="dot" style="background:${tm.ansi[2]}"></span>
+            &nbsp;~/Projects — claude</div>
+          <div class="term-body">${termBody(tm.ansi, tm.fg)}</div>
+        </div>
+      </div>
+    </div>
+    <div class="palettes">
+      <div class="pal"><h4>hub</h4><div class="sw">${
+        hubSw.map(([n,c]) => `<i title="${n} ${c}" style="background:${c}"></i>`).join("")}</div></div>
+      <div class="pal"><h4>terminal · 16 ANSI</h4><div class="sw ansi">${
+        tm.ansi.map((c,i) => `<i title="ansi ${i} ${c}" style="background:${c}"></i>`).join("")}</div></div>
+    </div>`;
+  board.appendChild(el);
+}
+</script>
+</body>
+</html>
