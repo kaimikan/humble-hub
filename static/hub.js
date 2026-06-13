@@ -13,8 +13,8 @@ async function openService(name) {
   try {
     const r = await fetch(`/api/projects/${encodeURIComponent(name)}/service/open`,
                           { method: "POST" });
-    const data = await r.json();
-    if (!r.ok) throw new Error(data.detail || r.statusText);
+    const data = await r.json().catch(() => ({})); // body may be a plain error page
+    if (!r.ok) throw new Error(data.detail || r.statusText || "service failed to start");
     if (tab) tab.location = data.url;
     refreshServiceDots();
   } catch (e) {
@@ -25,7 +25,7 @@ async function openService(name) {
 
 async function stopService(name) {
   const dot = document.querySelector(`.svc-dot[data-svc="${name}"]`);
-  if (dot) { dot.textContent = "◌"; dot.title = "stopping…"; } // instant feedback
+  if (dot) { dot.classList.remove("on"); dot.title = "stopping…"; } // instant feedback (keep the SVG)
   const r = await fetch(`/api/projects/${encodeURIComponent(name)}/service/stop`,
                         { method: "POST" });
   const data = await r.json().catch(() => ({}));
@@ -40,8 +40,7 @@ async function refreshServiceDots() {
     const states = await r.json();
     document.querySelectorAll(".svc-dot").forEach(dot => {
       const on = !!states[dot.dataset.svc];
-      dot.classList.toggle("on", on);
-      dot.textContent = on ? "●" : "○";
+      dot.classList.toggle("on", on);   // keep the SVG; .svc-dot.on fills it via CSS
       dot.title = on ? "running" : "stopped";
     });
     document.querySelectorAll(".b-stop").forEach(b => {

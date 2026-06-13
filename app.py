@@ -258,11 +258,22 @@ def service_open(name: str):
     if argv[0].startswith("."):  # resolve project-relative commands
         argv[0] = str(path / argv[0])
     env_path = f"{Path.home()}/.local/bin:{os.environ.get('PATH', '/usr/bin')}"
-    subprocess.run(
-        ["systemd-run", "--user", "--collect", "--quiet",
-         f"--unit=hub-svc-{name}", f"--working-directory={path}",
-         f"--setenv=PATH={env_path}", *argv],
-        check=True, capture_output=True, text=True)
+    # the port isn't answering, but a unit with this name may still linger —
+    # failed, or running a stale config (e.g. an old port after a hub.json
+    # edit). systemd-run would collide on the name; clear it first so the
+    # fresh config takes effect.
+    unit = f"hub-svc-{name}.service"
+    subprocess.run(["systemctl", "--user", "stop", unit], capture_output=True)
+    subprocess.run(["systemctl", "--user", "reset-failed", unit], capture_output=True)
+    try:
+        subprocess.run(
+            ["systemd-run", "--user", "--collect", "--quiet",
+             f"--unit=hub-svc-{name}", f"--working-directory={path}",
+             f"--setenv=PATH={env_path}", *argv],
+            check=True, capture_output=True, text=True)
+    except subprocess.CalledProcessError as exc:
+        raise HTTPException(500, f"could not start {name}: "
+                                 f"{(exc.stderr or '').strip() or exc}")
     for _ in range(100):  # wait for the port (max ~10 s)
         if _port_open(port):
             return {"ok": True, "url": url, "started": True}
