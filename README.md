@@ -102,11 +102,14 @@ other chat.
 
 ## Service launcher
 
-A project that ships a `hub.json` (`{"serve": "<cmd>", "port": N}`) becomes
-a **service** card: ▶ starts the command as a transient `hub-svc-<name>`
+A project that ships a `hub.json` (`{"serve": "<cmd>", "port": N}`) gets
+service controls: ▶ starts the command as a transient `hub-svc-<name>`
 user unit (own cgroup, survives hub restarts) and opens
 `localhost:<port>`; a status dot polls whether the port answers; ■ stops the
-unit.
+unit. By default such a project is typed *service*; an optional `"type"`
+field keeps it in its own category while still wiring the controls — so
+`linux-learning` stays a *notes* project but can serve its mkdocs site, and
+`do-it-diet` is a *site* whose menu links the regime pages.
 
 ## From the phone
 
