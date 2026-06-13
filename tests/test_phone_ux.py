@@ -97,6 +97,8 @@ with sync_playwright() as p:
     # --- no-keyboard-popup: tapping a kbar key must not move focus ----------
     pg.evaluate("""() => {
       document.getElementById('drawer').classList.add('open');
+      document.body.classList.add('drawer-open'); // real openDrawer sets this;
+      // it hides the floating #micbar so it can't intercept the kbar tap
       const ta = document.createElement('textarea');
       ta.id = 'fake-xterm-input';
       document.getElementById('dterm').appendChild(ta);
