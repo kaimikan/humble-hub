@@ -709,8 +709,12 @@ function createSession(key, project, o) {
     }
     s.lastOut = Date.now();
     s.sawOutput = true;
-    if (data.includes(7)) setStatus(s, "attention");
-    else if (s.status !== "attention" || s.key === active) setStatus(s, "working");
+    // the bell → "attention" (red) is meant to flag a BACKGROUND chat; don't
+    // raise it on the chat you're already viewing (its pill is now visible, so
+    // it would just flicker amber↔red as bells arrive — idea-#11 follow-up)
+    const viewing = s.key === active && drawerEl().classList.contains("open");
+    if (data.includes(7) && !viewing) setStatus(s, "attention");
+    else if (s.status !== "attention" || viewing) setStatus(s, "working");
   };
   ws.onclose = () => {
     term.write("\r\n\x1b[33m[session ended]\x1b[0m\r\n");
