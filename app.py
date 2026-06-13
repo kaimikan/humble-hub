@@ -916,6 +916,7 @@ ICONS = {
                '<path d="M4 6l1.4 1.4L8 5"/><path d="M4 12l1.4 1.4L8 11"/><path d="M4 18l1.4 1.4L8 17"/>',
     "ideas":   '<path d="M9 18h6"/><path d="M10 21h4"/>'
                '<path d="M12 3a6 6 0 0 1 3.7 10.7c-.6.5-.9 1-.9 1.8H9.2c0-.8-.3-1.3-.9-1.8A6 6 0 0 1 12 3z"/>',
+    "star":    '<path d="M12 3.5l2.6 5.3 5.9.9-4.25 4.15 1 5.85L12 17l-5.25 2.75 1-5.85L3.5 9.7l5.9-.9z"/>',
 }
 
 
@@ -943,8 +944,9 @@ def glyph(p: dict) -> str:
     return icon(p["type"])
 
 
-def card(p: dict) -> str:
+def card(p: dict, favs: set = frozenset()) -> str:
     name = html.escape(p["name"])
+    fav_on = " on" if p["name"] in favs else ""
     buttons = [
         f"""<div class="menu">
           <button class="b-claude" onclick="openDrawer('{name}')">{CHAT_SVG} claude ▾</button>
@@ -977,11 +979,12 @@ def card(p: dict) -> str:
     svc_dot = (f"""<span class="svc-dot" data-svc="{name}" title="stopped">{icon("dot")}</span>"""
                if p.get("serve") else "")
     return f"""
-    <div class="card" data-type="{p['type']}" data-text="{search_blob}">
+    <div class="card" data-type="{p['type']}" data-name="{name}" data-text="{search_blob}">
       <div class="head">
         <span class="glyph">{glyph(p)}</span>
         <h2>{name}</h2>
         {svc_dot}<span class="kind">{TYPE_LABELS[p["type"]]}</span>
+        <button class="b-fav{fav_on}" data-fav="{name}" title="favorite — pin to top">{icon("star")}</button>
       </div>
       <p class="excerpt">{f'“{excerpt}”' if excerpt else ''}</p>
       <p class="meta">{meta}</p>
@@ -991,7 +994,10 @@ def card(p: dict) -> str:
 
 @app.get("/", response_class=HTMLResponse)
 def index():
-    cards = "".join(card(p) for p in scan())
+    favs = set(get_notes().get("favorites", []))
+    # favourites first (stable sort keeps each group alphabetical)
+    projects = sorted(scan(), key=lambda p: p["name"] not in favs)
+    cards = "".join(card(p, favs) for p in projects)
     return f"""<!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8"><title>the humble hub</title>
@@ -1154,6 +1160,8 @@ def index():
     padding:.45rem .95rem; font:inherit; font-size:.88rem; font-variant:small-caps;
     letter-spacing:.06em; cursor:pointer; box-shadow:2px 3px 10px rgba(67,51,28,.4);
     display:inline-flex; align-items:center; gap:.45rem; }}
+  /* the active session keeps its pill (stable order) — ringed, not hidden */
+  .pill.active {{ outline:2.5px solid var(--ink); outline-offset:2px; }}
   .pill .dot {{ width:.55rem; height:.55rem; border-radius:50%; background:#c8b88a; }}
   .pill.s-working .dot {{ background:#e0af68; }}
   .pill.s-ready .dot {{ background:#9ece6a; }}
@@ -1172,6 +1180,12 @@ def index():
   .card h2 {{ margin:0; font-size:1.12rem; font-weight:600; flex:1;
               font-variant:small-caps; letter-spacing:.05em; }}
   .kind {{ font-style:italic; color:var(--ink-faint); font-size:.82rem; }}
+  /* favourite toggle — outline star, fills ochre when pinned to the top */
+  .b-fav {{ border:0; background:transparent; color:var(--ink-faint); cursor:pointer;
+    padding:.1rem .15rem; line-height:0; }}
+  .b-fav:hover {{ color:var(--ochre); background:transparent; }}
+  .b-fav.on {{ color:var(--ochre); }}
+  .b-fav.on svg.i {{ fill:currentColor; }}
   .excerpt {{ margin:0; font-style:italic; color:var(--ink-soft); font-size:.92rem;
               min-height:2.8em; display:-webkit-box; -webkit-line-clamp:4;
               -webkit-box-orient:vertical; overflow:hidden; }}

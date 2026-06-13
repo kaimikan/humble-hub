@@ -147,6 +147,29 @@ function saveNotes() {
   }), 400);
 }
 
+// --- favourites (idea #6): ★ pins a project to the top of the shelf; stored
+// in notes.json (same doc as the jots) so it's shared across phone + laptop.
+function reorderCards() {
+  const grid = document.querySelector(".grid");
+  if (!grid) return;
+  const favs = new Set(notes.favorites || []);
+  [...grid.querySelectorAll(".card")].sort((a, b) => {
+    const fa = favs.has(a.dataset.name), fb = favs.has(b.dataset.name);
+    if (fa !== fb) return fa ? -1 : 1;            // favourites first…
+    return a.dataset.name.localeCompare(b.dataset.name); // …then alphabetical
+  }).forEach(c => grid.appendChild(c));
+}
+document.addEventListener("click", e => {
+  const btn = e.target.closest(".b-fav");
+  if (!btn) return;
+  notes.favorites = notes.favorites || [];
+  const name = btn.dataset.fav, i = notes.favorites.indexOf(name);
+  if (i >= 0) { notes.favorites.splice(i, 1); btn.classList.remove("on"); }
+  else { notes.favorites.push(name); btn.classList.add("on"); }
+  saveNotes();
+  reorderCards();
+});
+
 // done/not-done filter for the to-do list (ideas have no done state).
 // Defaults to "active" — finished items are the least interesting at a glance.
 let todoFilter = "active";
@@ -444,10 +467,18 @@ function addItem(ev, kind) {
   const input = document.getElementById(`${kind}-input`);
   const text = input.value.trim();
   if (text) {
-    notes[kind].push(kind === "todos" ? { text, done: false } : { text });
+    const item = kind === "todos" ? { text, done: false } : { text };
+    notes[kind].push(item);
     input.value = "";
     renderNotes();
     saveNotes();
+    // bring the new row into view with a brief highlight so it's clear it landed
+    const li = [...document.getElementById(kind).children].find(el => el.__item === item);
+    if (li) {
+      li.scrollIntoView({ block: "nearest", behavior: "smooth" });
+      li.classList.add("just-added");
+      setTimeout(() => li.classList.remove("just-added"), 1200);
+    }
   }
   return false;
 }
@@ -472,6 +503,8 @@ function addItem(ev, kind) {
     .jot-col li .drag-handle:hover { color:var(--ink-soft); }
     .jot-col li.dragging { opacity:.65; background:var(--card-hot);
       box-shadow:1px 2px 9px rgba(67,51,28,.3); }
+    @keyframes jot-flash { from { background:var(--card-hot); } to { background:transparent; } }
+    .jot-col li.just-added { animation: jot-flash 1.2s ease; }
     .jot-col li .row-menu-btn { border:0; background:transparent; color:var(--ink-faint);
       cursor:pointer; font:inherit; font-size:1.05rem; line-height:1; padding:0 .25rem;
       align-self:center; }
@@ -762,8 +795,12 @@ function toggleDrawerFull() {
   const fullNow = document.body.classList.toggle("drawer-full");
   const f = document.getElementById("d-full");
   f.innerHTML = fullNow ? ICON_COLLAPSE : ICON_EXPAND;
-  // reflow the terminal once the width transition settles
-  setTimeout(() => refit(sessions.get(active)), 260);
+  f.blur(); // don't leave focus on ⤢ — else the next Enter re-toggles the drawer (idea #9)
+  // reflow the terminal once the width transition settles, then hand focus back
+  setTimeout(() => {
+    const s = sessions.get(active);
+    if (s) { refit(s); s.term.focus(); }
+  }, 260);
 }
 
 // TUIs (claude code) have no native scrollback to pan, so finger swipes do
@@ -831,9 +868,11 @@ function renderPills() {
   const box = document.getElementById("pills");
   box.innerHTML = "";
   sessions.forEach(s => {
-    if (s.key === active && drawerEl().classList.contains("open")) return;
     const pill = document.createElement("button");
     pill.className = `pill s-${s.status}`;
+    // keep the active session's pill in place (stable order) with a highlight,
+    // instead of removing it and shuffling the rest (idea #11)
+    if (s.key === active && drawerEl().classList.contains("open")) pill.classList.add("active");
     const short = s.label.length > 26 ? s.label.slice(0, 25) + "…" : s.label;
     pill.innerHTML = `<span class="dot"></span>${CHAT_ICON} `;
     pill.appendChild(document.createTextNode(short)); // label may be arbitrary text
