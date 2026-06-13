@@ -1113,11 +1113,8 @@ def index():
     outline-offset:4px; border-radius:2px; padding:1rem 1.2rem;
     display:flex; flex-direction:column; gap:.45rem; position:relative;
     background:var(--card-bg); box-shadow:2px 3px 8px rgba(67,51,28,.18); }}
-  /* rotated cards form stacking contexts — lift the hovered one so its
-     dropdown isn't painted under later cards */
+  /* lift the hovered card so its dropdown isn't painted under later cards */
   .card:hover {{ z-index:10; }}
-  .card:nth-child(odd) {{ transform:rotate(-.35deg); }}
-  .card:nth-child(even) {{ transform:rotate(.3deg); }}
   .head {{ display:flex; align-items:center; gap:.6rem; }}
   .glyph {{ font-size:1.45rem; line-height:1; }}
   .card h2 {{ margin:0; font-size:1.12rem; font-weight:600; flex:1;

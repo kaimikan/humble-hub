@@ -786,6 +786,9 @@ function closeActive() {
   s.term.dispose();
   s.host.remove();
   sessions.delete(active);
+  // the pty is now killed — drop it from the detached list too, or renderPills
+  // would resurrect it as a ⟲ reattach pill (idea #8 bug)
+  detachedPtys = detachedPtys.filter(p => p.token !== s.token);
   const next = sessions.keys().next();
   if (next.done) minimizeDrawer();
   else activate(next.value);
