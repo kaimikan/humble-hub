@@ -944,9 +944,19 @@ def glyph(p: dict) -> str:
     return icon(p["type"])
 
 
-def card(p: dict, favs: set = frozenset()) -> str:
+def card(p: dict, favs: set = frozenset(), peers: list = ()) -> str:
     name = html.escape(p["name"])
     fav_on = " on" if p["name"] in favs else ""
+    # show the declared port on service cards; flag it red if another project
+    # declares the same port (idea #10 — port conflicts like the :5000 one)
+    if p.get("port"):
+        if peers:
+            port_html = (f'<span class="svc-port warn" title="⚠ port {p["port"]} also '
+                         f'declared by {", ".join(peers)}">:{p["port"]}</span>')
+        else:
+            port_html = f'<span class="svc-port" title="serves on port {p["port"]}">:{p["port"]}</span>'
+    else:
+        port_html = ""
     buttons = [
         f"""<div class="menu">
           <button class="b-claude" onclick="openDrawer('{name}')">{CHAT_SVG} claude ▾</button>
@@ -983,7 +993,7 @@ def card(p: dict, favs: set = frozenset()) -> str:
       <div class="head">
         <span class="glyph">{glyph(p)}</span>
         <h2>{name}</h2>
-        {svc_dot}<span class="kind">{TYPE_LABELS[p["type"]]}</span>
+        {svc_dot}{port_html}<span class="kind">{TYPE_LABELS[p["type"]]}</span>
         <button class="b-fav{fav_on}" data-fav="{name}" title="favorite — pin to top">{icon("star")}</button>
       </div>
       <p class="excerpt">{f'“{excerpt}”' if excerpt else ''}</p>
@@ -997,7 +1007,14 @@ def index():
     favs = set(get_notes().get("favorites", []))
     # favourites first (stable sort keeps each group alphabetical)
     projects = sorted(scan(), key=lambda p: p["name"] not in favs)
-    cards = "".join(card(p, favs) for p in projects)
+    # map declared ports → projects, to flag conflicts (idea #10)
+    port_use: dict = {}
+    for p in projects:
+        if p.get("port"):
+            port_use.setdefault(p["port"], []).append(p["name"])
+    cards = "".join(
+        card(p, favs, [n for n in port_use.get(p.get("port"), []) if n != p["name"]])
+        for p in projects)
     return f"""<!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8"><title>the humble hub</title>
@@ -1180,6 +1197,10 @@ def index():
   .card h2 {{ margin:0; font-size:1.12rem; font-weight:600; flex:1;
               font-variant:small-caps; letter-spacing:.05em; }}
   .kind {{ font-style:italic; color:var(--ink-faint); font-size:.82rem; }}
+  /* declared service port; red when another project declares the same one */
+  .svc-port {{ font-family:"JetBrains Mono","Noto Sans Mono",monospace; font-size:.72rem;
+    color:var(--ink-faint); }}
+  .svc-port.warn {{ color:var(--sanguine); font-weight:700; }}
   /* favourite toggle — outline star, fills ochre when pinned to the top */
   .b-fav {{ border:0; background:transparent; color:var(--ink-faint); cursor:pointer;
     padding:.1rem .15rem; line-height:0; }}
