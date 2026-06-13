@@ -737,7 +737,13 @@ function activate(key) {
     }
     refit(s, true);
     s.pendingFit = false;
-    try { s.term.refresh(0, s.term.rows - 1); } catch (e) {}
+    // a second fit next frame catches a row-short first fit when switching
+    // between two active terminals, then pin the view to the latest output
+    // (otherwise the last lines can sit just below the fold — 2026-06-13 bug)
+    requestAnimationFrame(() => {
+      refit(s, true);
+      try { s.term.refresh(0, s.term.rows - 1); s.term.scrollToBottom(); } catch (e) {}
+    });
     s.term.focus();
   };
   requestAnimationFrame(() => settle());
