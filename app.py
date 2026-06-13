@@ -837,8 +837,38 @@ CHAT_SVG = ('<svg class="i" viewBox="0 0 24 24" aria-hidden="true">'
             ' 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/>'
             '</svg>')
 
-TYPE_GLYPHS = {"site": "☉", "app": "⚙", "code": "✒", "notes": "✎", "empty": "◯",
-               "service": "⚗"}
+# Unified hand-inked line-art icon set — one visual language across the hub.
+# Inner SVG markup only; icon() wraps it. They inherit the `svg.i` CSS (24×24
+# viewBox, fill:none, stroke=currentColor) so every icon follows the theme.
+ICONS = {
+    "site":    '<circle cx="12" cy="12" r="9"/><path d="M3 12h18"/>'
+               '<path d="M12 3c5 2.6 5 15.4 0 18"/><path d="M12 3c-5 2.6-5 15.4 0 18"/>',
+    "app":     '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18"/>'
+               '<path d="M6.5 6.5h.01"/>',
+    "code":    '<path d="M9 8l-4 4 4 4"/><path d="M15 8l4 4-4 4"/>',
+    "notes":   '<path d="M7 3h7l4 4v14H7z"/><path d="M14 3v4h4"/>'
+               '<path d="M10 13h6"/><path d="M10 17h6"/>',
+    "service": '<rect x="4" y="4" width="16" height="6" rx="1"/>'
+               '<rect x="4" y="14" width="16" height="6" rx="1"/>'
+               '<path d="M8 7h.01"/><path d="M8 17h.01"/>',
+    "empty":   '<circle cx="12" cy="12" r="8" stroke-dasharray="3 3"/>',
+    "audio":   '<path d="M9 17V5l11-2v12"/><circle cx="6" cy="17" r="3"/><circle cx="17" cy="15" r="3"/>',
+    "open":    '<path d="M8 5v14l11-7z"/>',
+    "stop":    '<rect x="6" y="6" width="12" height="12" rx="1"/>',
+    "dot":     '<circle cx="12" cy="12" r="5"/>',
+    "close":   '<path d="M6 6l12 12"/><path d="M18 6L6 18"/>',
+    "min":     '<path d="M5 18h14"/>',
+    "expand":  '<path d="M14 4h6v6"/><path d="M20 4l-7 7"/><path d="M10 20H4v-6"/><path d="M4 20l7-7"/>',
+    "chats":   '<path d="M4 5h11a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2H9l-4 3v-3a2 2 0 0 1-1-2V7a2 2 0 0 1 2-2z"/>',
+    "todo":    '<path d="M9 6h11"/><path d="M9 12h11"/><path d="M9 18h11"/>'
+               '<path d="M4 6l1.4 1.4L8 5"/><path d="M4 12l1.4 1.4L8 11"/><path d="M4 18l1.4 1.4L8 17"/>',
+    "ideas":   '<path d="M9 18h6"/><path d="M10 21h4"/>'
+               '<path d="M12 3a6 6 0 0 1 3.7 10.7c-.6.5-.9 1-.9 1.8H9.2c0-.8-.3-1.3-.9-1.8A6 6 0 0 1 12 3z"/>',
+}
+
+
+def icon(name: str, cls: str = "i") -> str:
+    return f'<svg class="{cls}" viewBox="0 0 24 24" aria-hidden="true">{ICONS[name]}</svg>'
 TYPE_LABELS = {
     "site": "site",
     "app": "app",
@@ -857,8 +887,8 @@ def glyph(p: dict) -> str:
             if line.startswith("Icon="):
                 icon_hint = line[5:].lower()
     if "audio" in icon_hint or "music" in icon_hint:
-        return "♪"
-    return TYPE_GLYPHS[p["type"]]
+        return icon("audio")
+    return icon(p["type"])
 
 
 def card(p: dict) -> str:
@@ -879,20 +909,20 @@ def card(p: dict) -> str:
             f"""<a class="btn" href="{html.escape(p['github'])}" target="_blank"
                title="remote repository">github</a>""")
     if p["type"] == "site":
-        buttons.insert(0, f"""<a class="btn b-go" href="{p['site']}" target="_blank">▶ open site</a>""")
+        buttons.insert(0, f"""<a class="btn b-go" href="{p['site']}" target="_blank">{icon("open")} open site</a>""")
     if p["type"] == "app":
-        buttons.insert(0, f"""<button class="b-go" onclick="act('{name}','launch')">▶ launch</button>""")
+        buttons.insert(0, f"""<button class="b-go" onclick="act('{name}','launch')">{icon("open")} launch</button>""")
     if p.get("serve"):  # service controls — may sit on any type (hub.json type override)
-        buttons.insert(0, f"""<button class="b-go" onclick="openService('{name}')">▶ open</button>""")
+        buttons.insert(0, f"""<button class="b-go" onclick="openService('{name}')">{icon("open")} open</button>""")
         buttons.append(f"""<button class="b-stop" data-stop="{name}"
           onclick="stopService('{name}')" title="stop the service"
-          style="display:none">■</button>""")
+          style="display:none">{icon("stop")}</button>""")
     meta = html.escape(p["last_commit"]) if p.get("last_commit") else ""
     if p.get("dirty"):
         meta += " · ✱ wet ink"
     excerpt = html.escape(p.get("excerpt") or "")
     search_blob = html.escape(f"{p['name']} {p.get('excerpt') or ''}".lower())
-    svc_dot = (f"""<span class="svc-dot" data-svc="{name}" title="stopped">○</span>"""
+    svc_dot = (f"""<span class="svc-dot" data-svc="{name}" title="stopped">{icon("dot")}</span>"""
                if p.get("serve") else "")
     return f"""
     <div class="card" data-type="{p['type']}" data-text="{search_blob}">
@@ -1102,7 +1132,9 @@ def index():
   button, .btn {{ background:transparent; color:var(--ink); border:1px solid var(--ink-soft);
     border-radius:2px; padding:.3rem .75rem; font:inherit; font-size:.84rem; line-height:1.3;
     font-variant:small-caps; letter-spacing:.06em; cursor:pointer; text-decoration:none;
-    display:inline-flex; align-items:center; box-sizing:border-box; }}
+    display:inline-flex; align-items:center; gap:.32em; box-sizing:border-box; }}
+  /* filled status dot when a service is running (outline when stopped) */
+  .svc-dot.on svg.i {{ fill:currentColor; }}
   button:hover, .btn:hover {{ background:var(--ink); color:var(--parchment); }}
   /* manuscript pigments: sanguine, lapis, verdigris */
   .b-go     {{ color:var(--sanguine); border-color:var(--sanguine); }}
@@ -1144,8 +1176,8 @@ def index():
         <option value="accept-edits">mode: accept edits</option>
         <option value="plan">mode: plan</option>
       </select></span>
-      <button class="jot-open" onclick="openJot('todos')">✎ to-do <span id="todos-count"></span></button>
-      <button class="jot-open" onclick="openJot('ideas')">✎ ideas <span id="ideas-count"></span></button>
+      <button class="jot-open" onclick="openJot('todos')">{icon("todo")} to-do <span id="todos-count"></span></button>
+      <button class="jot-open" onclick="openJot('ideas')">{icon("ideas")} ideas <span id="ideas-count"></span></button>
       <input id="search" type="search" placeholder="search…" oninput="refilter()">
       <span id="filters">
         <button class="chip active" data-type="" onclick="pick(this)">all</button>
@@ -1165,7 +1197,7 @@ def index():
     <div id="modal">
       <div class="m-head">
         <h3 id="m-title">to-do</h3>
-        <button class="del" onclick="closeJot()" title="close">✕</button>
+        <button class="del" onclick="closeJot()" title="close">{icon("close")}</button>
       </div>
       <div class="jot-col" id="col-todos">
         <ul id="todos"></ul>
@@ -1190,9 +1222,9 @@ def index():
   <aside id="drawer">
     <div class="d-head">
       <h2 id="d-title"></h2>
-      <a id="d-full" href="#" title="open as full page">⤢</a>
-      <button onclick="minimizeDrawer()" title="minimize — keeps the chat alive">▁</button>
-      <button onclick="closeActive()" title="end the session">✕</button>
+      <a id="d-full" href="#" title="open as full page">{icon("expand")}</a>
+      <button onclick="minimizeDrawer()" title="minimize — keeps the chat alive">{icon("min")}</button>
+      <button onclick="closeActive()" title="end the session">{icon("close")}</button>
     </div>
     <div id="dterm"></div>
   </aside>

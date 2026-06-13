@@ -550,6 +550,14 @@ const CHAT_ICON = '<svg class="i" viewBox="0 0 24 24" aria-hidden="true">'
   + 'L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5'
   + 'a8.48 8.48 0 0 1 8 8v.5z"/></svg>';
 
+// line-art icons for JS-rendered controls (mirror the app.py ICONS set)
+const svgIcon = inner => `<svg class="i" viewBox="0 0 24 24" aria-hidden="true">${inner}</svg>`;
+const ICON_EXPAND = svgIcon('<path d="M14 4h6v6"/><path d="M20 4l-7 7"/><path d="M10 20H4v-6"/><path d="M4 20l7-7"/>');
+const ICON_COLLAPSE = svgIcon('<path d="M20 9h-5V4"/><path d="M20 4l-6 6"/><path d="M4 15h5v5"/><path d="M4 20l6-6"/>');
+const ICON_REATTACH = svgIcon('<path d="M21 12a9 9 0 1 1-2.6-6.3"/><path d="M21 4v4h-4"/>');
+const ICON_CHATS = svgIcon('<path d="M4 5h11a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2H9l-4 3v-3a2 2 0 0 1-1-2V7a2 2 0 0 1 2-2z"/>');
+const ICON_CLOSE = svgIcon('<path d="M6 6l12 12"/><path d="M18 6L6 18"/>');
+
 const sessions = new Map();
 let active = null; // key of the session shown in the drawer, or null when hidden
 
@@ -736,7 +744,7 @@ function activate(key) {
 function toggleDrawerFull() {
   const fullNow = document.body.classList.toggle("drawer-full");
   const f = document.getElementById("d-full");
-  f.textContent = fullNow ? "⇲" : "⤢";
+  f.innerHTML = fullNow ? ICON_COLLAPSE : ICON_EXPAND;
   // reflow the terminal once the width transition settles
   setTimeout(() => refit(sessions.get(active)), 260);
 }
@@ -823,7 +831,7 @@ function renderPills() {
     if (attached.has(p.token)) return;
     const pill = document.createElement("button");
     pill.className = "pill s-detached";
-    pill.innerHTML = `<span class="dot"></span>⟲ `;
+    pill.innerHTML = `<span class="dot"></span>${ICON_REATTACH} `;
     pill.appendChild(document.createTextNode(disp(p.project)));
     pill.title = "live detached session — click to reattach";
     pill.onclick = () => openDrawer(p.project, { attach: p.token });
@@ -883,7 +891,7 @@ setInterval(() => {
   const trigger = document.createElement("button");
   trigger.className = "jot-open";
   trigger.id = "sess-open";
-  trigger.textContent = "❧ chats";
+  trigger.innerHTML = `${ICON_CHATS} chats`;
   trigger.title = "browse & resume past Claude sessions";
   trigger.onclick = () => openSessions();
   const rootMenu = document.querySelector(".controls > .menu");
@@ -895,7 +903,7 @@ setInterval(() => {
   overlay.hidden = true;
   overlay.innerHTML = `
     <div class="sess-modal">
-      <div class="m-head"><h3>conversations</h3><button class="del" title="close">✕</button></div>
+      <div class="m-head"><h3>conversations</h3><button class="del" title="close">${ICON_CLOSE}</button></div>
       <input id="sess-search" type="search" placeholder="search sessions…">
       <div id="sess-list"></div>
     </div>`;
