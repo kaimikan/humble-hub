@@ -1015,8 +1015,11 @@ setInterval(() => {
     .kbar .mic.rec { background:#7a2733; border-color:#f7768e; animation:micpulse 1.2s infinite; }
     @keyframes micpulse { 50% { opacity:.55; } }
     /* T38: global dictation mics — phone only, float bottom-left */
-    #micbar { display:none; position:fixed; left:1.05rem; bottom:1.05rem; z-index:46; gap:.4rem; }
+    /* floating mics: above the jot(60)/session(70) modals, below the theme
+       picker(80). Hidden while the drawer is open — the kbar mics serve there. */
+    #micbar { display:none; position:fixed; left:1.05rem; bottom:1.05rem; z-index:75; gap:.4rem; }
     @media (pointer: coarse) { #micbar { display:flex; } }
+    body.drawer-open #micbar { display:none; }
     #micbar .mic { font:1rem/1 "JetBrains Mono","Noto Sans Mono",monospace;
       background:var(--paper, #24283b); color:var(--ink, #c0caf5);
       border:1px solid var(--ink-soft, #3b4261); border-radius:999px;
@@ -1156,11 +1159,11 @@ setInterval(() => {
   }
 
   let rec = null, busy = false;
-  function makeMic(lang) {
+  function makeMic(lang, extraCls) {
     const tag = lang === "bg" ? "бг" : "en";
     const rest = ICON_MIC + tag;       // resting label: mic glyph + language
     const btn = document.createElement("button");
-    btn.className = "mic";
+    btn.className = extraCls ? "mic " + extraCls : "mic";
     btn.innerHTML = rest;
     btn.title = `dictate in ${lang === "bg" ? "Bulgarian" : "English"} via local Whisper`;
     btn.addEventListener("pointerdown", e => e.preventDefault()); // keep focus/keyboard as-is
@@ -1198,6 +1201,12 @@ setInterval(() => {
     });
     return btn;
   }
+
+  // Two placements, one logic (per-screen, so nothing overlaps):
+  //  • the full-screen terminal gets mics in its kbar footer
+  //  • the shelf / modals get the floating micbar (hidden while the drawer is
+  //    open so it never doubles with the kbar mics)
+  bar.append(makeMic("en", "wide"), makeMic("bg", "wide"));
 
   const micbar = document.createElement("div");
   micbar.id = "micbar";
