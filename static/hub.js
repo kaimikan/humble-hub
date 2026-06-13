@@ -559,6 +559,13 @@ const ICON_COLLAPSE = svgIcon('<path d="M20 9h-5V4"/><path d="M20 4l-6 6"/><path
 const ICON_REATTACH = svgIcon('<path d="M21 12a9 9 0 1 1-2.6-6.3"/><path d="M21 4v4h-4"/>');
 const ICON_CHATS = svgIcon('<path d="M4 5h11a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2H9l-4 3v-3a2 2 0 0 1-1-2V7a2 2 0 0 1 2-2z"/>');
 const ICON_CLOSE = svgIcon('<path d="M6 6l12 12"/><path d="M18 6L6 18"/>');
+// phone toolbar (kbar) + mic icons
+const ICON_UP = svgIcon('<path d="M12 19V6"/><path d="M6 12l6-6 6 6"/>');
+const ICON_DOWN = svgIcon('<path d="M12 5v13"/><path d="M6 12l6 6 6-6"/>');
+const ICON_LEFT = svgIcon('<path d="M19 12H6"/><path d="M12 6l-6 6 6 6"/>');
+const ICON_RIGHT = svgIcon('<path d="M5 12h13"/><path d="M12 6l6 6-6 6"/>');
+const ICON_ENTER = svgIcon('<path d="M20 6v5a3 3 0 0 1-3 3H5"/><path d="M9 10l-4 4 4 4"/>');
+const ICON_MIC = svgIcon('<rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0"/><path d="M12 18v3"/>');
 
 const sessions = new Map();
 let active = null; // key of the session shown in the drawer, or null when hidden
@@ -1072,17 +1079,20 @@ setInterval(() => {
     }
   }
 
-  // label, sequence, extra class
+  // label, sequence, extra class, icon (arrows/enter as line-art SVG; the word
+  // keys — space/esc/tab/⌃C — stay as text labels, which read clearer than an
+  // invented glyph would)
   const KEYS = [
-    ["↑", "\x1b[A"], ["↓", "\x1b[B"], ["←", "\x1b[D"], ["→", "\x1b[C"],
-    ["⏎", "\r", "wide"], ["space", " ", "wide"], ["esc", "\x1b", "wide"],
-    ["tab", "\t", "wide"], ["⌃C", "\x03", "wide"],
+    ["up", "\x1b[A", "", ICON_UP], ["down", "\x1b[B", "", ICON_DOWN],
+    ["left", "\x1b[D", "", ICON_LEFT], ["right", "\x1b[C", "", ICON_RIGHT],
+    ["enter", "\r", "wide", ICON_ENTER], ["space", " ", "wide"],
+    ["esc", "\x1b", "wide"], ["tab", "\t", "wide"], ["⌃C", "\x03", "wide"],
   ];
   const bar = document.createElement("div");
   bar.className = "kbar";
-  for (const [label, seq, cls] of KEYS) {
+  for (const [label, seq, cls, ic] of KEYS) {
     const b = document.createElement("button");
-    b.textContent = label;
+    if (ic) { b.innerHTML = ic; } else { b.textContent = label; }
     if (cls) b.className = cls;
     b.title = label === "space" ? "Space (toggle option)" : label;
     b.addEventListener("pointerdown", e => e.preventDefault()); // don't steal focus
@@ -1146,10 +1156,12 @@ setInterval(() => {
   }
 
   let rec = null, busy = false;
-  function makeMic(lang, label) {
+  function makeMic(lang) {
+    const tag = lang === "bg" ? "бг" : "en";
+    const rest = ICON_MIC + tag;       // resting label: mic glyph + language
     const btn = document.createElement("button");
     btn.className = "mic";
-    btn.textContent = label;
+    btn.innerHTML = rest;
     btn.title = `dictate in ${lang === "bg" ? "Bulgarian" : "English"} via local Whisper`;
     btn.addEventListener("pointerdown", e => e.preventDefault()); // keep focus/keyboard as-is
     btn.addEventListener("click", async () => {
@@ -1171,7 +1183,7 @@ setInterval(() => {
         stream.getTracks().forEach(t => t.stop());
         const blob = new Blob(chunks, { type: rec.mimeType || "audio/webm" });
         rec = null; busy = true;
-        btn.classList.remove("rec"); btn.textContent = "⋯";
+        btn.classList.remove("rec"); btn.textContent = "⋯";  // transcribing
         try {
           const res = await fetch("/api/dictate?lang=" + lang, { method: "POST", body: blob });
           const data = await res.json().catch(() => ({}));
@@ -1180,7 +1192,7 @@ setInterval(() => {
           if (text) deliverDictation(lang, text);
           else toast("heard nothing — try again");
         } catch (err) { toast("dictation failed: " + err.message); }
-        finally { busy = false; btn.textContent = label; }
+        finally { busy = false; btn.innerHTML = rest; }
       };
       btn.classList.add("rec"); rec.start();
     });
@@ -1189,7 +1201,7 @@ setInterval(() => {
 
   const micbar = document.createElement("div");
   micbar.id = "micbar";
-  micbar.append(makeMic("en", "🎤en"), makeMic("bg", "🎤бг"));
+  micbar.append(makeMic("en"), makeMic("bg"));
   document.body.appendChild(micbar);
 })();
 

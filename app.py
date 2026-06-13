@@ -731,6 +731,8 @@ def terminal_page(name: str, resume: bool = False, attach: str = "",
   #kbar button:active {{ background:var(--t-border,#3b4261); }}
   #kbar .wide {{ min-width:3.6rem; font-variant:small-caps; letter-spacing:.04em; }}
   #kbar .mic.rec {{ background:#7a2733; border-color:#f7768e; animation:micpulse 1.2s infinite; }}
+  #kbar svg {{ width:1.15em; height:1.15em; fill:none; stroke:currentColor; stroke-width:2;
+    stroke-linecap:round; stroke-linejoin:round; vertical-align:-.18em; }}
   .xterm, .xterm-viewport {{ touch-action:none; }}
   @keyframes micpulse {{ 50% {{ opacity:.55; }} }}
 </style></head>
@@ -787,13 +789,23 @@ def terminal_page(name: str, resume: bool = False, attach: str = "",
     const sendKey = seq => {{
       if (ws.readyState === 1) ws.send(JSON.stringify({{type:"input", data:seq}}));
     }};
-    const keys = [["↑","\\x1b[A"],["↓","\\x1b[B"],["←","\\x1b[D"],["→","\\x1b[C"],
-      ["⏎","\\r","wide"],["space"," ","wide"],["esc","\\x1b","wide"],
+    const _ic = s => '<svg viewBox="0 0 24 24" aria-hidden="true">' + s + '</svg>';
+    const I_UP = _ic('<path d="M12 19V6"/><path d="M6 12l6-6 6 6"/>');
+    const I_DOWN = _ic('<path d="M12 5v13"/><path d="M6 12l6 6 6-6"/>');
+    const I_LEFT = _ic('<path d="M19 12H6"/><path d="M12 6l-6 6 6 6"/>');
+    const I_RIGHT = _ic('<path d="M5 12h13"/><path d="M12 6l6 6-6 6"/>');
+    const I_ENTER = _ic('<path d="M20 6v5a3 3 0 0 1-3 3H5"/><path d="M9 10l-4 4 4 4"/>');
+    const I_MIC = _ic('<rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0"/><path d="M12 18v3"/>');
+    const keys = [["up","\\x1b[A","",I_UP],["down","\\x1b[B","",I_DOWN],
+      ["left","\\x1b[D","",I_LEFT],["right","\\x1b[C","",I_RIGHT],
+      ["enter","\\r","wide",I_ENTER],["space"," ","wide"],["esc","\\x1b","wide"],
       ["tab","\\t","wide"],["⌃C","\\x03","wide"]];
     const kbar = document.getElementById("kbar");
-    for (const [label, seq, cls] of keys) {{
+    for (const [label, seq, cls, ic] of keys) {{
       const btn = document.createElement("button");
-      btn.textContent = label; if (cls) btn.className = cls;
+      if (ic) {{ btn.innerHTML = ic; }} else {{ btn.textContent = label; }}
+      if (cls) btn.className = cls;
+      btn.title = label;
       btn.addEventListener("pointerdown", e => e.preventDefault());
       btn.addEventListener("click", () => sendKey(seq));
       kbar.appendChild(btn);
@@ -821,12 +833,12 @@ def terminal_page(name: str, resume: bool = False, attach: str = "",
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
     const mic = document.createElement("button");
     mic.className = "wide mic";
-    mic.textContent = "🎤";
+    mic.innerHTML = I_MIC;
     mic.title = "dictate (browser speech recognition)";
     let rec = null;
     mic.addEventListener("pointerdown", e => e.preventDefault());
     mic.addEventListener("click", () => {{
-      if (!SR) {{ mic.disabled = true; mic.textContent = "🎤✕";
+      if (!SR) {{ mic.disabled = true; mic.innerHTML = I_MIC + "✕";
         alert("This browser has no speech recognition (Firefox doesn't) — use Chrome."); return; }}
       if (!window.isSecureContext) {{
         alert("Mic needs a secure page — use the https tailnet URL, not plain http."); return; }}

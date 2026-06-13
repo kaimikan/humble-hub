@@ -70,10 +70,11 @@ with sync_playwright() as p:
     check("mobile: no JS errors", not errs, "; ".join(errs))
     check("mobile: kbar shown",
           pg.eval_on_selector(".kbar", "el => getComputedStyle(el).display") == "flex")
-    check("mobile: global dictation mics shown (#micbar)",
+    check("mobile: global dictation mics shown (#micbar, line-art)",
           pg.eval_on_selector("#micbar", "el => getComputedStyle(el).display") == "flex" and
+          pg.eval_on_selector_all("#micbar .mic svg", "els => els.length") == 2 and
           pg.eval_on_selector_all("#micbar .mic",
-              "els => els.map(b => b.textContent).join('')").find("🎤") >= 0)
+              "els => els.map(b => b.textContent.trim()).sort().join(',')") == "en,бг")
     check("mobile: files buttons hidden",
           pg.eval_on_selector(".b-files", "el => getComputedStyle(el).display") == "none")
     konsole_hidden = pg.eval_on_selector_all(
