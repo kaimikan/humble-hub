@@ -65,16 +65,8 @@ def git_info(path: Path) -> dict:
     }
 
 
-def detect(path: Path) -> dict:
-    """Classify a project and derive its available actions."""
-    manifest = path / "hub.json"
-    if manifest.is_file():  # explicit service manifest beats heuristics
-        try:
-            m = json.loads(manifest.read_text())
-            if m.get("serve") and m.get("port"):
-                return {"type": "service", "serve": m["serve"], "port": int(m["port"])}
-        except (json.JSONDecodeError, ValueError, TypeError):
-            pass  # malformed manifest → fall through to heuristics
+def _heuristic_type(path: Path) -> dict:
+    """Classify a project by what's in its directory (no manifest)."""
     desktop_files = sorted(path.glob("*.desktop"))
     if (path / "index.html").is_file():
         return {"type": "site", "site": f"/sites/{path.name}/"}
@@ -85,6 +77,35 @@ def detect(path: Path) -> dict:
     if any(path.glob("*.md")):
         return {"type": "notes"}
     return {"type": "empty"}
+
+
+def detect(path: Path) -> dict:
+    """Classify a project and derive its available actions.
+
+    A hub.json with serve+port wires the service controls (▶ open / ■ stop /
+    status dot). Such a project is typed "service" by default; an optional
+    "type" field keeps the project in its own category while still getting the
+    controls — e.g. linux-learning stays "notes" but can serve its mkdocs site.
+    """
+    svc, forced_type = {}, None
+    manifest = path / "hub.json"
+    if manifest.is_file():
+        try:
+            m = json.loads(manifest.read_text())
+            if m.get("serve") and m.get("port"):
+                svc = {"serve": m["serve"], "port": int(m["port"])}
+            if m.get("type"):
+                forced_type = m["type"]
+        except (json.JSONDecodeError, ValueError, TypeError):
+            pass  # malformed manifest → heuristics only
+
+    info = _heuristic_type(path)
+    if forced_type:
+        info["type"] = forced_type
+    elif svc:
+        info["type"] = "service"
+    info.update(svc)
+    return info
 
 
 def scan() -> list:
@@ -190,7 +211,7 @@ def _port_open(port: int) -> bool:
 @app.get("/api/services")
 def api_services():
     return {p["name"]: _port_open(p["port"])
-            for p in scan() if p["type"] == "service"}
+            for p in scan() if p.get("port")}
 
 
 @app.post("/api/projects/{name}/service/open")
@@ -199,7 +220,7 @@ def service_open(name: str):
     import time
     path = project_path(name)
     info = detect(path)
-    if info.get("type") != "service":
+    if not info.get("serve") or not info.get("port"):
         raise HTTPException(400, f"{name} has no hub.json service manifest")
     port, url = info["port"], f"http://localhost:{info['port']}"
     if _port_open(port):
@@ -230,7 +251,7 @@ def service_stop(name: str):
     info = detect(path)
     subprocess.run(["systemctl", "--user", "stop", f"hub-svc-{name}.service"],
                    capture_output=True)
-    if info.get("type") != "service":
+    if not info.get("port"):
         return {"ok": True, "stopped": True}
     for _ in range(8):  # give the unit a moment to release the port
         if not _port_open(info["port"]):
@@ -831,7 +852,7 @@ def card(p: dict) -> str:
         buttons.insert(0, f"""<a class="btn b-go" href="{p['site']}" target="_blank">▶ open site</a>""")
     if p["type"] == "app":
         buttons.insert(0, f"""<button class="b-go" onclick="act('{name}','launch')">▶ launch</button>""")
-    if p["type"] == "service":
+    if p.get("serve"):  # service controls — may sit on any type (hub.json type override)
         buttons.insert(0, f"""<button class="b-go" onclick="openService('{name}')">▶ open</button>""")
         buttons.append(f"""<button class="b-stop" data-stop="{name}"
           onclick="stopService('{name}')" title="stop the service"
@@ -842,7 +863,7 @@ def card(p: dict) -> str:
     excerpt = html.escape(p.get("excerpt") or "")
     search_blob = html.escape(f"{p['name']} {p.get('excerpt') or ''}".lower())
     svc_dot = (f"""<span class="svc-dot" data-svc="{name}" title="stopped">○</span>"""
-               if p["type"] == "service" else "")
+               if p.get("serve") else "")
     return f"""
     <div class="card" data-type="{p['type']}" data-text="{search_blob}">
       <div class="head">

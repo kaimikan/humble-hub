@@ -61,6 +61,18 @@ try:
     lidl = next((p for p in projects if p["name"] == "little-lidl-list"), None)
     check("lidl manifest detected too", lidl and lidl["type"] == "service", str(lidl))
 
+    # hub.json "type" override: a project keeps its own category but still
+    # carries serve/port (T10 — linux-learning serves mkdocs while staying notes)
+    ll = next((p for p in projects if p["name"] == "linux-learning"), None)
+    if ll:
+        check("type-override project keeps its declared type", ll["type"] == "notes", str(ll))
+        check("type-override project still carries serve/port",
+              ll.get("serve") and ll.get("port"), str(ll))
+        page_ll = urllib.request.urlopen(f"http://127.0.0.1:{PORT}/", timeout=10).read().decode()
+        check("type-override card still gets ▶ open + status dot",
+              "openService('linux-learning')" in page_ll
+              and 'data-svc="linux-learning"' in page_ll)
+
     page = urllib.request.urlopen(f"http://127.0.0.1:{PORT}/", timeout=10).read().decode()
     check("card has ▶ open + status dot + service chip",
           f"openService('{SVC}')" in page and f'data-svc="{SVC}"' in page
