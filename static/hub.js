@@ -369,6 +369,7 @@ function closeJot() {
 function beginEdit(item, li, txt) {
   const input = document.createElement("textarea");
   input.className = "edit-input";
+  input.autocomplete = "off";
   input.value = item.text;
   input.rows = 1;
   // grow with content up to the CSS max-height, then scroll internally
@@ -515,6 +516,7 @@ function addItem(ev, kind) {
   const search = document.createElement("input");
   search.type = "search";
   search.id = "jot-search";
+  search.autocomplete = "off";
   search.placeholder = "search…";
   search.oninput = () => setJotSearch(search.value);
   const sStyle = document.createElement("style");
@@ -907,7 +909,7 @@ setInterval(() => {
   overlay.innerHTML = `
     <div class="sess-modal">
       <div class="m-head"><h3>conversations</h3><button class="del" title="close">${ICON_CLOSE}</button></div>
-      <input id="sess-search" type="search" placeholder="search sessions…">
+      <input id="sess-search" type="search" placeholder="search sessions…" autocomplete="off">
       <div id="sess-list"></div>
     </div>`;
   document.body.appendChild(overlay);

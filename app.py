@@ -1209,7 +1209,7 @@ def index():
       </select></span>
       <button class="jot-open" onclick="openJot('todos')">{icon("todo")} to-do <span id="todos-count"></span></button>
       <button class="jot-open" onclick="openJot('ideas')">{icon("ideas")} ideas <span id="ideas-count"></span></button>
-      <input id="search" type="search" placeholder="search…" oninput="refilter()">
+      <input id="search" type="search" placeholder="search…" autocomplete="off" oninput="refilter()">
       <span id="filters">
         <button class="chip active" data-type="" onclick="pick(this)">all</button>
         <button class="chip" data-type="site" onclick="pick(this)">site</button>
@@ -1233,12 +1233,12 @@ def index():
       <div class="jot-col" id="col-todos">
         <ul id="todos"></ul>
         <form onsubmit="return addItem(event,'todos')">
-          <input id="todos-input" placeholder="add a task…"></form>
+          <input id="todos-input" placeholder="add a task…" autocomplete="off"></form>
       </div>
       <div class="jot-col" id="col-ideas">
         <ul id="ideas"></ul>
         <form onsubmit="return addItem(event,'ideas')">
-          <input id="ideas-input" placeholder="jot an idea…"></form>
+          <input id="ideas-input" placeholder="jot an idea…" autocomplete="off"></form>
       </div>
       <div id="confirm" hidden>
         <p id="confirm-text"></p>
