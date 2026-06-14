@@ -217,6 +217,16 @@ function refreshProjectFilter() {
   projs.forEach(p => bar.appendChild(mk(p, p)));
 }
 
+// surface the inherited project in the add-input placeholder, so adding an item
+// while a project filter is active visibly tags it
+function updateAddHints() {
+  const sfx = jotProject ? ` → ${jotProject}` : "";
+  const ti = document.getElementById("todos-input");
+  const ii = document.getElementById("ideas-input");
+  if (ti) ti.placeholder = "add a task…" + sfx;
+  if (ii) ii.placeholder = "jot an idea…" + sfx;
+}
+
 function renderNotes() {
   for (const kind of ["todos", "ideas"]) {
     const ul = document.getElementById(kind);
@@ -298,6 +308,7 @@ function renderNotes() {
     `· ${notes.todos.filter(t => !t.done).length}`;
   document.getElementById("ideas-count").textContent = `· ${notes.ideas.length}`;
   refreshProjectFilter();
+  updateAddHints();
 }
 
 // promote idea → to-do / demote to-do → idea
@@ -362,9 +373,45 @@ function commitDrag(kind, item, ul) {
 // Floating, body-anchored so the scrolling list's overflow can't clip it.
 let rowMenuEl = null;
 function closeRowMenu() { if (rowMenuEl) { rowMenuEl.remove(); rowMenuEl = null; } }
+// every project the hub knows (from the rendered cards) plus any already used
+// as a tag — the choices for the "set project" picker
+function projectList() {
+  const fromCards = [...document.querySelectorAll(".card[data-name]")].map(c => c.dataset.name);
+  const fromTags = [...notes.todos, ...notes.ideas].map(i => i.project).filter(Boolean);
+  return [...new Set([...fromCards, ...fromTags])].sort();
+}
+
+function placeMenu(menu, r) {
+  menu.style.top = `${Math.min(r.bottom + 4, window.innerHeight - menu.offsetHeight - 8)}px`;
+  menu.style.left = `${Math.max(8, r.right - menu.offsetWidth)}px`;
+}
+
+function openProjectPicker(item, r) {
+  closeRowMenu();
+  const menu = document.createElement("div");
+  menu.className = "row-menu";
+  const pick = (label, val) => {
+    const b = document.createElement("button");
+    b.textContent = label;
+    if ((item.project || null) === val) b.style.fontWeight = "700";
+    b.onclick = ev => {
+      ev.stopPropagation(); closeRowMenu();
+      if (val === null) delete item.project; else item.project = val;
+      renderNotes(); saveNotes();
+    };
+    menu.appendChild(b);
+  };
+  pick("— none —", null);
+  projectList().forEach(p => pick(p, p));
+  document.body.appendChild(menu);
+  rowMenuEl = menu;
+  placeMenu(menu, r);
+}
+
 function openRowMenu(e, kind, item) {
   e.stopPropagation();
   closeRowMenu();
+  const r = e.currentTarget.getBoundingClientRect();
   const menu = document.createElement("div");
   menu.className = "row-menu";
   const idx = () => notes[kind].indexOf(item); // recompute — indices shift
@@ -382,12 +429,12 @@ function openRowMenu(e, kind, item) {
   } else {
     add("→ make to-do", () => convertItem("ideas", idx()));
   }
+  add(item.project ? `project: ${item.project} ▸` : "set project ▸",
+      () => openProjectPicker(item, r));
   add("remove", () => askDelete(kind, idx()), true);
   document.body.appendChild(menu);
   rowMenuEl = menu;
-  const r = e.currentTarget.getBoundingClientRect();
-  menu.style.top = `${Math.min(r.bottom + 4, window.innerHeight - menu.offsetHeight - 8)}px`;
-  menu.style.left = `${Math.max(8, r.right - menu.offsetWidth)}px`;
+  placeMenu(menu, r);
 }
 document.addEventListener("click", closeRowMenu);
 document.addEventListener("keydown", e => { if (e.key === "Escape") closeRowMenu(); });
@@ -406,6 +453,8 @@ async function openJot(kind) {
   document.getElementById("m-title").textContent = kind === "todos" ? "to-do" : "ideas";
   document.getElementById("col-todos").style.display = kind === "todos" ? "" : "none";
   document.getElementById("col-ideas").style.display = kind === "ideas" ? "" : "none";
+  const tf = document.getElementById("todo-filter"); // all/active/done is to-do-only
+  if (tf) tf.style.display = kind === "todos" ? "flex" : "none";
   jotKind = kind;
   const sw = document.getElementById("jot-switch");
   if (sw) sw.textContent = kind === "todos" ? "→ ideas" : "→ to-do";
@@ -524,8 +573,9 @@ function addItem(ev, kind) {
 (() => {
   const style = document.createElement("style");
   style.textContent = `
-    .todo-filter { display:flex; gap:.4rem; justify-content:flex-end;
-      padding:0 .1rem .4rem; }
+    /* search + status toggles share one row to save vertical space */
+    .jot-controls { display:flex; align-items:center; gap:.55rem; margin:.45rem 0 .15rem; }
+    .todo-filter { display:flex; gap:.4rem; flex:none; }
     /* row layout: left rail (checkbox + drag handle) | text | ⋯ menu */
     #col-todos li, #col-ideas li { align-items:flex-start; gap:.5rem; }
     .jot-col li .row-left { display:flex; flex-direction:column; align-items:center;
@@ -546,7 +596,8 @@ function addItem(ev, kind) {
     .jot-col li .row-menu-btn:hover { color:var(--ink); background:transparent; }
     .row-menu { position:fixed; z-index:100; background:var(--paper, #f6edd6);
       border:1px solid var(--ink-soft); box-shadow:2px 3px 11px rgba(67,51,28,.35);
-      border-radius:2px; display:flex; flex-direction:column; min-width:9.5rem; }
+      border-radius:2px; display:flex; flex-direction:column; min-width:9.5rem;
+      max-height:60vh; overflow:auto; }
     .row-menu button { border:0; border-radius:0; background:transparent; text-align:left;
       color:var(--ink); font:inherit; font-size:.82rem; font-variant:small-caps;
       letter-spacing:.04em; padding:.42rem .75rem; cursor:pointer; }
@@ -565,19 +616,15 @@ function addItem(ev, kind) {
 
   const bar = document.createElement("div");
   bar.className = "todo-filter";
-  // color-coded: all = neutral, active = ochre (pending), done = verdigris (complete)
-  [["all", "all", null], ["active", "active", "var(--ochre, #8a6d1f)"], ["done", "done", "var(--verdigris, #4f6b3a)"]]
-    .forEach(([val, label, color]) => {
-      const b = document.createElement("button");
-      b.className = "chip" + (val === todoFilter ? " active" : "");
-      b.dataset.val = val;
-      b.textContent = label;
-      if (color) b.style.setProperty("--chip", color);
-      b.onclick = () => applyTodoFilter(val);
-      bar.appendChild(b);
-    });
-  const col = document.getElementById("col-todos");
-  col.insertBefore(bar, document.getElementById("todos"));
+  bar.id = "todo-filter"; // toggled per list (to-do only) by openJot
+  ["all", "active", "done"].forEach(val => {
+    const b = document.createElement("button");
+    b.className = "chip" + (val === todoFilter ? " active" : "");
+    b.dataset.val = val;
+    b.textContent = val;
+    b.onclick = () => applyTodoFilter(val);
+    bar.appendChild(b);
+  });
 
   // header switch button — flips the jot modal to the other list in one click
   const switchBtn = document.createElement("button");
@@ -597,19 +644,23 @@ function addItem(ev, kind) {
   search.oninput = () => setJotSearch(search.value);
   const sStyle = document.createElement("style");
   sStyle.textContent = `
-    #jot-search { width:100%; box-sizing:border-box; margin:.45rem 0 .15rem;
+    #jot-search { flex:1; min-width:0; box-sizing:border-box; margin:0;
       background:var(--input-bg); border:1px solid var(--ink-faint);
       border-radius:2px; color:var(--ink); font:inherit; font-size:.88rem;
       padding:.3rem .6rem; outline:none; }
     #jot-search:focus { border-color:var(--ink-soft); }
     #jot-search::placeholder { color:var(--ink-faint); font-style:italic; }`;
   document.head.appendChild(sStyle);
-  mhead.after(search);
+  // one controls row: search (flex) + the to-do status toggles (right)
+  const controls = document.createElement("div");
+  controls.className = "jot-controls";
+  controls.append(search, bar);
+  mhead.after(controls);
   // project-filter bar (populated by refreshProjectFilter when jots are tagged)
   const pfilter = document.createElement("div");
   pfilter.id = "jot-pfilter";
   pfilter.style.display = "none";
-  search.after(pfilter);
+  controls.after(pfilter);
 })();
 
 loadNotes();

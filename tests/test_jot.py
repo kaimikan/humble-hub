@@ -88,11 +88,13 @@ def run(page):
         ".todo-filter .chip.active", "el => el.dataset.val")
     check("the 'active' pill is the one marked active", active_chip == "active", active_chip)
 
-    # color-coded pills (ochre active, verdigris done) via the --chip var
-    done_color = page.eval_on_selector(
-        ".todo-filter .chip[data-val='done']",
-        "el => el.style.getPropertyValue('--chip')")
-    check("done pill is color-coded", "#4f6b3a" in done_color, done_color)
+    # status chips are NEUTRAL now (active filled, others outline) — pigments
+    # are reserved for action buttons, so a colour means one thing
+    chip_states = page.eval_on_selector_all(
+        ".todo-filter .chip",
+        "els => els.map(e => ({v: e.dataset.val, active: e.classList.contains('active')}))")
+    check("exactly one status chip is active",
+          sum(1 for c in chip_states if c["active"]) == 1, str(chip_states))
 
     # each row has checkbox + drag handle + ⋯ menu button
     row_ok = page.eval_on_selector(

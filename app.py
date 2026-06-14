@@ -1102,7 +1102,7 @@ def index():
     display:flex; align-items:flex-start; justify-content:center;
     padding-top:11vh; }}
   #overlay[hidden] {{ display:none; }}
-  #modal {{ width:min(560px, 92vw); background:var(--parchment);
+  #modal {{ width:min(760px, 94vw); background:var(--parchment);
     border:1.5px solid var(--ink-soft); outline:1px solid var(--ink-faint);
     outline-offset:4px; border-radius:2px; padding:1rem 1.2rem;
     box-shadow:3px 5px 18px rgba(40,30,15,.45); position:relative;
@@ -1166,7 +1166,9 @@ def index():
     border-radius:999px; color:var(--ink-soft); font:inherit;
     font-size:.78rem; font-variant:small-caps; letter-spacing:.05em;
     padding:.15rem .65rem; cursor:pointer; }}
-  .chip:hover {{ border-color:var(--ink); color:var(--ink); }}
+  /* hover must set its OWN background, else the global button:hover (dark fill)
+     leaks in → dark text on dark fill (invisible). Only non-active chips hover. */
+  .chip:hover:not(.active) {{ background:var(--card-hot); border-color:var(--ink); color:var(--ink); }}
   .chip.active {{ background:var(--ink); border-color:var(--ink); color:var(--parchment); }}
   /* service status dot + stop control */
   svg.i {{ width:1em; height:1em; vertical-align:-.12em;
