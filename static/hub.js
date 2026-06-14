@@ -1575,6 +1575,13 @@ setInterval(() => {
       padding:.05rem .45rem; color:var(--parchment); }
     .act-badge.push { background:var(--sanguine); }
     .act-badge.dirty { background:var(--ochre); }
+    .act-badge.new { background:var(--lapis); }
+    .act-since { color:var(--ink-faint); font-size:.78rem; font-style:italic;
+      margin:-.2rem 0 .7rem; display:flex; align-items:center; gap:.6rem; }
+    .act-reconcile { font:inherit; font-size:.76rem; font-variant:small-caps; letter-spacing:.05em;
+      padding:.22rem .6rem; border:1px solid var(--lapis); color:var(--lapis); background:transparent;
+      border-radius:2px; cursor:pointer; margin-left:auto; }
+    .act-reconcile:hover { background:var(--lapis); color:var(--parchment); }
     .act-row .commits { margin:.3rem 0 0 .25rem; font-size:.76rem; color:var(--ink-soft);
       font-family:"JetBrains Mono","Noto Sans Mono",monospace; }
     .act-row .commits div { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
@@ -1597,29 +1604,50 @@ setInterval(() => {
       + `<button class="del" title="close">${ICON_CLOSE}</button></div>`
       + `<div class="act-list">loading…</div>`;
     modal.querySelector(".del").onclick = () => { overlay.hidden = true; };
-    let data = [];
-    try { data = await (await fetch("/api/activity")).json(); } catch (e) {}
+    let payload = {};
+    try { payload = await (await fetch("/api/activity")).json(); } catch (e) {}
+    // shape (T42d): {last_reconcile, projects:[...]} — tolerate the old bare array
+    const data = Array.isArray(payload) ? payload : (payload.projects || []);
+    const marker = Array.isArray(payload) ? null : payload.last_reconcile;
+    const markerMs = marker ? marker * 1000 : 0;
+
+    // "since last reconcile" line + the bump button
+    const since = document.createElement("div");
+    since.className = "act-since";
+    const when = markerMs
+      ? new Date(markerMs).toLocaleString([], { dateStyle: "medium", timeStyle: "short" })
+      : null;
+    since.innerHTML = `<span>${when ? "since last reconcile · " + esc(when) : "never reconciled yet"}</span>`
+      + `<button class="act-reconcile" title="stamp now as reconciled — resets the “new” counts">mark reconciled</button>`;
+    since.querySelector(".act-reconcile").onclick = async () => {
+      try { await fetch("/api/reconcile", { method: "POST" }); } catch (e) {}
+      open();  // re-fetch so the counts reset
+    };
+    modal.insertBefore(since, modal.querySelector(".act-list"));
+
     const list = modal.querySelector(".act-list");
     list.innerHTML = "";
-    if (!Array.isArray(data) || !data.length) { list.textContent = "no git projects found."; return; }
+    if (!data.length) { list.textContent = "no git projects found."; return; }
     data.forEach(p => {
-      const clean = !p.ahead && !p.dirty && !p.no_upstream;
+      const fresh = p.new_since_reconcile || 0;
+      const clean = !fresh && !p.ahead && !p.dirty && !p.no_upstream;
       const row = document.createElement("div");
       row.className = "act-row" + (clean ? " clean" : "");
       const badges = [];
+      if (fresh) badges.push(`<span class="act-badge new">${fresh} new</span>`);
       if (p.ahead) badges.push(`<span class="act-badge push">↑${p.ahead} unpushed</span>`);
       if (p.no_upstream) badges.push(`<span class="act-badge push">↑ never pushed</span>`);
       if (p.dirty) badges.push(`<span class="act-badge dirty">✱ uncommitted</span>`);
-      const when = p.recent && p.recent[0] ? esc(p.recent[0].when) : "";
+      const last = p.recent && p.recent[0] ? esc(p.recent[0].when) : "";
       const commits = (p.recent || []).slice(0, 4).map(c => `<div>${esc(c.subject)}</div>`).join("");
       row.innerHTML = `<div class="top"><span class="pname">${esc(disp(p.name))}</span>`
-        + badges.join(" ") + `<span class="when">${when}</span></div>`
+        + badges.join(" ") + `<span class="when">${last}</span></div>`
         + `<div class="commits">${commits}</div>`;
       list.appendChild(row);
     });
     const foot = document.createElement("p");
     foot.className = "act-foot";
-    foot.textContent = "↑ = unpushed · ✱ = uncommitted. Ask Claude to “reconcile” and it reads these commits to propose to-do/idea updates.";
+    foot.textContent = "● new since reconcile · ↑ unpushed · ✱ uncommitted. Ask Claude to “reconcile” — it reads these commits to propose to-do/idea updates, then bumps the marker.";
     modal.appendChild(foot);
   }
   window.openActivity = open;

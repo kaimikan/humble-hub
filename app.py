@@ -232,7 +232,11 @@ def api_projects():
 def api_activity():
     """Per-project git status for the activity panel (T42c) — and the data a
     reconcile pass reads: recent commit subjects + unpushed/dirty signals.
-    Sorted actionable-first (unpushed or dirty), then by most recent commit."""
+    Carries `last_reconcile` (the T42d marker) and per-project
+    `new_since_reconcile` = commits since that marker, so the panel can show
+    "what changed since I last reconciled". Sorted actionable-first (new since
+    reconcile, unpushed, or dirty), then by most recent commit."""
+    marker = _read_notes().get("lastReconcile")
     out = []
     for p in scan():
         path = Path(p["path"])
@@ -241,17 +245,27 @@ def api_activity():
         recent = subprocess.run(
             ["git", "-C", str(path), "log", "-8", "--format=%h\t%cr\t%s"],
             capture_output=True, text=True).stdout.strip().splitlines()
+        # commits since the last reconcile (git accepts @<epoch> in --since)
+        new_since = 0
+        if marker:
+            n = subprocess.run(
+                ["git", "-C", str(path), "rev-list", "--count",
+                 f"--since=@{int(marker)}", "HEAD"],
+                capture_output=True, text=True).stdout.strip()
+            new_since = int(n) if n.isdigit() else 0
         out.append({
             "name": p["name"], "type": p["type"], "github": p.get("github", ""),
             "last_commit": p.get("last_commit", ""),
             "last_commit_at": int(p.get("last_commit_at") or 0),
             "ahead": p.get("ahead", 0), "dirty": bool(p.get("dirty")),
             "no_upstream": p.get("no_upstream", False),
+            "new_since_reconcile": new_since,
             "recent": [dict(zip(("h", "when", "subject"), ln.split("\t", 2))) for ln in recent],
         })
-    out.sort(key=lambda x: (0 if (x["ahead"] or x["dirty"] or x["no_upstream"]) else 1,
+    out.sort(key=lambda x: (0 if (x["new_since_reconcile"] or x["ahead"]
+                                  or x["dirty"] or x["no_upstream"]) else 1,
                             -x["last_commit_at"]))
-    return out
+    return {"last_reconcile": int(marker) if marker else None, "projects": out}
 
 
 # --- service projects (hub.json: {"serve": "<cmd>", "port": N}) -------------
@@ -383,6 +397,19 @@ def append_note(kind: str, item: dict):
         doc.setdefault(kind, []).append(entry)
         _write_notes(doc)
     return {"ok": True, "added": entry}
+
+
+@app.post("/api/reconcile")
+def mark_reconciled():
+    """Stamp 'now' as the last-reconcile marker (T42d). After a reconcile pass
+    closes/adds to-dos, this bumps the timestamp so the activity panel's
+    `new_since_reconcile` counts reset — the next pass only sees fresh work."""
+    import time
+    with _NOTES_LOCK:
+        doc = _read_notes()
+        doc["lastReconcile"] = int(time.time())
+        _write_notes(doc)
+    return {"ok": True, "at": doc["lastReconcile"]}
 
 
 # --- phone dictation (T32) ---------------------------------------------------

@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>T42 mockup — project-tagged jots + recent activity</title>
+<style>
+  /* Static design preview in the hub's codex palette — NO logic, just the look. */
+  :root {
+    --ink:#43331c; --ink-soft:#6e5a39; --ink-faint:#9c875f;
+    --parchment:#efe2c0; --paper:#f6edd6;
+    --lapis:#2f5277; --sanguine:#9a3b22; --verdigris:#4f6b3a; --ochre:#8a6d1f; --plum:#5a3d6e;
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; font:16px/1.5 "EB Garamond","Noto Serif",Georgia,serif; color:var(--ink);
+    background:
+      radial-gradient(ellipse at 15% 8%, #f7edd3 0%, transparent 55%),
+      radial-gradient(ellipse at 85% 95%, #e2d2a8 0%, transparent 55%),
+      var(--parchment);
+    min-height:100vh; padding:2rem 1.2rem; }
+  .wrap { max-width:980px; margin:0 auto; }
+  h1 { font-variant:small-caps; letter-spacing:.12em; text-align:center; font-weight:600; }
+  .lede { text-align:center; color:var(--ink-soft); font-style:italic; margin:0 0 2rem; }
+  .cols { display:flex; gap:1.4rem; flex-wrap:wrap; align-items:flex-start; }
+  .panel { background:var(--paper); border:1.5px solid var(--ink-soft); outline:1px solid var(--ink-faint);
+    outline-offset:4px; border-radius:2px; padding:1rem 1.1rem; box-shadow:3px 5px 18px rgba(40,30,15,.35);
+    flex:1 1 420px; }
+  .panel h2 { margin:.1rem 0 .7rem; font-size:1rem; font-variant:small-caps; letter-spacing:.08em; }
+
+  /* --- project filter chips --- */
+  .pfilter { display:flex; gap:.4rem; flex-wrap:wrap; margin-bottom:.7rem; }
+  .pchip { font-size:.72rem; font-variant:small-caps; letter-spacing:.05em; padding:.18rem .6rem;
+    border:1px solid var(--ink-faint); border-radius:999px; color:var(--ink-soft); background:transparent;
+    cursor:pointer; }
+  .pchip.on { background:var(--ink); color:var(--parchment); border-color:var(--ink); }
+
+  /* --- jot list with project tags --- */
+  .jots { list-style:none; margin:0; padding:0; }
+  .jots li { display:flex; align-items:center; gap:.55rem; padding:.35rem 0;
+    border-bottom:1px dotted rgba(156,135,95,.4); }
+  .jots input[type=checkbox] { accent-color:var(--verdigris); }
+  .jots .num { color:var(--ink-faint); font-size:.78rem; width:1.2rem; text-align:right; }
+  .jots .txt { flex:1; }
+  .jots li.done .txt { text-decoration:line-through; color:var(--ink-faint); }
+  /* the project tag — small, pigment-coded by the project, click to filter */
+  .tag { font-size:.66rem; font-variant:small-caps; letter-spacing:.04em; padding:.08rem .45rem;
+    border-radius:999px; white-space:nowrap; color:#fff; }
+  .tag.hub   { background:var(--ink-soft); }
+  .tag.p5    { background:var(--ochre); }
+  .tag.lidl  { background:var(--verdigris); }
+  .tag.timmy { background:var(--sanguine); }
+  .tag.sss   { background:var(--plum); }
+  .tag.none  { background:transparent; color:var(--ink-faint); border:1px dashed var(--ink-faint); }
+
+  /* --- recent activity --- */
+  .act-head { display:flex; align-items:center; gap:.6rem; }
+  .act-head .reconcile { margin-left:auto; font:inherit; font-size:.8rem; font-variant:small-caps;
+    letter-spacing:.05em; padding:.3rem .7rem; border:1px solid var(--lapis); color:var(--lapis);
+    background:transparent; border-radius:2px; cursor:pointer; }
+  .since { color:var(--ink-faint); font-size:.76rem; font-style:italic; margin:.1rem 0 .7rem; }
+  .arow { display:flex; align-items:center; gap:.6rem; padding:.45rem 0;
+    border-bottom:1px dotted rgba(156,135,95,.4); }
+  .arow .glyph { color:var(--ochre); width:1.2rem; text-align:center; }
+  .arow .pname { font-variant:small-caps; letter-spacing:.04em; }
+  .arow .meta { color:var(--ink-soft); font-size:.8rem; }
+  .arow .badge { background:var(--sanguine); color:#fff; font-size:.66rem; border-radius:999px;
+    padding:.05rem .4rem; }
+  .arow .review { margin-left:auto; font:inherit; font-size:.78rem; color:var(--lapis);
+    background:transparent; border:0; cursor:pointer; }
+  .arow.quiet { opacity:.55; }
+  .arow.quiet .badge { background:var(--ink-faint); }
+  .note { margin-top:1.4rem; color:var(--ink-soft); font-size:.85rem; font-style:italic; text-align:center; }
+</style>
+</head>
+<body>
+<main class="wrap">
+  <h1>T42 — project-tagged jots &amp; recent activity</h1>
+  <p class="lede">design preview only · no logic yet · how it would sit inside the hub's jot + a new activity panel</p>
+
+  <div class="cols">
+    <!-- ============ JOTTINGS with project tags + filter ============ -->
+    <section class="panel">
+      <h2>✎ to-do</h2>
+      <div class="pfilter">
+        <button class="pchip on">all projects</button>
+        <button class="pchip">humble-hub</button>
+        <button class="pchip">p5-playground</button>
+        <button class="pchip">little-lidl-list</button>
+        <button class="pchip">training-timmy</button>
+        <button class="pchip">smooth-song</button>
+      </div>
+      <ul class="jots">
+        <li><input type="checkbox"><span class="num">1</span>
+          <span class="txt">append endpoint + project tag</span><span class="tag hub">humble-hub</span></li>
+        <li><input type="checkbox"><span class="num">2</span>
+          <span class="txt">order the 3D printer</span><span class="tag none">no project</span></li>
+        <li><input type="checkbox"><span class="num">3</span>
+          <span class="txt">scope SAM 3D Body for poses</span><span class="tag timmy">training-timmy</span></li>
+        <li><input type="checkbox"><span class="num">4</span>
+          <span class="txt">UI/UX polish pass</span><span class="tag sss">smooth-song</span></li>
+        <li class="done"><input type="checkbox" checked><span class="num">✓</span>
+          <span class="txt">meal plan + exports</span><span class="tag lidl">little-lidl-list</span></li>
+        <li class="done"><input type="checkbox" checked><span class="num">✓</span>
+          <span class="txt">evolving walkers sketch</span><span class="tag p5">p5-playground</span></li>
+      </ul>
+    </section>
+
+    <!-- ============ RECENT ACTIVITY / reconcile ============ -->
+    <section class="panel">
+      <div class="act-head">
+        <h2 style="margin:0">⟳ recent activity</h2>
+        <button class="reconcile">reconcile 4 →</button>
+      </div>
+      <p class="since">since last reconcile · 2026-06-13 21:40</p>
+      <div class="arow">
+        <span class="glyph">❧</span><span class="pname">smooth-song-searching</span>
+        <span class="badge">2 new</span><span class="meta">· 20 min ago</span>
+        <button class="review">review →</button>
+      </div>
+      <div class="arow">
+        <span class="glyph">☉</span><span class="pname">p5-playground</span>
+        <span class="badge">7 new</span><span class="meta">· 1 h ago</span>
+        <button class="review">review →</button>
+      </div>
+      <div class="arow">
+        <span class="glyph">⚗</span><span class="pname">curated-cool-content</span>
+        <span class="badge">4 new</span><span class="meta">· 3 h ago</span>
+        <button class="review">review →</button>
+      </div>
+      <div class="arow">
+        <span class="glyph">⚗</span><span class="pname">little-lidl-list</span>
+        <span class="badge">1 new</span><span class="meta">· 5 h ago</span>
+        <button class="review">review →</button>
+      </div>
+      <div class="arow quiet">
+        <span class="glyph">◯</span><span class="pname">wow-world-wiki</span>
+        <span class="badge">0</span><span class="meta">· quiet since reconcile</span>
+      </div>
+      <p class="since" style="margin-top:.8rem">▸ "review" reads that repo's new commits (+ its chat
+      transcript) and proposes linked to-do/idea updates for your approval.</p>
+    </section>
+  </div>
+
+  <p class="note">Tags are pigment-coded per project and clickable (= the filter above). The activity
+  panel reuses the commit timestamps the hub already collects — no new logging.</p>
+</main>
+</body>
+</html>
