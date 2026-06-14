@@ -198,20 +198,22 @@ function setJotSearch(value) {
 let jotProject = "";
 function matchesJotProject(item) { return !jotProject || item.project === jotProject; }
 function setJotProject(p) { jotProject = (jotProject === p ? "" : p); renderNotes(); }
-function refreshProjectFilter() {
-  const sel = document.getElementById("jot-project");
-  if (!sel) return;
-  // only projects that actually have tagged items — a dropdown scales as the
-  // hub grows (a chip row would get overwhelming)
-  const projs = [...new Set([...notes.todos, ...notes.ideas]
+// projects with items in the CURRENT view (kind + the to-do status filter) —
+// the filter only offers what's actually there to filter to
+function filterProjects() {
+  return [...new Set(notes[jotKind]
+    .filter(it => matchesTodoFilter(jotKind, it))
     .map(i => i.project).filter(Boolean))].sort();
-  const wrap = sel.closest(".sel-wrap");
-  if (wrap) wrap.style.display = projs.length ? "" : "none";
-  if (jotProject && !projs.includes(jotProject)) jotProject = ""; // tag gone → reset
-  sel.innerHTML = "";
-  sel.appendChild(new Option("all projects", ""));
-  projs.forEach(p => sel.appendChild(new Option(p, p)));
-  sel.value = jotProject;
+}
+
+function refreshProjectFilter() {
+  const btn = document.getElementById("jot-project-btn");
+  if (!btn) return;
+  const scoped = filterProjects();
+  // drop a stale selection only when the current list has no such project at all
+  if (jotProject && !notes[jotKind].some(i => i.project === jotProject)) jotProject = "";
+  btn.style.display = (scoped.length || jotProject) ? "" : "none";
+  btn.querySelector(".lbl").textContent = jotProject || "all projects";
 }
 
 // surface the inherited project in the add-input placeholder, so adding an item
@@ -386,40 +388,46 @@ function placeMenu(menu, r) {
   menu.style.left = `${Math.max(8, r.right - menu.offsetWidth)}px`;
 }
 
-function openProjectPicker(item, r) {
+// a searchable dropdown reusing the row-menu look — used by both the
+// set-project picker and the project filter. options: [{label, value, pinned?}]
+function openSearchablePicker(anchorRect, options, current, onPick) {
   closeRowMenu();
   const menu = document.createElement("div");
   menu.className = "row-menu";
   menu.addEventListener("mousedown", e => e.stopPropagation()); // don't self-close
   const sb = document.createElement("input");
   sb.className = "row-menu-search";
-  sb.placeholder = "filter projects…";
+  sb.placeholder = "filter…";
   sb.autocomplete = "off";
   menu.appendChild(sb);
-  const pick = (label, val, isNone) => {
+  options.forEach(o => {
     const b = document.createElement("button");
-    b.textContent = label;
-    if (isNone) b.dataset.none = "1";
-    if ((item.project || null) === val) b.style.fontWeight = "700";
-    b.onclick = ev => {
-      ev.stopPropagation(); closeRowMenu();
-      if (val === null) delete item.project; else item.project = val;
-      renderNotes(); saveNotes();
-    };
+    b.textContent = o.label;
+    if (o.pinned) b.dataset.pinned = "1";
+    if (o.value === current) b.style.fontWeight = "700";
+    b.onclick = ev => { ev.stopPropagation(); closeRowMenu(); onPick(o.value); };
     menu.appendChild(b);
-  };
-  pick("— none —", null, true);
-  projectList().forEach(p => pick(p, p));
+  });
   sb.oninput = () => {
     const q = sb.value.toLowerCase();
     menu.querySelectorAll("button").forEach(b => {
-      b.style.display = (b.dataset.none || b.textContent.toLowerCase().includes(q)) ? "" : "none";
+      b.style.display = (b.dataset.pinned || b.textContent.toLowerCase().includes(q)) ? "" : "none";
     });
   };
   document.body.appendChild(menu);
   rowMenuEl = menu;
-  placeMenu(menu, r);
+  placeMenu(menu, anchorRect);
   if (!matchMedia("(pointer: coarse)").matches) sb.focus(); // desktop: ready to type
+}
+
+// set/clear the project on a single jot item (offers every hub project)
+function openProjectPicker(item, r) {
+  const opts = [{ label: "— none —", value: null, pinned: true },
+                ...projectList().map(p => ({ label: p, value: p }))];
+  openSearchablePicker(r, opts, item.project || null, val => {
+    if (val === null) delete item.project; else item.project = val;
+    renderNotes(); saveNotes();
+  });
 }
 
 function openRowMenu(e, kind, item) {
@@ -669,26 +677,32 @@ function addItem(ev, kind) {
       padding:.3rem .6rem; outline:none; }
     #jot-search:focus { border-color:var(--ink-soft); }
     #jot-search::placeholder { color:var(--ink-faint); font-style:italic; }
-    #jot-project { -webkit-appearance:none; appearance:none; background:var(--input-bg);
-      border:1px solid var(--ink-faint); border-radius:2px; color:var(--ink); font:inherit;
-      font-size:.82rem; padding:.3rem 1.4rem .3rem .55rem; cursor:pointer; max-width:10rem;
-      outline:none; }
-    #jot-project:focus { border-color:var(--ink-soft); }`;
+    #jot-project-btn { display:inline-flex; align-items:center; gap:.3rem; flex:none;
+      background:var(--input-bg); border:1px solid var(--ink-faint); border-radius:2px;
+      color:var(--ink); font:inherit; font-size:.82rem; font-variant:normal; letter-spacing:normal;
+      padding:.3rem .55rem; cursor:pointer; }
+    #jot-project-btn::after { content:"▾"; color:var(--ink-soft); font-size:.7rem; }
+    #jot-project-btn:hover { background:var(--card-hot); color:var(--ink); border-color:var(--ink-soft); }
+    #jot-project-btn .lbl { max-width:8rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }`;
   document.head.appendChild(sStyle);
-  // project-filter dropdown (shown by refreshProjectFilter when jots are tagged;
-  // .sel-wrap gives it the same caret as the mode select)
-  const projWrap = document.createElement("span");
-  projWrap.className = "sel-wrap";
-  projWrap.style.display = "none";
-  const projSel = document.createElement("select");
-  projSel.id = "jot-project";
-  projSel.title = "filter by project";
-  projSel.onchange = () => setJotProject(projSel.value);
-  projWrap.appendChild(projSel);
-  // one controls row: search (flex) + project dropdown + to-do status toggles
+  // project-filter button — a custom searchable dropdown (same look as the
+  // set-project picker), shown by refreshProjectFilter when jots are tagged
+  const projBtn = document.createElement("button");
+  projBtn.id = "jot-project-btn";
+  projBtn.title = "filter by project";
+  projBtn.style.display = "none";
+  projBtn.innerHTML = '<span class="lbl">all projects</span>';
+  projBtn.onclick = e => {
+    e.stopPropagation();
+    const opts = [{ label: "all projects", value: "", pinned: true },
+                  ...filterProjects().map(p => ({ label: p, value: p }))];
+    openSearchablePicker(projBtn.getBoundingClientRect(), opts, jotProject,
+      val => { jotProject = val; renderNotes(); });
+  };
+  // one controls row: search (flex) + project filter + to-do status toggles
   const controls = document.createElement("div");
   controls.className = "jot-controls";
-  controls.append(search, projWrap, bar);
+  controls.append(search, projBtn, bar);
   mhead.after(controls);
 })();
 
