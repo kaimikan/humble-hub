@@ -199,22 +199,19 @@ let jotProject = "";
 function matchesJotProject(item) { return !jotProject || item.project === jotProject; }
 function setJotProject(p) { jotProject = (jotProject === p ? "" : p); renderNotes(); }
 function refreshProjectFilter() {
-  const bar = document.getElementById("jot-pfilter");
-  if (!bar) return;
+  const sel = document.getElementById("jot-project");
+  if (!sel) return;
+  // only projects that actually have tagged items — a dropdown scales as the
+  // hub grows (a chip row would get overwhelming)
   const projs = [...new Set([...notes.todos, ...notes.ideas]
     .map(i => i.project).filter(Boolean))].sort();
-  bar.innerHTML = "";
-  if (!projs.length) { bar.style.display = "none"; return; }
-  bar.style.display = "flex";
-  const mk = (label, val) => {
-    const b = document.createElement("button");
-    b.className = "chip" + (jotProject === val ? " active" : "");
-    b.textContent = label;
-    b.onclick = () => setJotProject(val);
-    return b;
-  };
-  bar.appendChild(mk("all projects", ""));
-  projs.forEach(p => bar.appendChild(mk(p, p)));
+  const wrap = sel.closest(".sel-wrap");
+  if (wrap) wrap.style.display = projs.length ? "" : "none";
+  if (jotProject && !projs.includes(jotProject)) jotProject = ""; // tag gone → reset
+  sel.innerHTML = "";
+  sel.appendChild(new Option("all projects", ""));
+  projs.forEach(p => sel.appendChild(new Option(p, p)));
+  sel.value = jotProject;
 }
 
 // surface the inherited project in the add-input placeholder, so adding an item
@@ -283,16 +280,19 @@ function renderNotes() {
       menuBtn.title = "actions";
       menuBtn.onclick = e => openRowMenu(e, kind, item);
 
-      li.append(left, idx, txt);
-      if (item.project) {              // neutral project tag → click to filter
+      // content column: project tag ON TOP (a small pill), text full-width below
+      const content = document.createElement("div");
+      content.className = "jot-content";
+      if (item.project) {
         const tag = document.createElement("span");
         tag.className = "jot-tag";
         tag.textContent = item.project;
         tag.title = `project: ${item.project} — click to filter`;
         tag.onclick = e => { e.stopPropagation(); setJotProject(item.project); };
-        li.append(tag);
+        content.append(tag);
       }
-      li.append(menuBtn);
+      content.append(txt);
+      li.append(left, idx, content, menuBtn);
       ul.appendChild(li);
     });
     if (shown === 0 && notes[kind].length) {
@@ -390,9 +390,16 @@ function openProjectPicker(item, r) {
   closeRowMenu();
   const menu = document.createElement("div");
   menu.className = "row-menu";
-  const pick = (label, val) => {
+  menu.addEventListener("mousedown", e => e.stopPropagation()); // don't self-close
+  const sb = document.createElement("input");
+  sb.className = "row-menu-search";
+  sb.placeholder = "filter projects…";
+  sb.autocomplete = "off";
+  menu.appendChild(sb);
+  const pick = (label, val, isNone) => {
     const b = document.createElement("button");
     b.textContent = label;
+    if (isNone) b.dataset.none = "1";
     if ((item.project || null) === val) b.style.fontWeight = "700";
     b.onclick = ev => {
       ev.stopPropagation(); closeRowMenu();
@@ -401,11 +408,18 @@ function openProjectPicker(item, r) {
     };
     menu.appendChild(b);
   };
-  pick("— none —", null);
+  pick("— none —", null, true);
   projectList().forEach(p => pick(p, p));
+  sb.oninput = () => {
+    const q = sb.value.toLowerCase();
+    menu.querySelectorAll("button").forEach(b => {
+      b.style.display = (b.dataset.none || b.textContent.toLowerCase().includes(q)) ? "" : "none";
+    });
+  };
   document.body.appendChild(menu);
   rowMenuEl = menu;
   placeMenu(menu, r);
+  if (!matchMedia("(pointer: coarse)").matches) sb.focus(); // desktop: ready to type
 }
 
 function openRowMenu(e, kind, item) {
@@ -606,12 +620,17 @@ function addItem(ev, kind) {
     .row-menu button.danger:hover { background:var(--sanguine, #9a3b22); color:var(--parchment); }
     .jot-col li.empty-hint { justify-content:center; font-style:italic;
       color:var(--ink-faint); border-bottom:0; }
-    /* T42: neutral project tag on a row + the project-filter bar */
-    .jot-col li .jot-tag { flex:none; align-self:center; white-space:nowrap; cursor:pointer;
-      font-size:.64rem; font-variant:small-caps; letter-spacing:.04em; color:var(--ink-soft);
+    /* T42: project tag sits ON TOP of the row; the text spans full width below */
+    .jot-col li .jot-content { flex:1; min-width:0; display:flex; flex-direction:column; gap:.12rem; }
+    .jot-col li .jot-content .txt { flex:none; }
+    .jot-col li .jot-tag { align-self:flex-start; white-space:nowrap; cursor:pointer;
+      font-size:.62rem; font-variant:small-caps; letter-spacing:.04em; color:var(--ink-soft);
       border:1px solid var(--ink-faint); border-radius:999px; padding:.02rem .45rem; }
     .jot-col li .jot-tag:hover { border-color:var(--ink-soft); color:var(--ink); }
-    #jot-pfilter { display:flex; flex-wrap:wrap; gap:.35rem; padding:.1rem 0 .35rem; }`;
+    /* searchable set-project picker */
+    .row-menu-search { position:sticky; top:0; margin:.25rem; padding:.3rem .5rem; font:inherit;
+      font-size:.8rem; border:1px solid var(--ink-faint); border-radius:2px;
+      background:var(--input-bg); color:var(--ink); outline:none; }`;
   document.head.appendChild(style);
 
   const bar = document.createElement("div");
@@ -649,18 +668,28 @@ function addItem(ev, kind) {
       border-radius:2px; color:var(--ink); font:inherit; font-size:.88rem;
       padding:.3rem .6rem; outline:none; }
     #jot-search:focus { border-color:var(--ink-soft); }
-    #jot-search::placeholder { color:var(--ink-faint); font-style:italic; }`;
+    #jot-search::placeholder { color:var(--ink-faint); font-style:italic; }
+    #jot-project { -webkit-appearance:none; appearance:none; background:var(--input-bg);
+      border:1px solid var(--ink-faint); border-radius:2px; color:var(--ink); font:inherit;
+      font-size:.82rem; padding:.3rem 1.4rem .3rem .55rem; cursor:pointer; max-width:10rem;
+      outline:none; }
+    #jot-project:focus { border-color:var(--ink-soft); }`;
   document.head.appendChild(sStyle);
-  // one controls row: search (flex) + the to-do status toggles (right)
+  // project-filter dropdown (shown by refreshProjectFilter when jots are tagged;
+  // .sel-wrap gives it the same caret as the mode select)
+  const projWrap = document.createElement("span");
+  projWrap.className = "sel-wrap";
+  projWrap.style.display = "none";
+  const projSel = document.createElement("select");
+  projSel.id = "jot-project";
+  projSel.title = "filter by project";
+  projSel.onchange = () => setJotProject(projSel.value);
+  projWrap.appendChild(projSel);
+  // one controls row: search (flex) + project dropdown + to-do status toggles
   const controls = document.createElement("div");
   controls.className = "jot-controls";
-  controls.append(search, bar);
+  controls.append(search, projWrap, bar);
   mhead.after(controls);
-  // project-filter bar (populated by refreshProjectFilter when jots are tagged)
-  const pfilter = document.createElement("div");
-  pfilter.id = "jot-pfilter";
-  pfilter.style.display = "none";
-  controls.after(pfilter);
 })();
 
 loadNotes();
