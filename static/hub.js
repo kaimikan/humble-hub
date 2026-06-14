@@ -194,6 +194,29 @@ function setJotSearch(value) {
   renderNotes();
 }
 
+// project filter (T42): jots can be tagged with a project; filter to one
+let jotProject = "";
+function matchesJotProject(item) { return !jotProject || item.project === jotProject; }
+function setJotProject(p) { jotProject = (jotProject === p ? "" : p); renderNotes(); }
+function refreshProjectFilter() {
+  const bar = document.getElementById("jot-pfilter");
+  if (!bar) return;
+  const projs = [...new Set([...notes.todos, ...notes.ideas]
+    .map(i => i.project).filter(Boolean))].sort();
+  bar.innerHTML = "";
+  if (!projs.length) { bar.style.display = "none"; return; }
+  bar.style.display = "flex";
+  const mk = (label, val) => {
+    const b = document.createElement("button");
+    b.className = "chip" + (jotProject === val ? " active" : "");
+    b.textContent = label;
+    b.onclick = () => setJotProject(val);
+    return b;
+  };
+  bar.appendChild(mk("all projects", ""));
+  projs.forEach(p => bar.appendChild(mk(p, p)));
+}
+
 function renderNotes() {
   for (const kind of ["todos", "ideas"]) {
     const ul = document.getElementById(kind);
@@ -209,6 +232,7 @@ function renderNotes() {
     notes[kind].forEach(item => {
       if (!matchesTodoFilter(kind, item)) return; // hidden by the to-do filter
       if (!matchesJotSearch(item)) return;        // hidden by the search box
+      if (!matchesJotProject(item)) return;       // hidden by the project filter
       shown++;
       const li = document.createElement("li");
       li.__item = item; // ref used by drag-commit + the row menu (indices shift)
@@ -249,7 +273,16 @@ function renderNotes() {
       menuBtn.title = "actions";
       menuBtn.onclick = e => openRowMenu(e, kind, item);
 
-      li.append(left, idx, txt, menuBtn);
+      li.append(left, idx, txt);
+      if (item.project) {              // neutral project tag → click to filter
+        const tag = document.createElement("span");
+        tag.className = "jot-tag";
+        tag.textContent = item.project;
+        tag.title = `project: ${item.project} — click to filter`;
+        tag.onclick = e => { e.stopPropagation(); setJotProject(item.project); };
+        li.append(tag);
+      }
+      li.append(menuBtn);
       ul.appendChild(li);
     });
     if (shown === 0 && notes[kind].length) {
@@ -264,6 +297,7 @@ function renderNotes() {
   document.getElementById("todos-count").textContent =
     `· ${notes.todos.filter(t => !t.done).length}`;
   document.getElementById("ideas-count").textContent = `· ${notes.ideas.length}`;
+  refreshProjectFilter();
 }
 
 // promote idea → to-do / demote to-do → idea
@@ -468,6 +502,7 @@ function addItem(ev, kind) {
   const text = input.value.trim();
   if (text) {
     const item = kind === "todos" ? { text, done: false } : { text };
+    if (jotProject) item.project = jotProject; // adding while filtered tags it
     notes[kind].push(item);
     input.value = "";
     renderNotes();
@@ -519,7 +554,13 @@ function addItem(ev, kind) {
     .row-menu button.danger { color:var(--sanguine, #9a3b22); }
     .row-menu button.danger:hover { background:var(--sanguine, #9a3b22); color:var(--parchment); }
     .jot-col li.empty-hint { justify-content:center; font-style:italic;
-      color:var(--ink-faint); border-bottom:0; }`;
+      color:var(--ink-faint); border-bottom:0; }
+    /* T42: neutral project tag on a row + the project-filter bar */
+    .jot-col li .jot-tag { flex:none; align-self:center; white-space:nowrap; cursor:pointer;
+      font-size:.64rem; font-variant:small-caps; letter-spacing:.04em; color:var(--ink-soft);
+      border:1px solid var(--ink-faint); border-radius:999px; padding:.02rem .45rem; }
+    .jot-col li .jot-tag:hover { border-color:var(--ink-soft); color:var(--ink); }
+    #jot-pfilter { display:flex; flex-wrap:wrap; gap:.35rem; padding:.1rem 0 .35rem; }`;
   document.head.appendChild(style);
 
   const bar = document.createElement("div");
@@ -564,6 +605,11 @@ function addItem(ev, kind) {
     #jot-search::placeholder { color:var(--ink-faint); font-style:italic; }`;
   document.head.appendChild(sStyle);
   mhead.after(search);
+  // project-filter bar (populated by refreshProjectFilter when jots are tagged)
+  const pfilter = document.createElement("div");
+  pfilter.id = "jot-pfilter";
+  pfilter.style.display = "none";
+  search.after(pfilter);
 })();
 
 loadNotes();

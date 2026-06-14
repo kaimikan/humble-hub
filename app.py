@@ -305,20 +305,51 @@ def service_stop(name: str):
 # --- notes & to-dos (file-backed, see data/notes.json) ---
 
 NOTES_FILE = HUB_DIR / "data" / "notes.json"
+_NOTES_LOCK = __import__("threading").Lock()
 
 
-@app.get("/api/notes")
-def get_notes():
+def _read_notes() -> dict:
     if NOTES_FILE.is_file():
         return json.loads(NOTES_FILE.read_text())
     return {"todos": [], "ideas": []}
 
 
-@app.put("/api/notes")
-def put_notes(doc: dict):
+def _write_notes(doc: dict) -> None:
     NOTES_FILE.parent.mkdir(exist_ok=True)
     NOTES_FILE.write_text(json.dumps(doc, ensure_ascii=False, indent=1))
+
+
+@app.get("/api/notes")
+def get_notes():
+    return _read_notes()
+
+
+@app.put("/api/notes")
+def put_notes(doc: dict):
+    _write_notes(doc)
     return {"ok": True}
+
+
+@app.post("/api/notes/{kind}")
+def append_note(kind: str, item: dict):
+    """Append a single to-do/idea WITHOUT sending the whole doc — so any session
+    (or a one-line curl) can file a linked item without clobbering concurrent
+    edits. `item`: {text, project?}. Locked read-modify-write (T42)."""
+    if kind not in ("todos", "ideas"):
+        raise HTTPException(404, "kind must be 'todos' or 'ideas'")
+    text = (item.get("text") or "").strip()
+    if not text:
+        raise HTTPException(400, "text is required")
+    entry = {"text": text}
+    if kind == "todos":
+        entry["done"] = False
+    if item.get("project"):
+        entry["project"] = str(item["project"])
+    with _NOTES_LOCK:
+        doc = _read_notes()
+        doc.setdefault(kind, []).append(entry)
+        _write_notes(doc)
+    return {"ok": True, "added": entry}
 
 
 # --- phone dictation (T32) ---------------------------------------------------
