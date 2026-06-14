@@ -86,9 +86,16 @@ def git_info(path: Path) -> dict:
     if "github.com" in remote:
         web = re.sub(r"^git@github\.com:", "https://github.com/", remote)
         web = re.sub(r"\.git$", "", web)
+    # commits ahead of upstream = unpushed work; "" if there's no upstream set
+    ahead_raw = run("rev-list", "--count", "@{u}..HEAD")
+    ahead = int(ahead_raw) if ahead_raw.isdigit() else 0
+    has_upstream = bool(run("rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"))
     return {
         "last_commit": run("log", "-1", "--format=%ad — %s", "--date=format:%Y-%m-%d"),
+        "last_commit_at": run("log", "-1", "--format=%ct"),  # epoch, for sorting
         "dirty": bool(run("status", "--porcelain")),
+        "ahead": ahead,                 # unpushed commits
+        "no_upstream": not has_upstream and bool(remote),  # has a remote but no tracking branch
         "remote": remote,
         "github": web,
     }
@@ -219,6 +226,32 @@ def open_folder(name: str):
 @app.get("/api/projects")
 def api_projects():
     return scan()
+
+
+@app.get("/api/activity")
+def api_activity():
+    """Per-project git status for the activity panel (T42c) — and the data a
+    reconcile pass reads: recent commit subjects + unpushed/dirty signals.
+    Sorted actionable-first (unpushed or dirty), then by most recent commit."""
+    out = []
+    for p in scan():
+        path = Path(p["path"])
+        if not (path / ".git").is_dir():
+            continue
+        recent = subprocess.run(
+            ["git", "-C", str(path), "log", "-8", "--format=%h\t%cr\t%s"],
+            capture_output=True, text=True).stdout.strip().splitlines()
+        out.append({
+            "name": p["name"], "type": p["type"], "github": p.get("github", ""),
+            "last_commit": p.get("last_commit", ""),
+            "last_commit_at": int(p.get("last_commit_at") or 0),
+            "ahead": p.get("ahead", 0), "dirty": bool(p.get("dirty")),
+            "no_upstream": p.get("no_upstream", False),
+            "recent": [dict(zip(("h", "when", "subject"), ln.split("\t", 2))) for ln in recent],
+        })
+    out.sort(key=lambda x: (0 if (x["ahead"] or x["dirty"] or x["no_upstream"]) else 1,
+                            -x["last_commit_at"]))
+    return out
 
 
 # --- service projects (hub.json: {"serve": "<cmd>", "port": N}) -------------
@@ -1015,6 +1048,10 @@ def card(p: dict, favs: set = frozenset(), peers: list = ()) -> str:
     meta = html.escape(p["last_commit"]) if p.get("last_commit") else ""
     if p.get("dirty"):
         meta += " · ✱ wet ink"
+    if p.get("ahead"):
+        meta += f" · ↑{p['ahead']} unpushed"
+    elif p.get("no_upstream"):
+        meta += " · ↑ never pushed"
     # the port lives on the meta line, not the head — keeps it from squeezing the
     # title onto a second line
     meta_line = " · ".join(x for x in (port_html, meta) if x)

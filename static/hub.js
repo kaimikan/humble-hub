@@ -1548,3 +1548,89 @@ setInterval(() => {
   // resolveTheme (themes.js) maps renamed/unknown keys to a current one
   apply(resolveTheme(localStorage.getItem("hubTheme") || "codex"));
 })();
+
+
+// --- activity panel (T42c): per-project git status dashboard ----------------
+// "what needs committing / pushing", + recent commits (the data a reconcile
+// pass reads). Injected from JS so it ships on refresh, no service restart.
+(() => {
+  const esc = s => String(s).replace(/[&<>]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
+  const style = document.createElement("style");
+  style.textContent = `
+    .act-overlay { position:fixed; inset:0; background:rgba(40,30,15,.4); z-index:72;
+      display:flex; align-items:flex-start; justify-content:center; padding:9vh .6rem 0; }
+    .act-overlay[hidden] { display:none; }
+    .act-modal { width:min(640px,94vw); max-height:80vh; overflow:auto; box-sizing:border-box;
+      background:var(--parchment); border:1.5px solid var(--ink-soft); outline:1px solid var(--ink-faint);
+      outline-offset:4px; border-radius:2px; padding:1rem 1.2rem; box-shadow:3px 5px 18px rgba(40,30,15,.45); }
+    .act-modal .m-head { display:flex; align-items:center; gap:.5rem; margin-bottom:.6rem; }
+    .act-modal h3 { margin:0; flex:1; font-size:1rem; font-weight:600; font-variant:small-caps;
+      letter-spacing:.08em; color:var(--ink); }
+    .act-row { padding:.5rem .15rem; border-bottom:1px dotted rgba(156,135,95,.4); }
+    .act-row.clean { opacity:.5; }
+    .act-row .top { display:flex; align-items:center; gap:.5rem; }
+    .act-row .pname { font-variant:small-caps; letter-spacing:.04em; font-weight:600; color:var(--ink); }
+    .act-row .when { color:var(--ink-faint); font-size:.76rem; margin-left:auto; white-space:nowrap; }
+    .act-badge { font-size:.64rem; font-variant:small-caps; letter-spacing:.04em; border-radius:999px;
+      padding:.05rem .45rem; color:var(--parchment); }
+    .act-badge.push { background:var(--sanguine); }
+    .act-badge.dirty { background:var(--ochre); }
+    .act-row .commits { margin:.3rem 0 0 .25rem; font-size:.76rem; color:var(--ink-soft);
+      font-family:"JetBrains Mono","Noto Sans Mono",monospace; }
+    .act-row .commits div { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .act-foot { margin-top:.7rem; font-size:.8rem; font-style:italic; color:var(--ink-soft); }`;
+  document.head.appendChild(style);
+
+  const overlay = document.createElement("div");
+  overlay.className = "act-overlay";
+  overlay.hidden = true;
+  const modal = document.createElement("div");
+  modal.className = "act-modal";
+  overlay.appendChild(modal);
+  document.body.appendChild(overlay);
+  overlay.addEventListener("click", e => { if (e.target === overlay) overlay.hidden = true; });
+  document.addEventListener("keydown", e => { if (e.key === "Escape") overlay.hidden = true; });
+
+  async function open() {
+    overlay.hidden = false;
+    modal.innerHTML = `<div class="m-head"><h3>⟳ git activity</h3>`
+      + `<button class="del" title="close">${ICON_CLOSE}</button></div>`
+      + `<div class="act-list">loading…</div>`;
+    modal.querySelector(".del").onclick = () => { overlay.hidden = true; };
+    let data = [];
+    try { data = await (await fetch("/api/activity")).json(); } catch (e) {}
+    const list = modal.querySelector(".act-list");
+    list.innerHTML = "";
+    if (!Array.isArray(data) || !data.length) { list.textContent = "no git projects found."; return; }
+    data.forEach(p => {
+      const clean = !p.ahead && !p.dirty && !p.no_upstream;
+      const row = document.createElement("div");
+      row.className = "act-row" + (clean ? " clean" : "");
+      const badges = [];
+      if (p.ahead) badges.push(`<span class="act-badge push">↑${p.ahead} unpushed</span>`);
+      if (p.no_upstream) badges.push(`<span class="act-badge push">↑ never pushed</span>`);
+      if (p.dirty) badges.push(`<span class="act-badge dirty">✱ uncommitted</span>`);
+      const when = p.recent && p.recent[0] ? esc(p.recent[0].when) : "";
+      const commits = (p.recent || []).slice(0, 4).map(c => `<div>${esc(c.subject)}</div>`).join("");
+      row.innerHTML = `<div class="top"><span class="pname">${esc(disp(p.name))}</span>`
+        + badges.join(" ") + `<span class="when">${when}</span></div>`
+        + `<div class="commits">${commits}</div>`;
+      list.appendChild(row);
+    });
+    const foot = document.createElement("p");
+    foot.className = "act-foot";
+    foot.textContent = "↑ = unpushed · ✱ = uncommitted. Ask Claude to “reconcile” and it reads these commits to propose to-do/idea updates.";
+    modal.appendChild(foot);
+  }
+  window.openActivity = open;
+
+  // trigger in the controls row, next to ❧ chats
+  const btn = document.createElement("button");
+  btn.className = "jot-open";
+  btn.id = "act-open";
+  btn.innerHTML = `${ICON_REATTACH} activity`;
+  btn.title = "git activity — unpushed / uncommitted across projects";
+  btn.onclick = open;
+  const chats = document.getElementById("sess-open");
+  if (chats) chats.after(btn); else document.querySelector(".controls") && document.querySelector(".controls").appendChild(btn);
+})();
