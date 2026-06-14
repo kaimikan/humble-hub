@@ -984,6 +984,9 @@ def card(p: dict, favs: set = frozenset(), peers: list = ()) -> str:
     meta = html.escape(p["last_commit"]) if p.get("last_commit") else ""
     if p.get("dirty"):
         meta += " · ✱ wet ink"
+    # the port lives on the meta line, not the head — keeps it from squeezing the
+    # title onto a second line
+    meta_line = " · ".join(x for x in (port_html, meta) if x)
     excerpt = md_inline(p.get("excerpt") or "")
     search_blob = html.escape(f"{p['name']} {p.get('excerpt') or ''}".lower())
     svc_dot = (f"""<span class="svc-dot" data-svc="{name}" title="stopped">{icon("dot")}</span>"""
@@ -993,11 +996,11 @@ def card(p: dict, favs: set = frozenset(), peers: list = ()) -> str:
       <div class="head">
         <span class="glyph">{glyph(p)}</span>
         <h2>{name}</h2>
-        {svc_dot}{port_html}<span class="kind">{TYPE_LABELS[p["type"]]}</span>
+        {svc_dot}<span class="kind">{TYPE_LABELS[p["type"]]}</span>
         <button class="b-fav{fav_on}" data-fav="{name}" title="favorite — pin to top">{icon("star")}</button>
       </div>
       <p class="excerpt">{f'“{excerpt}”' if excerpt else ''}</p>
-      <p class="meta">{meta}</p>
+      <p class="meta">{meta_line}</p>
       <div class="actions">{''.join(buttons)}</div>
     </div>"""
 
@@ -1125,16 +1128,15 @@ def index():
     border-radius:2px; color:var(--ink); font:inherit; font-size:.9rem;
     padding:.35rem .7rem; width:240px; }}
   #search::placeholder {{ color:var(--ink-faint); font-style:italic; }}
-  .chip {{ background:transparent; border:1px solid var(--chip, var(--ink-soft));
-    border-radius:999px; color:var(--chip, var(--ink-soft)); font:inherit;
+  /* category chips are NEUTRAL — icon + text tell them apart; the pigments are
+     reserved for the action buttons (lapis=claude, sanguine=go, verdigris=files)
+     so a colour means one thing. Chips only carry an active/inactive state. */
+  .chip {{ background:transparent; border:1px solid var(--ink-soft);
+    border-radius:999px; color:var(--ink-soft); font:inherit;
     font-size:.78rem; font-variant:small-caps; letter-spacing:.05em;
     padding:.15rem .65rem; cursor:pointer; }}
-  /* hover and active both fill with the chip's pigment, text stays parchment */
-  .chip:hover, .chip.active {{ background:var(--chip, var(--ink));
-    border-color:var(--chip, var(--ink)); color:var(--parchment); }}
-  .chip[data-type="site"]  {{ --chip:var(--lapis); }}
-  .chip[data-type="service"] {{ --chip:var(--plum); }}
-  .chip[data-type="app"]   {{ --chip:var(--sanguine); }}
+  .chip:hover {{ border-color:var(--ink); color:var(--ink); }}
+  .chip.active {{ background:var(--ink); border-color:var(--ink); color:var(--parchment); }}
   /* service status dot + stop control */
   svg.i {{ width:1em; height:1em; vertical-align:-.12em;
     fill:none; stroke:currentColor; stroke-width:2;
@@ -1143,9 +1145,6 @@ def index():
   .svc-dot.on {{ color:var(--verdigris); }}
   .b-stop {{ color:var(--ink-faint); border-color:var(--ink-faint); padding:.3rem .5rem; }}
   .b-stop:hover {{ background:var(--sanguine); border-color:var(--sanguine); color:var(--parchment); }}
-  .chip[data-type="code"]  {{ --chip:var(--ochre); }}
-  .chip[data-type="notes"] {{ --chip:var(--verdigris); }}
-  .chip[data-type="empty"] {{ --chip:#9c875f; }}
   /* side-drawer terminal — pushes the shelf aside rather than covering it */
   :root {{ --drawer-w: min(680px, 58vw); }}
   body.drawer-open #shelf {{ margin-right:var(--drawer-w); }}
@@ -1270,12 +1269,12 @@ def index():
       <input id="search" type="search" placeholder="search…" autocomplete="off" oninput="refilter()">
       <span id="filters">
         <button class="chip active" data-type="" onclick="pick(this)">all</button>
-        <button class="chip" data-type="site" onclick="pick(this)">site</button>
-        <button class="chip" data-type="service" onclick="pick(this)">service</button>
-        <button class="chip" data-type="app" onclick="pick(this)">app</button>
-        <button class="chip" data-type="code" onclick="pick(this)">code</button>
-        <button class="chip" data-type="notes" onclick="pick(this)">notes</button>
-        <button class="chip" data-type="empty" onclick="pick(this)">empty</button>
+        <button class="chip" data-type="site" onclick="pick(this)">{icon("site")} site</button>
+        <button class="chip" data-type="service" onclick="pick(this)">{icon("service")} service</button>
+        <button class="chip" data-type="app" onclick="pick(this)">{icon("app")} app</button>
+        <button class="chip" data-type="code" onclick="pick(this)">{icon("code")} code</button>
+        <button class="chip" data-type="notes" onclick="pick(this)">{icon("notes")} notes</button>
+        <button class="chip" data-type="empty" onclick="pick(this)">{icon("empty")} empty</button>
       </span>
     </div>
   </header>
