@@ -522,7 +522,9 @@ function beginEdit(item, li, txt) {
     else if (e.key === "Escape") { done = true; renderNotes(); }
   };
   input.onblur = commit;
-  li.replaceChild(input, txt);
+  // T42 wraps .txt inside a .jot-content div, so swap within txt's real parent,
+  // not li (li.replaceChild threw NotFoundError → clicking a row did nothing).
+  txt.parentNode.replaceChild(input, txt);
   grow();
   input.focus();
   input.setSelectionRange(input.value.length, input.value.length);

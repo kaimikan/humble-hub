@@ -192,6 +192,24 @@ def run(page):
     order = [t["text"] for t in last.get("todos", [])]
     check("drag reorder persists new order", order == ["charlie", "bravo-done"], str(order))
 
+    # --- click-to-edit a row (regression: T42 jot-content wrapper) ---------
+    # txt lives inside .jot-content now; beginEdit must swap within txt's real
+    # parent, not li, or clicking a row throws and editing silently breaks.
+    # Run last, on the visible to-do list, with no list-switch (a switch would
+    # reload the fixture and clobber the in-memory state the asserts rely on).
+    saved.clear()
+    page.click("#todos li:has-text('charlie') .txt")
+    page.wait_for_selector("#todos li .edit-input")
+    check("clicking a row opens the edit textarea",
+          page.query_selector("#todos li .edit-input") is not None)
+    page.fill("#todos li .edit-input", "charlie-edited")
+    page.keyboard.press("Enter")
+    page.wait_for_timeout(600)
+    last = saved[-1] if saved else {}
+    edited = any(t["text"] == "charlie-edited" for t in last.get("todos", []))
+    check("editing a row persists the new text", edited, json.dumps(last))
+    check("editing raised no JS errors", not errors, "; ".join(errors))
+
 
 with sync_playwright() as p:
     browser = p.chromium.launch()
