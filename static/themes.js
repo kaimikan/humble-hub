@@ -21,7 +21,7 @@ const THEME = {
     bg:"#fff3da", paper:"#ffe9c2", ink:"#33250e", inkSoft:"#a65c00", inkFaint:"#cf9544",
     lapis:"#1f4dd8", sanguine:"#f56f00", verdigris:"#2eaf5d", ochre:"#e6a817", plum:"#8c4ddd",
     term:{ bg:"#1a1410", fg:"#ffe9c2", ansi:["#2a1f15","#f5503c","#2eaf5d","#e6a817","#2f6df0","#c266ff","#2bb0c8","#ffe9c2","#4a3520","#ff6e54","#46c873","#ffbe3a","#5a8cff","#d488ff","#4cc8de","#fff4dc"] } },
-  phosphor: { name:"phosphor", mode:"dark", font:"'JetBrains Mono','Hack','Noto Sans Mono',monospace",
+  phosphor: { name:"crt", mode:"dark", skin:"crt", font:"'JetBrains Mono','Hack','Noto Sans Mono',monospace",
     bg:"#050905", paper:"#0b140c", ink:"#a8ffbe", inkSoft:"#52d98b", inkFaint:"#2e7d52",
     lapis:"#36e3a0", sanguine:"#ff5470", verdigris:"#2ecf7a", ochre:"#9fe06a", plum:"#36b88f",
     term:{ bg:"#050d07", fg:"#a8ffbe", ansi:["#0a160d","#ff5470","#36e3a0","#9fe06a","#2ee6c0","#7df0b0","#5affd0","#c8ffd8","#163a24","#ff7088","#5affb8","#b6f07a","#56f0d2","#9bf6c4","#86ffe0","#e6fff0"] } },

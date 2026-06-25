@@ -1423,11 +1423,53 @@ setInterval(() => {
   }).join("\n");
   document.head.appendChild(style);
 
+  // --- skin layer (theme-worlds): a theme may carry an optional `skin` that
+  // goes beyond the palette — extra CSS + mounted overlay DOM (scanlines, a
+  // live canvas, etc). Each skin: { css } static rules injected once, scoped to
+  // its own body[data-theme]; mount() returns a teardown fn run on theme change.
+  // This is the hook a future p5.js "world" mounts its sketch canvas into.
+  const SKIN = {
+    crt: {
+      css: `
+        body[data-theme="phosphor"] { text-shadow:0 0 1px var(--lapis), 0 0 7px rgba(54,227,160,.30); }
+        body[data-theme="phosphor"] .card-title, body[data-theme="phosphor"] h1,
+        body[data-theme="phosphor"] h2, body[data-theme="phosphor"] h3 {
+          text-shadow:0 0 2px var(--lapis), 0 0 12px rgba(54,227,160,.45); }
+        .crt-fx { position:fixed; inset:0; pointer-events:none; z-index:60; }
+        .crt-fx .scan { position:absolute; inset:0; mix-blend-mode:multiply;
+          background:repeating-linear-gradient(to bottom,
+            rgba(0,0,0,0) 0, rgba(0,0,0,0) 2px, rgba(0,0,0,.16) 3px, rgba(0,0,0,0) 4px); }
+        .crt-fx .vig { position:absolute; inset:0;
+          background:radial-gradient(ellipse 100% 100% at center, transparent 58%, rgba(0,0,0,.55) 100%);
+          box-shadow:inset 0 0 7rem rgba(0,0,0,.5); }
+        @media (prefers-reduced-motion:no-preference) {
+          .crt-fx .flick { position:absolute; inset:0; background:rgba(40,255,170,.025);
+            animation:crt-flicker .14s steps(2) infinite; }
+        }
+        @keyframes crt-flicker { 0%{opacity:.45} 50%{opacity:.18} 100%{opacity:.5} }`,
+      mount() {
+        const fx = document.createElement("div");
+        fx.className = "crt-fx";
+        fx.innerHTML = '<div class="scan"></div><div class="vig"></div><div class="flick"></div>';
+        document.body.appendChild(fx);
+        return () => fx.remove();
+      },
+    },
+  };
+  const skinStyle = document.createElement("style");
+  skinStyle.textContent = Object.values(SKIN).map(s => s.css || "").join("\n");
+  document.head.appendChild(skinStyle);
+  let skinTeardown = null;
+
   const apply = t => {
     if (!THEME[t]) t = "codex";
     activeTheme = t;
     if (t === "codex") delete document.body.dataset.theme;
     else document.body.dataset.theme = t;
+    // swap the skin overlay: tear down the previous, mount the new world's
+    if (skinTeardown) { skinTeardown(); skinTeardown = null; }
+    const sk = THEME[t].skin;
+    if (sk && SKIN[sk]) skinTeardown = SKIN[sk].mount();
     // the drawer + #dterm padding frame the terminal — match its bg so there's
     // no off-theme dark border around the canvas
     document.documentElement.style.setProperty("--term-bg", THEME[t].term.bg);
