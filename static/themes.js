@@ -49,8 +49,17 @@ const THEME = {
     bg:"#191724", paper:"#1f1d2e", ink:"#e0def4", inkSoft:"#908caa", inkFaint:"#6e6a86",
     lapis:"#31748f", sanguine:"#eb6f92", verdigris:"#9ccfd8", ochre:"#f6c177", plum:"#c4a7e7",
     term:{ bg:"#191724", fg:"#e0def4", ansi:["#26233a","#eb6f92","#31748f","#f6c177","#9ccfd8","#c4a7e7","#ebbcba","#e0def4","#6e6a86","#eb6f92","#31748f","#f6c177","#9ccfd8","#c4a7e7","#ebbcba","#e0def4"] } },
+  // generative "world": a p5.js flow field behind a LIGHT UI styled after the
+  // p5js.org website — near-white bg, signature brand pink (#ed225d), near-black
+  // ink. `flow` is the 2-colour particle scheme the skin reads (pink + a deep
+  // indigo so trails stay legible on light). Terminal stays dark, as elsewhere.
+  flow:     { name:"p5 flow", mode:"light", skin:"flowfield", font:"system-ui,'Segoe UI',sans-serif",
+    bg:"#fcf3f6", paper:"#ffffff", ink:"#1d1b1f", inkSoft:"#6b5560", inkFaint:"#b6a0a8",
+    lapis:"#2f6df0", sanguine:"#ed225d", verdigris:"#1f9d57", ochre:"#c98a1f", plum:"#8a3fd1",
+    flow:["#ed225d","#4a2fd6"],
+    term:{ bg:"#0e1018", fg:"#e8ecf5", ansi:["#1b1f2e","#ed225d","#3fd08a","#e0b341","#5b8cff","#c77dff","#46d0e0","#cfd6e6","#3a4258","#ff5d83","#5fe0a3","#f0c75e","#83a8ff","#d49bff","#6fe0ee","#ffffff"] } },
 };
-const THEME_ORDER = ["codex","lapis","koi","phosphor","graphite","nord","zenburn","frappe","gruvbox","rosepine"];
+const THEME_ORDER = ["codex","lapis","koi","phosphor","graphite","nord","zenburn","frappe","gruvbox","rosepine","flow"];
 const THEME_MIGRATE = { matrix: "phosphor", dragon: "koi" };  // renamed themes
 
 // resolve a stored key to a current, valid theme key (handles renames)

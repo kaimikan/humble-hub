@@ -1428,6 +1428,67 @@ setInterval(() => {
   // live canvas, etc). Each skin: { css } static rules injected once, scoped to
   // its own body[data-theme]; mount() returns a teardown fn run on theme change.
   // This is the hook a future p5.js "world" mounts its sketch canvas into.
+
+  // lazy-load the vendored p5.js once, only when a generative world mounts
+  let _p5load = null;
+  const loadP5 = () => window.p5 ? Promise.resolve()
+    : (_p5load = _p5load || new Promise((res, rej) => {
+        const s = document.createElement("script");
+        s.src = "/static/vendor/p5.min.js"; s.onload = res; s.onerror = rej;
+        document.head.appendChild(s);
+      }));
+
+  // flow-field sketch (adapted from p5-playground/flow-field to instance mode):
+  // a Perlin-noise vector field driving particles, tinted from the theme's own
+  // pigments and fading as slow trails so it reads as one cohesive world.
+  const makeFlowSketch = (theme, container) => {
+    const [bgR, bgG, bgB] = _hx(theme.bg);
+    // a designed 2-colour scheme if the theme defines `flow`, else its pigments
+    const palette = (theme.flow || [theme.lapis, theme.verdigris, theme.plum, theme.ochre, theme.sanguine]).map(_hx);
+    const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const scl = 14, inc = 0.16;  // higher = more turbulent field, shorter streamlines
+    return (p) => {
+      let parts = [], field, ncols, nrows, zoff = 0;
+      const reseed = () => { ncols = p.floor(p.width / scl); nrows = p.floor(p.height / scl);
+        field = new Array(ncols * nrows); };
+      class Particle {
+        constructor() { this.pos = p.createVector(p.random(p.width), p.random(p.height));
+          this.vel = p.createVector(0, 0); this.acc = p.createVector(0, 0);
+          this.max = p.random(1.0, 2.2);  // per-particle speed → they desync, don't ride as one
+          this.col = palette[(p.random(palette.length)) | 0]; }
+        follow(f) { const v = f[p.floor(this.pos.x / scl) + p.floor(this.pos.y / scl) * ncols];
+          if (v) this.acc.add(v);
+          this.acc.add(p5.Vector.random2D().mult(0.06)); }  // jitter breaks the "snake" clumping
+        update() { this.vel.add(this.acc); this.vel.limit(this.max); this.pos.add(this.vel); this.acc.mult(0); }
+        edges() { if (this.pos.x > p.width) this.pos.x = 0; if (this.pos.x < 0) this.pos.x = p.width;
+          if (this.pos.y > p.height) this.pos.y = 0; if (this.pos.y < 0) this.pos.y = p.height; }
+        show() { p.stroke(this.col[0], this.col[1], this.col[2], 72); p.strokeWeight(1.6);
+          p.point(this.pos.x, this.pos.y); }
+      }
+      p.setup = () => {
+        p.createCanvas(p.windowWidth, p.windowHeight).parent(container);
+        p.pixelDensity(1); p.frameRate(30); reseed();
+        const N = Math.min(1000, Math.floor(p.width * p.height / 2100));
+        for (let i = 0; i < N; i++) parts.push(new Particle());
+        p.background(bgR, bgG, bgB);
+      };
+      p.draw = () => {
+        p.background(bgR, bgG, bgB, 16);  // translucent wash → slow fading trails
+        let yoff = 0;
+        for (let y = 0; y < nrows; y++) { let xoff = 0;
+          for (let x = 0; x < ncols; x++) {
+            const v = p5.Vector.fromAngle(p.noise(xoff, yoff, zoff) * p.TWO_PI * 2);
+            v.setMag(0.2); field[x + y * ncols] = v; xoff += inc; }
+          yoff += inc; }
+        zoff += 0.0006;
+        for (const pt of parts) { pt.follow(field); pt.update(); pt.edges(); pt.show(); }
+        if (reduced && p.frameCount > 140) p.noLoop();  // settle to a still field
+      };
+      p.windowResized = () => { p.resizeCanvas(p.windowWidth, p.windowHeight); reseed();
+        p.background(bgR, bgG, bgB); };
+    };
+  };
+
   const SKIN = {
     crt: {
       css: `
@@ -1453,6 +1514,36 @@ setInterval(() => {
         return () => fx.remove();
       },
     },
+    flowfield: {
+      // canvas sits BEHIND content (z-index:-1); body bg goes transparent for
+      // this world so the field shows, with a dark base on the container to
+      // avoid a flash before p5 loads. Cards/inputs are made opaque so the field
+      // stays strictly behind them. A faint top wash keeps header text legible.
+      css: `
+        body[data-theme="flow"] { background:transparent;
+          /* cards/inputs go barely translucent so the field whispers through */
+          --card-bg:rgba(255,255,255,.9); --card-hot:rgba(255,240,244,.92); --input-bg:rgba(255,255,255,.9); }
+        body[data-theme="flow"] #modal,
+        body[data-theme="flow"] .sess-modal,
+        body[data-theme="flow"] .theme-modal,
+        body[data-theme="flow"] .act-modal { background:rgba(252,243,246,.93); }
+        /* softened, pastel p5 pink for the session/terminal pills */
+        body[data-theme="flow"] .pill { background:#ea6e96; color:#fff; }
+        body[data-theme="flow"] .pill.active { outline-color:#ea6e96; }
+        .flow-fx { position:fixed; inset:0; z-index:-1; pointer-events:none; background:#fcf3f6; }
+        .flow-fx canvas { display:block; }
+        .flow-fx::after { content:""; position:absolute; inset:0;
+          background:linear-gradient(to bottom, rgba(252,243,246,.72), transparent 20%); }`,
+      mount(theme) {
+        const container = document.createElement("div");
+        container.className = "flow-fx";
+        document.body.appendChild(container);
+        let inst = null, alive = true;
+        loadP5().then(() => { if (alive) inst = new p5(makeFlowSketch(theme, container), container); })
+          .catch(() => {});
+        return () => { alive = false; if (inst) inst.remove(); container.remove(); };
+      },
+    },
   };
   const skinStyle = document.createElement("style");
   skinStyle.textContent = Object.values(SKIN).map(s => s.css || "").join("\n");
@@ -1467,7 +1558,7 @@ setInterval(() => {
     // swap the skin overlay: tear down the previous, mount the new world's
     if (skinTeardown) { skinTeardown(); skinTeardown = null; }
     const sk = THEME[t].skin;
-    if (sk && SKIN[sk]) skinTeardown = SKIN[sk].mount();
+    if (sk && SKIN[sk]) skinTeardown = SKIN[sk].mount(THEME[t]);
     // the drawer + #dterm padding frame the terminal — match its bg so there's
     // no off-theme dark border around the canvas
     document.documentElement.style.setProperty("--term-bg", THEME[t].term.bg);
