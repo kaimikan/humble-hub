@@ -1626,7 +1626,10 @@ setInterval(() => {
     .theme-card .dots { display:flex; gap:.35rem; }
     .theme-card .dots span { width:.7rem; height:.7rem; border-radius:50%; display:inline-block; }
     .theme-card .t-name { display:block; padding:.3rem 0; font-variant:small-caps;
-      letter-spacing:.06em; font-size:.85rem; color:var(--ink); }`;
+      letter-spacing:.06em; font-size:.85rem; color:var(--ink); }
+    .theme-section { margin:1rem 0 .2rem; padding-top:.75rem; font-variant:small-caps;
+      letter-spacing:.12em; font-size:.78rem; color:var(--ink-soft);
+      border-top:1px solid var(--ink-faint); }`;
   document.head.appendChild(pStyle);
 
   const overlay = document.createElement("div");
@@ -1636,16 +1639,14 @@ setInterval(() => {
   modal.className = "theme-modal";
   modal.innerHTML = '<div class="m-head"><h3>themes</h3>'
     + '<button class="t-close" title="close">' + ICON_CLOSE + "</button></div>";
-  const row = document.createElement("div");
-  row.className = "theme-row";
-  for (const k of THEME_ORDER) {
+  // every part of a card renders in ITS theme (bg, ink, font) — not the active
+  // one; the card's own bg fills behind the stack
+  const makeCard = (k) => {
     const t = THEME[k];
     const dots = [t.lapis, t.sanguine, t.verdigris, t.ochre];
     const card = document.createElement("button");
     card.className = "theme-card";
     card.dataset.theme = k;
-    // every part of the card renders in ITS theme (bg, ink, font) — not the
-    // currently active one; the card's own bg fills behind the stack
     card.style.background = t.bg;
     card.innerHTML = `
       <span class="swatch" style="background:${t.bg}; font-family:${t.font}">
@@ -1655,9 +1656,26 @@ setInterval(() => {
       <span class="t-name" style="background:${t.bg}; color:${t.ink};
         font-family:${t.font}; border-top:1px solid rgba(128,128,128,.35)">${t.name}</span>`;
     card.onclick = () => apply(k);
-    row.appendChild(card);
-  }
+    return card;
+  };
+  // plain palettes up top; generative "worlds" (themes carrying a skin) get
+  // their own section at the bottom
+  const plain = THEME_ORDER.filter(k => !THEME[k].skin);
+  const worlds = THEME_ORDER.filter(k => THEME[k].skin);
+  const row = document.createElement("div");
+  row.className = "theme-row";
+  plain.forEach(k => row.appendChild(makeCard(k)));
   modal.appendChild(row);
+  if (worlds.length) {
+    const sec = document.createElement("div");
+    sec.className = "theme-section";
+    sec.textContent = "special · worlds";
+    modal.appendChild(sec);
+    const wrow = document.createElement("div");
+    wrow.className = "theme-row";
+    worlds.forEach(k => wrow.appendChild(makeCard(k)));
+    modal.appendChild(wrow);
+  }
   overlay.appendChild(modal);
   document.body.appendChild(overlay);
 
