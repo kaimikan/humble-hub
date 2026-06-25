@@ -1544,6 +1544,64 @@ setInterval(() => {
         return () => { alive = false; if (inst) inst.remove(); container.remove(); };
       },
     },
+    // material skin (CSS only, no mount): Mac OS X Aqua — gel buttons, glossy
+    // panels, pinstripe desktop. Gel recipe adapted from btxx.org / GirlieMac.
+    aqua: {
+      css: `
+        /* pinstripe desktop over a cool blue-grey wash */
+        body[data-theme="aqua"] {
+          background:
+            repeating-linear-gradient(to bottom, rgba(60,90,140,0) 0 1px, rgba(60,90,140,.05) 1px 2px),
+            linear-gradient(to bottom, #e8eef7, #d6e0ee);
+          background-attachment:fixed;
+          --card-bg:#ffffff; --card-hot:#f2f6fc; --input-bg:#ffffff; }
+        /* glossy white panels */
+        body[data-theme="aqua"] .card {
+          border-radius:11px; border:1px solid rgba(120,140,170,.45);
+          background:linear-gradient(to bottom, #ffffff 0%, #eef3f9 100%);
+          box-shadow:0 6px 16px rgba(40,70,120,.16), inset 0 1px 0 rgba(255,255,255,.95); }
+        /* gel base shared by buttons / chips / pills */
+        body[data-theme="aqua"] .card button,
+        body[data-theme="aqua"] .card .btn,
+        body[data-theme="aqua"] .chip,
+        body[data-theme="aqua"] .pill {
+          position:relative; border-radius:999px; overflow:visible;
+          box-shadow:inset 0 1px 0 rgba(255,255,255,.9), 0 1px 2px rgba(0,0,0,.14); }
+        /* the signature top-half shine */
+        body[data-theme="aqua"] .card button::before,
+        body[data-theme="aqua"] .card .btn::before,
+        body[data-theme="aqua"] .chip::before,
+        body[data-theme="aqua"] .pill::before {
+          content:""; position:absolute; left:6%; top:1px; width:88%; height:42%;
+          border-radius:999px; pointer-events:none;
+          background:linear-gradient(to bottom, rgba(255,255,255,.85), rgba(255,255,255,0)); }
+        /* graphite (default) gel face */
+        body[data-theme="aqua"] .card button,
+        body[data-theme="aqua"] .card .btn,
+        body[data-theme="aqua"] .chip {
+          border:1px solid #b6c0cd; color:#2a3543; text-shadow:0 1px 0 rgba(255,255,255,.7);
+          background:linear-gradient(to bottom, #ffffff 0, #f1f4f8 48%, #e7ecf2 52%, #dfe6ee 100%); }
+        body[data-theme="aqua"] .card button:hover,
+        body[data-theme="aqua"] .card .btn:hover,
+        body[data-theme="aqua"] .chip:hover {
+          color:#1a2330;
+          background:linear-gradient(to bottom, #ffffff 0, #f7fafd 48%, #eef3f8 52%, #e6ecf3 100%); }
+        /* blue gel: primary actions, active filter chip, session pills */
+        body[data-theme="aqua"] .card .b-go,
+        body[data-theme="aqua"] .chip.active,
+        body[data-theme="aqua"] .pill {
+          border:1px solid #2c6098; color:#fff; text-shadow:0 -1px 0 rgba(0,0,0,.3);
+          background:linear-gradient(to bottom, #7cc3ff 0, #3f8bd4 48%, #2f78c4 52%, #2d6fb8 100%); }
+        /* keep icon-only buttons (favourite star) flat, not blue gels */
+        body[data-theme="aqua"] .card .b-fav {
+          background:none; border:0; box-shadow:none; }
+        body[data-theme="aqua"] .card .b-fav::before { display:none; }
+        /* inset Aqua search field */
+        body[data-theme="aqua"] input[type=text],
+        body[data-theme="aqua"] input[type=search] {
+          border-radius:999px; border:1px solid #b6c0cd; background:#fff;
+          box-shadow:inset 0 1px 3px rgba(0,0,0,.14); }`,
+    },
   };
   const skinStyle = document.createElement("style");
   skinStyle.textContent = Object.values(SKIN).map(s => s.css || "").join("\n");
@@ -1558,7 +1616,7 @@ setInterval(() => {
     // swap the skin overlay: tear down the previous, mount the new world's
     if (skinTeardown) { skinTeardown(); skinTeardown = null; }
     const sk = THEME[t].skin;
-    if (sk && SKIN[sk]) skinTeardown = SKIN[sk].mount(THEME[t]);
+    if (sk && SKIN[sk] && SKIN[sk].mount) skinTeardown = SKIN[sk].mount(THEME[t]);
     // the drawer + #dterm padding frame the terminal — match its bg so there's
     // no off-theme dark border around the canvas
     document.documentElement.style.setProperty("--term-bg", THEME[t].term.bg);

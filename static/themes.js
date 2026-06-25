@@ -58,8 +58,15 @@ const THEME = {
     lapis:"#2f6df0", sanguine:"#ed225d", verdigris:"#1f9d57", ochre:"#c98a1f", plum:"#8a3fd1",
     flow:["#ed225d","#4a2fd6"],
     term:{ bg:"#0e1018", fg:"#e8ecf5", ansi:["#1b1f2e","#ed225d","#3fd08a","#e0b341","#5b8cff","#c77dff","#46d0e0","#cfd6e6","#3a4258","#ff5d83","#5fe0a3","#f0c75e","#83a8ff","#d49bff","#6fe0ee","#ffffff"] } },
+  // glossy "world": Mac OS X Aqua — pinstripe desktop, gel buttons, glassy
+  // panels. A material skin (restyles surfaces) rather than an overlay/canvas;
+  // Lucida Grande is the period system font. Blue #2f78c4 + the traffic lights.
+  aqua:     { name:"aqua", mode:"light", skin:"aqua", font:"'Lucida Grande','Helvetica Neue',Helvetica,Arial,sans-serif",
+    bg:"#dde5f0", paper:"#ffffff", ink:"#1f2937", inkSoft:"#5a6b80", inkFaint:"#9babc0",
+    lapis:"#2f78c4", sanguine:"#e0463a", verdigris:"#1f9e3d", ochre:"#e0a020", plum:"#8a52c4",
+    term:{ bg:"#1f2430", fg:"#d7deea", ansi:["#2a3140","#e0463a","#3fae5a","#e0a020","#3f8bd4","#a06fe0","#3fb0c8","#cdd6e4","#3d4759","#ef6a5e","#5fce7a","#f0c050","#6fb0ee","#c49bf0","#6fd0e4","#ffffff"] } },
 };
-const THEME_ORDER = ["codex","lapis","koi","phosphor","graphite","nord","zenburn","frappe","gruvbox","rosepine","flow"];
+const THEME_ORDER = ["codex","lapis","koi","phosphor","graphite","nord","zenburn","frappe","gruvbox","rosepine","flow","aqua"];
 const THEME_MIGRATE = { matrix: "phosphor", dragon: "koi" };  // renamed themes
 
 // resolve a stored key to a current, valid theme key (handles renames)
