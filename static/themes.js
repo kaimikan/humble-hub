@@ -21,7 +21,7 @@ const THEME = {
     bg:"#fff3da", paper:"#ffe9c2", ink:"#33250e", inkSoft:"#a65c00", inkFaint:"#cf9544",
     lapis:"#1f4dd8", sanguine:"#f56f00", verdigris:"#2eaf5d", ochre:"#e6a817", plum:"#8c4ddd",
     term:{ bg:"#1a1410", fg:"#ffe9c2", ansi:["#2a1f15","#f5503c","#2eaf5d","#e6a817","#2f6df0","#c266ff","#2bb0c8","#ffe9c2","#4a3520","#ff6e54","#46c873","#ffbe3a","#5a8cff","#d488ff","#4cc8de","#fff4dc"] } },
-  phosphor: { name:"phosphor", mode:"dark", font:"'JetBrains Mono','Hack','Noto Sans Mono',monospace",
+  phosphor: { name:"crt", mode:"dark", skin:"crt", font:"'JetBrains Mono','Hack','Noto Sans Mono',monospace",
     bg:"#050905", paper:"#0b140c", ink:"#a8ffbe", inkSoft:"#52d98b", inkFaint:"#2e7d52",
     lapis:"#36e3a0", sanguine:"#ff5470", verdigris:"#2ecf7a", ochre:"#9fe06a", plum:"#36b88f",
     term:{ bg:"#050d07", fg:"#a8ffbe", ansi:["#0a160d","#ff5470","#36e3a0","#9fe06a","#2ee6c0","#7df0b0","#5affd0","#c8ffd8","#163a24","#ff7088","#5affb8","#b6f07a","#56f0d2","#9bf6c4","#86ffe0","#e6fff0"] } },
@@ -49,8 +49,31 @@ const THEME = {
     bg:"#191724", paper:"#1f1d2e", ink:"#e0def4", inkSoft:"#908caa", inkFaint:"#6e6a86",
     lapis:"#31748f", sanguine:"#eb6f92", verdigris:"#9ccfd8", ochre:"#f6c177", plum:"#c4a7e7",
     term:{ bg:"#191724", fg:"#e0def4", ansi:["#26233a","#eb6f92","#31748f","#f6c177","#9ccfd8","#c4a7e7","#ebbcba","#e0def4","#6e6a86","#eb6f92","#31748f","#f6c177","#9ccfd8","#c4a7e7","#ebbcba","#e0def4"] } },
+  // generative "world": a p5.js flow field behind a LIGHT UI styled after the
+  // p5js.org website — near-white bg, signature brand pink (#ed225d), near-black
+  // ink. `flow` is the 2-colour particle scheme the skin reads (pink + a deep
+  // indigo so trails stay legible on light). Terminal stays dark, as elsewhere.
+  flow:     { name:"p5 flow", mode:"light", skin:"flowfield", font:"system-ui,'Segoe UI',sans-serif",
+    bg:"#fcf3f6", paper:"#ffffff", ink:"#1d1b1f", inkSoft:"#6b5560", inkFaint:"#b6a0a8",
+    lapis:"#2f6df0", sanguine:"#ed225d", verdigris:"#1f9d57", ochre:"#c98a1f", plum:"#8a3fd1",
+    flow:["#ed225d","#4a2fd6"],
+    term:{ bg:"#0e1018", fg:"#e8ecf5", ansi:["#1b1f2e","#ed225d","#3fd08a","#e0b341","#5b8cff","#c77dff","#46d0e0","#cfd6e6","#3a4258","#ff5d83","#5fe0a3","#f0c75e","#83a8ff","#d49bff","#6fe0ee","#ffffff"] } },
+  // glossy "world": Mac OS X Aqua — pinstripe desktop, gel buttons, glassy
+  // panels. A material skin (restyles surfaces) rather than an overlay/canvas;
+  // Lucida Grande is the period system font. Blue #2f78c4 + the traffic lights.
+  aqua:     { name:"aqua", mode:"light", skin:"aqua", font:"'Lucida Grande','Helvetica Neue',Helvetica,Arial,sans-serif",
+    bg:"#dde5f0", paper:"#ffffff", ink:"#1f2937", inkSoft:"#5a6b80", inkFaint:"#9babc0",
+    lapis:"#2f78c4", sanguine:"#e0463a", verdigris:"#1f9e3d", ochre:"#e0a020", plum:"#8a52c4",
+    term:{ bg:"#1f2430", fg:"#d7deea", ansi:["#2a3140","#e0463a","#3fae5a","#e0a020","#3f8bd4","#a06fe0","#3fb0c8","#cdd6e4","#3d4759","#ef6a5e","#5fce7a","#f0c050","#6fb0ee","#c49bf0","#6fd0e4","#ffffff"] } },
+  // joke "world": peak-2000s GeoCities — starfield desktop, Comic Sans, neon
+  // bevels, rainbow WordArt, blinking UNDER CONSTRUCTION, a scrolling marquee,
+  // a visitor counter and a glitter cursor trail. Deliberately maximalist.
+  geocities:{ name:"geocities", mode:"dark", skin:"geocities", font:"'Comic Sans MS','Comic Sans','Chalkboard SE',cursive",
+    bg:"#05010f", paper:"#160a33", ink:"#e8ffe8", inkSoft:"#9fd0ff", inkFaint:"#7a6ab0",
+    lapis:"#00e0ff", sanguine:"#ff2d95", verdigris:"#39ff14", ochre:"#ffe600", plum:"#b14bff",
+    term:{ bg:"#05010f", fg:"#39ff14", ansi:["#1a1030","#ff2d95","#39ff14","#ffe600","#00e0ff","#b14bff","#00e0ff","#e8ffe8","#4a3a7a","#ff6cb5","#7dff5c","#fff04d","#6cefff","#cb86ff","#6cefff","#ffffff"] } },
 };
-const THEME_ORDER = ["codex","lapis","koi","phosphor","graphite","nord","zenburn","frappe","gruvbox","rosepine"];
+const THEME_ORDER = ["codex","lapis","koi","phosphor","graphite","nord","zenburn","frappe","gruvbox","rosepine","flow","aqua","geocities"];
 const THEME_MIGRATE = { matrix: "phosphor", dragon: "koi" };  // renamed themes
 
 // resolve a stored key to a current, valid theme key (handles renames)

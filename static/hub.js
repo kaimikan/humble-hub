@@ -1423,11 +1423,264 @@ setInterval(() => {
   }).join("\n");
   document.head.appendChild(style);
 
+  // --- skin layer (theme-worlds): a theme may carry an optional `skin` that
+  // goes beyond the palette — extra CSS + mounted overlay DOM (scanlines, a
+  // live canvas, etc). Each skin: { css } static rules injected once, scoped to
+  // its own body[data-theme]; mount() returns a teardown fn run on theme change.
+  // This is the hook a future p5.js "world" mounts its sketch canvas into.
+
+  // lazy-load the vendored p5.js once, only when a generative world mounts
+  let _p5load = null;
+  const loadP5 = () => window.p5 ? Promise.resolve()
+    : (_p5load = _p5load || new Promise((res, rej) => {
+        const s = document.createElement("script");
+        s.src = "/static/vendor/p5.min.js"; s.onload = res; s.onerror = rej;
+        document.head.appendChild(s);
+      }));
+
+  // flow-field sketch (adapted from p5-playground/flow-field to instance mode):
+  // a Perlin-noise vector field driving particles, tinted from the theme's own
+  // pigments and fading as slow trails so it reads as one cohesive world.
+  const makeFlowSketch = (theme, container) => {
+    const [bgR, bgG, bgB] = _hx(theme.bg);
+    // a designed 2-colour scheme if the theme defines `flow`, else its pigments
+    const palette = (theme.flow || [theme.lapis, theme.verdigris, theme.plum, theme.ochre, theme.sanguine]).map(_hx);
+    const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const scl = 14, inc = 0.16;  // higher = more turbulent field, shorter streamlines
+    return (p) => {
+      let parts = [], field, ncols, nrows, zoff = 0;
+      const reseed = () => { ncols = p.floor(p.width / scl); nrows = p.floor(p.height / scl);
+        field = new Array(ncols * nrows); };
+      class Particle {
+        constructor() { this.pos = p.createVector(p.random(p.width), p.random(p.height));
+          this.vel = p.createVector(0, 0); this.acc = p.createVector(0, 0);
+          this.max = p.random(1.0, 2.2);  // per-particle speed → they desync, don't ride as one
+          this.col = palette[(p.random(palette.length)) | 0]; }
+        follow(f) { const v = f[p.floor(this.pos.x / scl) + p.floor(this.pos.y / scl) * ncols];
+          if (v) this.acc.add(v);
+          this.acc.add(p5.Vector.random2D().mult(0.06)); }  // jitter breaks the "snake" clumping
+        update() { this.vel.add(this.acc); this.vel.limit(this.max); this.pos.add(this.vel); this.acc.mult(0); }
+        edges() { if (this.pos.x > p.width) this.pos.x = 0; if (this.pos.x < 0) this.pos.x = p.width;
+          if (this.pos.y > p.height) this.pos.y = 0; if (this.pos.y < 0) this.pos.y = p.height; }
+        show() { p.stroke(this.col[0], this.col[1], this.col[2], 72); p.strokeWeight(1.6);
+          p.point(this.pos.x, this.pos.y); }
+      }
+      p.setup = () => {
+        p.createCanvas(p.windowWidth, p.windowHeight).parent(container);
+        p.pixelDensity(1); p.frameRate(30); reseed();
+        const N = Math.min(1000, Math.floor(p.width * p.height / 2100));
+        for (let i = 0; i < N; i++) parts.push(new Particle());
+        p.background(bgR, bgG, bgB);
+      };
+      p.draw = () => {
+        p.background(bgR, bgG, bgB, 16);  // translucent wash → slow fading trails
+        let yoff = 0;
+        for (let y = 0; y < nrows; y++) { let xoff = 0;
+          for (let x = 0; x < ncols; x++) {
+            const v = p5.Vector.fromAngle(p.noise(xoff, yoff, zoff) * p.TWO_PI * 2);
+            v.setMag(0.2); field[x + y * ncols] = v; xoff += inc; }
+          yoff += inc; }
+        zoff += 0.0006;
+        for (const pt of parts) { pt.follow(field); pt.update(); pt.edges(); pt.show(); }
+        if (reduced && p.frameCount > 140) p.noLoop();  // settle to a still field
+      };
+      p.windowResized = () => { p.resizeCanvas(p.windowWidth, p.windowHeight); reseed();
+        p.background(bgR, bgG, bgB); };
+    };
+  };
+
+  const SKIN = {
+    crt: {
+      css: `
+        body[data-theme="phosphor"] { text-shadow:0 0 1px var(--lapis), 0 0 8px rgba(54,227,160,.38); }
+        body[data-theme="phosphor"] .card-title, body[data-theme="phosphor"] h1,
+        body[data-theme="phosphor"] h2, body[data-theme="phosphor"] h3 {
+          text-shadow:0 0 2px var(--lapis), 0 0 13px rgba(54,227,160,.5); }
+        /* z-index 65: above the drawer (50) + its backdrop (60) so the FX land
+           on the terminal too, but below menus/modals/toasts (70-100). */
+        .crt-fx { position:fixed; inset:0; pointer-events:none; z-index:65; }
+        .crt-fx > div { position:absolute; inset:0; }
+        .crt-fx .scan { mix-blend-mode:multiply;
+          background:repeating-linear-gradient(to bottom,
+            rgba(0,0,0,0) 0, rgba(0,0,0,0) 2px, rgba(0,0,0,.18) 3px, rgba(0,0,0,0) 4px); }
+        /* curvature via a smooth vignette falloff only — no hard dome edge */
+        .crt-fx .vig {
+          background:radial-gradient(ellipse 115% 115% at center, transparent 55%, rgba(0,0,0,.62) 100%); }`,
+      mount() {
+        const fx = document.createElement("div");
+        fx.className = "crt-fx";
+        fx.innerHTML = '<div class="scan"></div><div class="vig"></div>';
+        document.body.appendChild(fx);
+        return () => fx.remove();
+      },
+    },
+    flowfield: {
+      // canvas sits BEHIND content (z-index:-1); body bg goes transparent for
+      // this world so the field shows, with a dark base on the container to
+      // avoid a flash before p5 loads. Cards/inputs are made opaque so the field
+      // stays strictly behind them. A faint top wash keeps header text legible.
+      css: `
+        body[data-theme="flow"] { background:transparent;
+          /* cards/inputs go barely translucent so the field whispers through */
+          --card-bg:rgba(255,255,255,.9); --card-hot:rgba(255,240,244,.92); --input-bg:rgba(255,255,255,.9); }
+        body[data-theme="flow"] #modal,
+        body[data-theme="flow"] .sess-modal,
+        body[data-theme="flow"] .theme-modal,
+        body[data-theme="flow"] .act-modal { background:rgba(252,243,246,.93); }
+        /* softened, pastel p5 pink for the session/terminal pills */
+        body[data-theme="flow"] .pill { background:#ea6e96; color:#fff; }
+        body[data-theme="flow"] .pill.active { outline-color:#ea6e96; }
+        .flow-fx { position:fixed; inset:0; z-index:-1; pointer-events:none; background:#fcf3f6; }
+        .flow-fx canvas { display:block; }
+        .flow-fx::after { content:""; position:absolute; inset:0;
+          background:linear-gradient(to bottom, rgba(252,243,246,.72), transparent 20%); }`,
+      mount(theme) {
+        const container = document.createElement("div");
+        container.className = "flow-fx";
+        document.body.appendChild(container);
+        let inst = null, alive = true;
+        loadP5().then(() => { if (alive) inst = new p5(makeFlowSketch(theme, container), container); })
+          .catch(() => {});
+        return () => { alive = false; if (inst) inst.remove(); container.remove(); };
+      },
+    },
+    // material skin (CSS only, no mount): Mac OS X Aqua — gel buttons, glossy
+    // panels, pinstripe desktop. Gel recipe adapted from btxx.org / GirlieMac.
+    aqua: {
+      css: `
+        /* pinstripe desktop over a cool blue-grey wash */
+        body[data-theme="aqua"] {
+          background:
+            repeating-linear-gradient(to bottom, rgba(60,90,140,0) 0 1px, rgba(60,90,140,.05) 1px 2px),
+            linear-gradient(to bottom, #e8eef7, #d6e0ee);
+          background-attachment:fixed;
+          --card-bg:#ffffff; --card-hot:#f2f6fc; --input-bg:#ffffff; }
+        /* glossy white panels */
+        body[data-theme="aqua"] .card {
+          border-radius:11px; border:1px solid rgba(120,140,170,.45);
+          background:linear-gradient(to bottom, #ffffff 0%, #eef3f9 100%);
+          box-shadow:0 6px 16px rgba(40,70,120,.16), inset 0 1px 0 rgba(255,255,255,.95); }
+        /* gel base shared by buttons / chips / pills */
+        body[data-theme="aqua"] .card button,
+        body[data-theme="aqua"] .card .btn,
+        body[data-theme="aqua"] .chip,
+        body[data-theme="aqua"] .pill {
+          position:relative; border-radius:999px; overflow:visible;
+          box-shadow:inset 0 1px 0 rgba(255,255,255,.9), 0 1px 2px rgba(0,0,0,.14); }
+        /* the signature top-half shine */
+        body[data-theme="aqua"] .card button::before,
+        body[data-theme="aqua"] .card .btn::before,
+        body[data-theme="aqua"] .chip::before,
+        body[data-theme="aqua"] .pill::before {
+          content:""; position:absolute; left:6%; top:1px; width:88%; height:42%;
+          border-radius:999px; pointer-events:none;
+          background:linear-gradient(to bottom, rgba(255,255,255,.85), rgba(255,255,255,0)); }
+        /* graphite (default) gel face */
+        body[data-theme="aqua"] .card button,
+        body[data-theme="aqua"] .card .btn,
+        body[data-theme="aqua"] .chip {
+          border:1px solid #b6c0cd; color:#2a3543; text-shadow:0 1px 0 rgba(255,255,255,.7);
+          background:linear-gradient(to bottom, #ffffff 0, #f1f4f8 48%, #e7ecf2 52%, #dfe6ee 100%); }
+        body[data-theme="aqua"] .card button:hover,
+        body[data-theme="aqua"] .card .btn:hover,
+        body[data-theme="aqua"] .chip:hover {
+          color:#1a2330;
+          background:linear-gradient(to bottom, #ffffff 0, #f7fafd 48%, #eef3f8 52%, #e6ecf3 100%); }
+        /* blue gel: primary actions, active filter chip, session pills */
+        body[data-theme="aqua"] .card .b-go,
+        body[data-theme="aqua"] .chip.active,
+        body[data-theme="aqua"] .pill {
+          border:1px solid #2c6098; color:#fff; text-shadow:0 -1px 0 rgba(0,0,0,.3);
+          background:linear-gradient(to bottom, #7cc3ff 0, #3f8bd4 48%, #2f78c4 52%, #2d6fb8 100%); }
+        /* keep icon-only buttons (favourite star) flat, not blue gels */
+        body[data-theme="aqua"] .card .b-fav {
+          background:none; border:0; box-shadow:none; }
+        body[data-theme="aqua"] .card .b-fav::before { display:none; }
+        /* inset Aqua search field */
+        body[data-theme="aqua"] input[type=text],
+        body[data-theme="aqua"] input[type=search] {
+          border-radius:999px; border:1px solid #b6c0cd; background:#fff;
+          box-shadow:inset 0 1px 3px rgba(0,0,0,.14); }`,
+    },
+    // joke world: GeoCities. CSS chrome + mounted decorations (construction
+    // banner, marquee, visitor counter) + a glitter cursor trail.
+    geocities: {
+      css: `
+        /* tiled starfield desktop */
+        body[data-theme="geocities"] {
+          background:
+            radial-gradient(1px 1px at 20% 30%, #fff, transparent),
+            radial-gradient(1px 1px at 75% 60%, #cfe, transparent),
+            radial-gradient(2px 2px at 40% 80%, #fff, transparent),
+            radial-gradient(1px 1px at 85% 18%, #ffd, transparent),
+            radial-gradient(1px 1px at 55% 45%, #fff, transparent),
+            #05010f;
+          background-size:170px 170px,210px 210px,250px 250px,190px 190px,230px 230px,auto;
+          --card-bg:#160a33; --card-hot:#23114d; --input-bg:#0c0622; }
+        /* rainbow WordArt title */
+        body[data-theme="geocities"] header h1 {
+          background:linear-gradient(90deg,#ff2d95,#ffe600,#39ff14,#00e0ff,#b14bff,#ff2d95);
+          -webkit-background-clip:text; background-clip:text; color:transparent;
+          -webkit-text-stroke:1px #fff; filter:drop-shadow(2px 2px 0 #000);
+          font-weight:bold; }
+        /* beveled neon cards */
+        body[data-theme="geocities"] .card {
+          border:4px ridge #00e0ff; border-radius:0; background:#160a33;
+          box-shadow:0 0 12px #ff2d95, inset 0 0 18px rgba(0,224,255,.15); }
+        /* loud chunky buttons */
+        body[data-theme="geocities"] .card button,
+        body[data-theme="geocities"] .card .btn,
+        body[data-theme="geocities"] .chip,
+        body[data-theme="geocities"] .pill {
+          border:3px outset #ff2d95; border-radius:0; color:#ffe600;
+          background:#3a0d5c; text-shadow:1px 1px 0 #000; font-weight:bold; }
+        body[data-theme="geocities"] .card button:hover,
+        body[data-theme="geocities"] .card .btn:hover,
+        body[data-theme="geocities"] .chip:hover {
+          background:#5a149c; color:#39ff14; }
+        body[data-theme="geocities"] .chip.active,
+        body[data-theme="geocities"] .pill {
+          background:#0d3a5c; border-color:#00e0ff; color:#39ff14; }
+        /* fixed chrome layer */
+        .geo-spark { position:fixed; pointer-events:none; z-index:9999; font-size:1rem;
+          animation:geo-fade .7s linear forwards; }
+        @keyframes geo-fade { from{opacity:1;transform:scale(1)} to{opacity:0;transform:scale(.3) translateY(7px)} }`,
+      mount() {
+        // glitter cursor trail (paused over the terminal drawer)
+        const sparks = ["✨", "⭐", "🌟", "💫"];
+        let last = 0;
+        const onMove = (e) => {
+          if (e.pointerType && e.pointerType !== "mouse") return;  // no trail on touch scroll
+          const now = performance.now();
+          if (now - last < 45 || document.body.classList.contains("drawer-open")) return;
+          last = now;
+          const s = document.createElement("span");
+          s.className = "geo-spark";
+          s.textContent = sparks[(Math.random() * sparks.length) | 0];
+          s.style.left = e.clientX + "px"; s.style.top = e.clientY + "px";
+          document.body.appendChild(s);
+          setTimeout(() => s.remove(), 700);
+        };
+        window.addEventListener("pointermove", onMove);
+        return () => { window.removeEventListener("pointermove", onMove);
+          document.querySelectorAll(".geo-spark").forEach(n => n.remove()); };
+      },
+    },
+  };
+  const skinStyle = document.createElement("style");
+  skinStyle.textContent = Object.values(SKIN).map(s => s.css || "").join("\n");
+  document.head.appendChild(skinStyle);
+  let skinTeardown = null;
+
   const apply = t => {
     if (!THEME[t]) t = "codex";
     activeTheme = t;
     if (t === "codex") delete document.body.dataset.theme;
     else document.body.dataset.theme = t;
+    // swap the skin overlay: tear down the previous, mount the new world's
+    if (skinTeardown) { skinTeardown(); skinTeardown = null; }
+    const sk = THEME[t].skin;
+    if (sk && SKIN[sk] && SKIN[sk].mount) skinTeardown = SKIN[sk].mount(THEME[t]);
     // the drawer + #dterm padding frame the terminal — match its bg so there's
     // no off-theme dark border around the canvas
     document.documentElement.style.setProperty("--term-bg", THEME[t].term.bg);
@@ -1495,7 +1748,10 @@ setInterval(() => {
     .theme-card .dots { display:flex; gap:.35rem; }
     .theme-card .dots span { width:.7rem; height:.7rem; border-radius:50%; display:inline-block; }
     .theme-card .t-name { display:block; padding:.3rem 0; font-variant:small-caps;
-      letter-spacing:.06em; font-size:.85rem; color:var(--ink); }`;
+      letter-spacing:.06em; font-size:.85rem; color:var(--ink); }
+    .theme-section { margin:1rem 0 .2rem; padding-top:.75rem; font-variant:small-caps;
+      letter-spacing:.12em; font-size:.78rem; color:var(--ink-soft);
+      border-top:1px solid var(--ink-faint); }`;
   document.head.appendChild(pStyle);
 
   const overlay = document.createElement("div");
@@ -1505,16 +1761,14 @@ setInterval(() => {
   modal.className = "theme-modal";
   modal.innerHTML = '<div class="m-head"><h3>themes</h3>'
     + '<button class="t-close" title="close">' + ICON_CLOSE + "</button></div>";
-  const row = document.createElement("div");
-  row.className = "theme-row";
-  for (const k of THEME_ORDER) {
+  // every part of a card renders in ITS theme (bg, ink, font) — not the active
+  // one; the card's own bg fills behind the stack
+  const makeCard = (k) => {
     const t = THEME[k];
     const dots = [t.lapis, t.sanguine, t.verdigris, t.ochre];
     const card = document.createElement("button");
     card.className = "theme-card";
     card.dataset.theme = k;
-    // every part of the card renders in ITS theme (bg, ink, font) — not the
-    // currently active one; the card's own bg fills behind the stack
     card.style.background = t.bg;
     card.innerHTML = `
       <span class="swatch" style="background:${t.bg}; font-family:${t.font}">
@@ -1524,9 +1778,26 @@ setInterval(() => {
       <span class="t-name" style="background:${t.bg}; color:${t.ink};
         font-family:${t.font}; border-top:1px solid rgba(128,128,128,.35)">${t.name}</span>`;
     card.onclick = () => apply(k);
-    row.appendChild(card);
-  }
+    return card;
+  };
+  // plain palettes up top; generative "worlds" (themes carrying a skin) get
+  // their own section at the bottom
+  const plain = THEME_ORDER.filter(k => !THEME[k].skin);
+  const worlds = THEME_ORDER.filter(k => THEME[k].skin);
+  const row = document.createElement("div");
+  row.className = "theme-row";
+  plain.forEach(k => row.appendChild(makeCard(k)));
   modal.appendChild(row);
+  if (worlds.length) {
+    const sec = document.createElement("div");
+    sec.className = "theme-section";
+    sec.textContent = "special · worlds";
+    modal.appendChild(sec);
+    const wrow = document.createElement("div");
+    wrow.className = "theme-row";
+    worlds.forEach(k => wrow.appendChild(makeCard(k)));
+    modal.appendChild(wrow);
+  }
   overlay.appendChild(modal);
   document.body.appendChild(overlay);
 
