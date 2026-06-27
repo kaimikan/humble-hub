@@ -633,6 +633,12 @@ function addItem(ev, kind) {
     /* T42: project tag sits ON TOP of the row; the text spans full width below */
     .jot-col li .jot-content { flex:1; min-width:0; display:flex; flex-direction:column; gap:.12rem; }
     .jot-col li .jot-content .txt { flex:none; }
+    /* idea #19: editing keeps the row's full multi-line height. flex:1 here made
+       flex-basis:0 win over the JS-set height in this column flex → one line. */
+    .jot-col li .jot-content .edit-input { flex:none; width:100%; box-sizing:border-box;
+      background:transparent; border:0; border-bottom:1px solid var(--ink-soft);
+      color:var(--ink); font:inherit; font-size:.92rem; padding:0 .1rem; outline:none;
+      resize:none; line-height:1.45; max-height:9.8rem; overflow-y:auto; }
     .jot-col li .jot-tag { align-self:flex-start; white-space:nowrap; cursor:pointer;
       font-size:.62rem; font-variant:small-caps; letter-spacing:.04em; color:var(--ink-soft);
       border:1px solid var(--ink-faint); border-radius:999px; padding:.02rem .45rem; }
