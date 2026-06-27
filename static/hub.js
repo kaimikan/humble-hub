@@ -1650,6 +1650,7 @@ setInterval(() => {
         const sparks = ["✨", "⭐", "🌟", "💫"];
         let last = 0;
         const onMove = (e) => {
+          if (e.pointerType && e.pointerType !== "mouse") return;  // no trail on touch scroll
           const now = performance.now();
           if (now - last < 45 || document.body.classList.contains("drawer-open")) return;
           last = now;
