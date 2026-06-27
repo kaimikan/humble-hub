@@ -1602,6 +1602,69 @@ setInterval(() => {
           border-radius:999px; border:1px solid #b6c0cd; background:#fff;
           box-shadow:inset 0 1px 3px rgba(0,0,0,.14); }`,
     },
+    // joke world: GeoCities. CSS chrome + mounted decorations (construction
+    // banner, marquee, visitor counter) + a glitter cursor trail.
+    geocities: {
+      css: `
+        /* tiled starfield desktop */
+        body[data-theme="geocities"] {
+          background:
+            radial-gradient(1px 1px at 20% 30%, #fff, transparent),
+            radial-gradient(1px 1px at 75% 60%, #cfe, transparent),
+            radial-gradient(2px 2px at 40% 80%, #fff, transparent),
+            radial-gradient(1px 1px at 85% 18%, #ffd, transparent),
+            radial-gradient(1px 1px at 55% 45%, #fff, transparent),
+            #05010f;
+          background-size:170px 170px,210px 210px,250px 250px,190px 190px,230px 230px,auto;
+          --card-bg:#160a33; --card-hot:#23114d; --input-bg:#0c0622; }
+        /* rainbow WordArt title */
+        body[data-theme="geocities"] header h1 {
+          background:linear-gradient(90deg,#ff2d95,#ffe600,#39ff14,#00e0ff,#b14bff,#ff2d95);
+          -webkit-background-clip:text; background-clip:text; color:transparent;
+          -webkit-text-stroke:1px #fff; filter:drop-shadow(2px 2px 0 #000);
+          font-weight:bold; }
+        /* beveled neon cards */
+        body[data-theme="geocities"] .card {
+          border:4px ridge #00e0ff; border-radius:0; background:#160a33;
+          box-shadow:0 0 12px #ff2d95, inset 0 0 18px rgba(0,224,255,.15); }
+        /* loud chunky buttons */
+        body[data-theme="geocities"] .card button,
+        body[data-theme="geocities"] .card .btn,
+        body[data-theme="geocities"] .chip,
+        body[data-theme="geocities"] .pill {
+          border:3px outset #ff2d95; border-radius:0; color:#ffe600;
+          background:#3a0d5c; text-shadow:1px 1px 0 #000; font-weight:bold; }
+        body[data-theme="geocities"] .card button:hover,
+        body[data-theme="geocities"] .card .btn:hover,
+        body[data-theme="geocities"] .chip:hover {
+          background:#5a149c; color:#39ff14; }
+        body[data-theme="geocities"] .chip.active,
+        body[data-theme="geocities"] .pill {
+          background:#0d3a5c; border-color:#00e0ff; color:#39ff14; }
+        /* fixed chrome layer */
+        .geo-spark { position:fixed; pointer-events:none; z-index:9999; font-size:1rem;
+          animation:geo-fade .7s linear forwards; }
+        @keyframes geo-fade { from{opacity:1;transform:scale(1)} to{opacity:0;transform:scale(.3) translateY(7px)} }`,
+      mount() {
+        // glitter cursor trail (paused over the terminal drawer)
+        const sparks = ["✨", "⭐", "🌟", "💫"];
+        let last = 0;
+        const onMove = (e) => {
+          const now = performance.now();
+          if (now - last < 45 || document.body.classList.contains("drawer-open")) return;
+          last = now;
+          const s = document.createElement("span");
+          s.className = "geo-spark";
+          s.textContent = sparks[(Math.random() * sparks.length) | 0];
+          s.style.left = e.clientX + "px"; s.style.top = e.clientY + "px";
+          document.body.appendChild(s);
+          setTimeout(() => s.remove(), 700);
+        };
+        window.addEventListener("pointermove", onMove);
+        return () => { window.removeEventListener("pointermove", onMove);
+          document.querySelectorAll(".geo-spark").forEach(n => n.remove()); };
+      },
+    },
   };
   const skinStyle = document.createElement("style");
   skinStyle.textContent = Object.values(SKIN).map(s => s.css || "").join("\n");

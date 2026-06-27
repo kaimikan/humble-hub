@@ -65,8 +65,15 @@ const THEME = {
     bg:"#dde5f0", paper:"#ffffff", ink:"#1f2937", inkSoft:"#5a6b80", inkFaint:"#9babc0",
     lapis:"#2f78c4", sanguine:"#e0463a", verdigris:"#1f9e3d", ochre:"#e0a020", plum:"#8a52c4",
     term:{ bg:"#1f2430", fg:"#d7deea", ansi:["#2a3140","#e0463a","#3fae5a","#e0a020","#3f8bd4","#a06fe0","#3fb0c8","#cdd6e4","#3d4759","#ef6a5e","#5fce7a","#f0c050","#6fb0ee","#c49bf0","#6fd0e4","#ffffff"] } },
+  // joke "world": peak-2000s GeoCities — starfield desktop, Comic Sans, neon
+  // bevels, rainbow WordArt, blinking UNDER CONSTRUCTION, a scrolling marquee,
+  // a visitor counter and a glitter cursor trail. Deliberately maximalist.
+  geocities:{ name:"geocities", mode:"dark", skin:"geocities", font:"'Comic Sans MS','Comic Sans','Chalkboard SE',cursive",
+    bg:"#05010f", paper:"#160a33", ink:"#e8ffe8", inkSoft:"#9fd0ff", inkFaint:"#7a6ab0",
+    lapis:"#00e0ff", sanguine:"#ff2d95", verdigris:"#39ff14", ochre:"#ffe600", plum:"#b14bff",
+    term:{ bg:"#05010f", fg:"#39ff14", ansi:["#1a1030","#ff2d95","#39ff14","#ffe600","#00e0ff","#b14bff","#00e0ff","#e8ffe8","#4a3a7a","#ff6cb5","#7dff5c","#fff04d","#6cefff","#cb86ff","#6cefff","#ffffff"] } },
 };
-const THEME_ORDER = ["codex","lapis","koi","phosphor","graphite","nord","zenburn","frappe","gruvbox","rosepine","flow","aqua"];
+const THEME_ORDER = ["codex","lapis","koi","phosphor","graphite","nord","zenburn","frappe","gruvbox","rosepine","flow","aqua","geocities"];
 const THEME_MIGRATE = { matrix: "phosphor", dragon: "koi" };  // renamed themes
 
 // resolve a stored key to a current, valid theme key (handles renames)
