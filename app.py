@@ -9,6 +9,7 @@ Localhost only.
 import asyncio
 import fcntl
 import html
+import io
 import json
 import os
 import pty
@@ -18,11 +19,24 @@ import struct
 import subprocess
 import sys
 import termios
+import uuid
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
+from fastapi import (
+    FastAPI,
+    File,
+    HTTPException,
+    Request,
+    UploadFile,
+    WebSocket,
+    WebSocketDisconnect,
+)
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
+from PIL import Image, ImageOps
+import pillow_heif
+
+pillow_heif.register_heif_opener()  # so iPhone/Oppo HEIC uploads open like JPEGs
 
 PROJECTS_DIR = Path.home() / "Projects"
 HUB_DIR = Path(__file__).resolve().parent
@@ -162,6 +176,12 @@ def scan() -> list:
 
 
 app.mount("/static", StaticFiles(directory=HUB_DIR / "static"))
+
+# Uploaded images live under data/ (git-ignored — never committed) and are
+# served read-only at /attachments/<id>.jpg. See the upload endpoint below.
+ATTACH_DIR = HUB_DIR / "data" / "attachments"
+ATTACH_DIR.mkdir(parents=True, exist_ok=True)
+app.mount("/attachments", StaticFiles(directory=ATTACH_DIR))
 
 
 # ---------------------------------------------------------------------------
@@ -397,6 +417,36 @@ def append_note(kind: str, item: dict):
         doc.setdefault(kind, []).append(entry)
         _write_notes(doc)
     return {"ok": True, "added": entry}
+
+
+# --- image uploads (attach to a jot, or drop into the inbox) ---
+
+MAX_IMG_DIM = 2000  # downscale the long edge to this; phone shots are far larger
+
+
+@app.post("/api/upload")
+async def upload_images(files: list[UploadFile] = File(...)):
+    """Accept one or more image uploads (multipart/form-data, field `files`),
+    normalise each to a web-safe, downscaled JPEG — HEIC included, orientation
+    honoured, EXIF (incl. GPS) dropped on re-encode — store under
+    data/attachments/, and return the new ids. The caller decides what to do
+    with them: attach to a to-do/idea, or push into notes.inbox. Reached from
+    the phone over `tailscale serve` (HTTPS, tailnet-only); no auth here because
+    the whole hub is localhost + tailnet only."""
+    out = []
+    for f in files:
+        raw = await f.read()
+        try:
+            img = Image.open(io.BytesIO(raw))
+            img = ImageOps.exif_transpose(img)  # bake rotation in before stripping
+            img = img.convert("RGB")
+        except Exception:
+            raise HTTPException(400, f"not a readable image: {f.filename}")
+        img.thumbnail((MAX_IMG_DIM, MAX_IMG_DIM))  # in place, keeps aspect ratio
+        name = uuid.uuid4().hex + ".jpg"
+        img.save(ATTACH_DIR / name, "JPEG", quality=85, optimize=True)
+        out.append({"id": name, "w": img.width, "h": img.height})
+    return {"images": out}
 
 
 @app.post("/api/reconcile")
@@ -1008,6 +1058,15 @@ ICONS = {
     "ideas":   '<path d="M9 18h6"/><path d="M10 21h4"/>'
                '<path d="M12 3a6 6 0 0 1 3.7 10.7c-.6.5-.9 1-.9 1.8H9.2c0-.8-.3-1.3-.9-1.8A6 6 0 0 1 12 3z"/>',
     "star":    '<path d="M12 3.5l2.6 5.3 5.9.9-4.25 4.15 1 5.85L12 17l-5.25 2.75 1-5.85L3.5 9.7l5.9-.9z"/>',
+    # an open tray with an item dropping in — the image inbox (was 📥)
+    "inbox":   '<path d="M12 3v8"/><path d="M9 8l3 3 3-3"/>'
+               '<path d="M4 14h3l2 3h6l2-3h3v4a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1z"/>',
+    # camera — the "drop an image" button (was 📷)
+    "camera":  '<path d="M21 19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2h3l1.5-2.2h5L16 7h3a2 2 0 0 1 2 2z"/>'
+               '<circle cx="12" cy="13" r="3.6"/>',
+    # paperclip — attach image(s) to a jot (was 📎, the "bobby pin")
+    "attach":  '<path d="M20 11.5l-8.2 8.2a5 5 0 0 1-7.07-7.07l8.49-8.49a3.2 3.2 0 0 1 4.53 4.53'
+               'l-8.49 8.49a1.4 1.4 0 0 1-1.98-1.98l7.6-7.6"/>',
 }
 
 
@@ -1360,6 +1419,7 @@ def index():
       </select></span>
       <button class="jot-open" onclick="openJot('todos')">{icon("todo")} to-do <span id="todos-count"></span></button>
       <button class="jot-open" onclick="openJot('ideas')">{icon("ideas")} ideas <span id="ideas-count"></span></button>
+      <button class="jot-open" id="inbox-open" onclick="openInbox()">{icon("inbox")} inbox <span id="inbox-count"></span></button>
       <input id="search" type="search" placeholder="search…" autocomplete="off" oninput="refilter()">
       <span id="filters">
         <button class="chip active" data-type="" onclick="pick(this)">all</button>
@@ -1383,13 +1443,26 @@ def index():
       </div>
       <div class="jot-col" id="col-todos">
         <ul id="todos"></ul>
-        <form onsubmit="return addItem(event,'todos')">
-          <input id="todos-input" placeholder="add a task…" autocomplete="off"></form>
+        <div class="attach-strip" id="todos-attach"></div>
+        <form onsubmit="return addItem(event,'todos')" class="jot-add">
+          <input id="todos-input" placeholder="add a task…" autocomplete="off">
+          <label class="attach-btn" title="attach image(s)">{icon("attach")}<input type="file"
+            accept="image/*" multiple onchange="pickAttach(event,'todos')" hidden></label>
+        </form>
       </div>
       <div class="jot-col" id="col-ideas">
         <ul id="ideas"></ul>
-        <form onsubmit="return addItem(event,'ideas')">
-          <input id="ideas-input" placeholder="jot an idea…" autocomplete="off"></form>
+        <div class="attach-strip" id="ideas-attach"></div>
+        <form onsubmit="return addItem(event,'ideas')" class="jot-add">
+          <input id="ideas-input" placeholder="jot an idea…" autocomplete="off">
+          <label class="attach-btn" title="attach image(s)">{icon("attach")}<input type="file"
+            accept="image/*" multiple onchange="pickAttach(event,'ideas')" hidden></label>
+        </form>
+      </div>
+      <div class="jot-col" id="col-inbox" style="display:none">
+        <ul id="inbox-list"></ul>
+        <label class="inbox-add" title="drop an image into the inbox">{icon("camera")} add image
+          <input type="file" accept="image/*" multiple onchange="dropToInbox(event)" hidden></label>
       </div>
       <div id="confirm" hidden>
         <p id="confirm-text"></p>

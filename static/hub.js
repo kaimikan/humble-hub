@@ -294,6 +294,7 @@ function renderNotes() {
         content.append(tag);
       }
       content.append(txt);
+      if (item.images && item.images.length) content.append(thumbStrip(item.images));
       li.append(left, idx, content, menuBtn);
       ul.appendChild(li);
     });
@@ -309,6 +310,11 @@ function renderNotes() {
   document.getElementById("todos-count").textContent =
     `· ${notes.todos.filter(t => !t.done).length}`;
   document.getElementById("ideas-count").textContent = `· ${notes.ideas.length}`;
+  const inboxN = (notes.inbox || []).length;
+  const ic = document.getElementById("inbox-count");
+  if (ic) ic.textContent = inboxN ? `· ${inboxN}` : "";
+  const io = document.getElementById("inbox-open");
+  if (io) io.classList.toggle("has-items", inboxN > 0);
   refreshProjectFilter();
   updateAddHints();
 }
@@ -475,11 +481,12 @@ async function openJot(kind) {
   document.getElementById("m-title").textContent = kind === "todos" ? "to-do" : "ideas";
   document.getElementById("col-todos").style.display = kind === "todos" ? "" : "none";
   document.getElementById("col-ideas").style.display = kind === "ideas" ? "" : "none";
+  document.getElementById("col-inbox").style.display = "none";
   const tf = document.getElementById("todo-filter"); // all/active/done is to-do-only
   if (tf) tf.style.display = kind === "todos" ? "flex" : "none";
   jotKind = kind;
   const sw = document.getElementById("jot-switch");
-  if (sw) sw.textContent = kind === "todos" ? "→ ideas" : "→ to-do";
+  if (sw) { sw.style.display = ""; sw.textContent = kind === "todos" ? "→ ideas" : "→ to-do"; }
   cancelDelete();
   // on phones, auto-focusing the add-input pops the soft keyboard and shoves
   // the list off-screen before you can read it — only autofocus on desktop
@@ -573,9 +580,14 @@ function addItem(ev, kind) {
   ev.preventDefault();
   const input = document.getElementById(`${kind}-input`);
   const text = input.value.trim();
+  const imgs = pendingAttach[kind];
+  // unified attach: text + image(s) → a filed note; image(s) alone → the inbox
+  // (capture now, write the note later). Bare submit with nothing does nothing.
+  if (!text && imgs.length) { imgsToInbox(imgs); clearAttach(kind); return false; }
   if (text) {
     const item = kind === "todos" ? { text, done: false } : { text };
     if (jotProject) item.project = jotProject; // adding while filtered tags it
+    if (imgs.length) { item.images = imgs.slice(); clearAttach(kind); }
     notes[kind].push(item);
     input.value = "";
     renderNotes();
@@ -590,6 +602,229 @@ function addItem(ev, kind) {
   }
   return false;
 }
+
+// --- image attachments & the drop-inbox -------------------------------------
+// One uploader feeds two flows (the unified attach button, see addItem): pick
+// image(s) on a jot → they ride along when you file the note; pick with no text
+// → they fall into the inbox to triage later. /api/upload normalises each image
+// server-side (downscaled JPEG, EXIF/GPS stripped) and returns its id.
+let pendingAttach = { todos: [], ideas: [] };
+
+async function uploadFiles(fileList) {
+  const files = [...fileList];
+  if (!files.length) return [];
+  const fd = new FormData();
+  for (const f of files) fd.append("files", f);
+  let res;
+  try { res = await fetch("/api/upload", { method: "POST", body: fd }); }
+  catch { alert("upload failed — no connection?"); return []; }
+  if (!res.ok) { alert("upload failed — image not readable?"); return []; }
+  return (await res.json()).images.map(im => im.id);
+}
+
+async function pickAttach(ev, kind) {
+  const inp = ev.target;
+  const ids = await uploadFiles(inp.files);
+  inp.value = "";                       // let the same file be re-picked later
+  pendingAttach[kind].push(...ids);
+  renderAttachStrip(kind);
+}
+
+function clearAttach(kind) { pendingAttach[kind] = []; renderAttachStrip(kind); }
+
+function renderAttachStrip(kind) {
+  const strip = document.getElementById(`${kind}-attach`);
+  if (!strip) return;
+  strip.innerHTML = "";
+  pendingAttach[kind].forEach((id, i) => {
+    const wrap = document.createElement("span");
+    wrap.className = "attach-thumb";
+    const img = document.createElement("img");
+    img.src = `/attachments/${id}`;
+    const x = document.createElement("button");
+    x.type = "button"; x.className = "attach-x"; x.textContent = "✕"; x.title = "remove";
+    x.onclick = () => { pendingAttach[kind].splice(i, 1); renderAttachStrip(kind); };
+    wrap.append(img, x);
+    strip.appendChild(wrap);
+  });
+  strip.classList.toggle("has", pendingAttach[kind].length > 0);
+}
+
+// thumbnails shown on a filed note / inbox card; click opens the full image
+function thumbStrip(ids) {
+  const strip = document.createElement("div");
+  strip.className = "jot-thumbs";
+  ids.forEach(id => {
+    const a = document.createElement("a");
+    a.href = `/attachments/${id}`; a.target = "_blank"; a.rel = "noopener";
+    const img = document.createElement("img");
+    img.src = `/attachments/${id}`; img.loading = "lazy";
+    a.appendChild(img);
+    strip.appendChild(a);
+  });
+  return strip;
+}
+
+function imgsToInbox(ids) {
+  notes.inbox = notes.inbox || [];
+  ids.forEach(id => notes.inbox.push({ img: id }));
+  renderNotes();
+  if (document.getElementById("col-inbox").style.display !== "none") renderInbox();
+  saveNotesNow();
+}
+
+async function dropToInbox(ev) {
+  const inp = ev.target;
+  const ids = await uploadFiles(inp.files);
+  inp.value = "";
+  if (ids.length) imgsToInbox(ids);
+}
+
+function openInbox() {
+  loadNotes().then(() => {
+    document.getElementById("overlay").hidden = false;
+    document.getElementById("m-title").textContent = "inbox";
+    document.getElementById("col-todos").style.display = "none";
+    document.getElementById("col-ideas").style.display = "none";
+    document.getElementById("col-inbox").style.display = "";
+    const tf = document.getElementById("todo-filter");
+    if (tf) tf.style.display = "none";
+    const sw = document.getElementById("jot-switch");
+    if (sw) sw.style.display = "none";   // no to-do⇄ideas toggle from the inbox
+    cancelDelete();
+    renderInbox();
+  });
+}
+
+function renderInbox() {
+  const ul = document.getElementById("inbox-list");
+  ul.innerHTML = "";
+  const items = notes.inbox || [];
+  if (!items.length) {
+    const li = document.createElement("li");
+    li.className = "empty-hint";
+    li.textContent = "inbox empty — drop an image to capture it.";
+    ul.appendChild(li);
+    return;
+  }
+  items.forEach((item, i) => {
+    const li = document.createElement("li");
+    li.className = "inbox-row";
+    const a = document.createElement("a");
+    a.href = `/attachments/${item.img}`; a.target = "_blank"; a.rel = "noopener";
+    a.className = "inbox-thumb";
+    const img = document.createElement("img");
+    img.src = `/attachments/${item.img}`; img.loading = "lazy";
+    a.appendChild(img);
+
+    const body = document.createElement("div");
+    body.className = "inbox-body";
+    const cap = document.createElement("input");
+    cap.className = "inbox-cap";
+    cap.placeholder = "describe it (optional)…";
+    cap.value = item.caption || "";
+    cap.oninput = () => { item.caption = cap.value; saveNotes(); };
+
+    const row = document.createElement("div");
+    row.className = "inbox-actions";
+    const del = mkInboxBtn("✕", () => removeInbox(i)); del.classList.add("danger");
+    row.append(mkInboxBtn("→ to-do", () => promoteInbox(i, "todos")),
+               mkInboxBtn("→ idea", () => promoteInbox(i, "ideas")), del);
+    body.append(cap, row);
+    li.append(a, body);
+    ul.appendChild(li);
+  });
+}
+
+function mkInboxBtn(label, fn) {
+  const b = document.createElement("button");
+  b.type = "button"; b.textContent = label; b.onclick = fn;
+  return b;
+}
+
+// triage: turn an inbox image into a filed to-do/idea (caption becomes the text)
+function promoteInbox(i, kind) {
+  const item = (notes.inbox || [])[i];
+  if (!item) return;
+  const text = (item.caption || "").trim() || "image note";
+  const note = kind === "todos" ? { text, done: false } : { text };
+  note.images = [item.img];
+  notes[kind].push(note);
+  notes.inbox.splice(i, 1);
+  renderInbox();
+  renderNotes();
+  saveNotesNow();
+}
+
+function removeInbox(i) {
+  if (!notes.inbox) return;
+  notes.inbox.splice(i, 1);   // the image file itself stays on disk (harmless)
+  renderInbox();
+  renderNotes();
+  saveNotesNow();
+}
+
+// immediate (non-debounced) save — inbox writes use this so a phone capture
+// survives the tab being closed right after the drop
+function saveNotesNow() {
+  clearTimeout(saveTimer);
+  fetch("/api/notes", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(notes),
+  });
+}
+
+// styles for attachments + the inbox — injected here (not the page template) so
+// they ship on a browser refresh, matching the rest of the jot UI
+(() => {
+  const style = document.createElement("style");
+  style.textContent = `
+    .jot-add { display:flex; align-items:center; gap:.45rem; }
+    .jot-add input { flex:1; min-width:0; }
+    .attach-btn { cursor:pointer; font-size:1.25rem; line-height:1; padding:.15rem .3rem;
+      opacity:.55; user-select:none; flex:none; display:inline-flex; align-items:center; }
+    .attach-btn:hover { opacity:1; }
+    .inbox-add svg.i { width:1.2em; height:1.2em; }
+    .attach-strip { display:none; flex-wrap:wrap; gap:.4rem; margin:.4rem 0 .1rem; }
+    .attach-strip.has { display:flex; }
+    .attach-thumb { position:relative; line-height:0; }
+    .attach-thumb img { width:46px; height:46px; object-fit:cover; border-radius:3px;
+      border:1px solid var(--ink-faint); }
+    .attach-x { position:absolute; top:-7px; right:-7px; width:17px; height:17px;
+      border-radius:50%; border:0; background:var(--ink); color:var(--parchment);
+      font-size:.62rem; line-height:1; cursor:pointer; padding:0; }
+    .jot-thumbs { display:flex; flex-wrap:wrap; gap:.35rem; margin-top:.35rem; }
+    .jot-thumbs img { width:54px; height:54px; object-fit:cover; border-radius:3px;
+      border:1px solid var(--ink-faint); cursor:zoom-in; }
+    #inbox-open.has-items { color:var(--ink); font-weight:600; }
+    #inbox-open .has-items, #inbox-count { font-variant-numeric:tabular-nums; }
+    .inbox-add { display:inline-flex; align-items:center; gap:.4rem; cursor:pointer;
+      margin-top:.6rem; align-self:flex-start; border:1px solid var(--ink-soft);
+      border-radius:2px; color:var(--ink); font-size:.85rem; font-variant:small-caps;
+      letter-spacing:.05em; padding:.4rem .85rem; }
+    .inbox-add:hover { background:var(--ink); color:var(--parchment); }
+    #col-inbox ul { list-style:none; margin:0; padding:0; }
+    .inbox-row { display:flex; gap:.7rem; align-items:flex-start; padding:.6rem 0;
+      border-bottom:1px solid var(--ink-faint); }
+    .inbox-thumb { line-height:0; flex:none; }
+    .inbox-thumb img { width:84px; height:84px; object-fit:cover; border-radius:4px;
+      border:1px solid var(--ink-faint); cursor:zoom-in; }
+    .inbox-body { flex:1; min-width:0; display:flex; flex-direction:column; gap:.45rem; }
+    .inbox-cap { width:100%; box-sizing:border-box; background:transparent;
+      border:0; border-bottom:1px solid var(--ink-soft); color:var(--ink);
+      font:inherit; font-size:.9rem; padding:.1rem; outline:none; }
+    .inbox-actions { display:flex; gap:.4rem; flex-wrap:wrap; }
+    .inbox-actions button { border:1px solid var(--ink-soft); border-radius:2px;
+      background:transparent; color:var(--ink); font:inherit; font-size:.78rem;
+      font-variant:small-caps; letter-spacing:.04em; padding:.22rem .6rem; cursor:pointer; }
+    .inbox-actions button:hover { background:var(--ink); color:var(--parchment); }
+    .inbox-actions button.danger { border-color:var(--sanguine, #9a3b22);
+      color:var(--sanguine, #9a3b22); margin-left:auto; }
+    .inbox-actions button.danger:hover { background:var(--sanguine, #9a3b22);
+      color:var(--parchment); }`;
+  document.head.appendChild(style);
+})();
 
 // to-do filter bar (all/active/done) + per-row tool styling — injected from JS
 // (not the page template) so it ships without a hub.service restart, which would

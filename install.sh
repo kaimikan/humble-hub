@@ -4,7 +4,8 @@ set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 
 [ -d "$HERE/.venv" ] || uv venv "$HERE/.venv"
-uv pip install --python "$HERE/.venv/bin/python" fastapi uvicorn websockets
+uv pip install --python "$HERE/.venv/bin/python" fastapi uvicorn websockets \
+  python-multipart pillow pillow-heif
 
 install -Dm644 "$HERE/hub.service" "$HOME/.config/systemd/user/hub.service"
 systemctl --user daemon-reload
