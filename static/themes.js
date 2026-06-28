@@ -72,8 +72,20 @@ const THEME = {
     bg:"#05010f", paper:"#160a33", ink:"#e8ffe8", inkSoft:"#9fd0ff", inkFaint:"#7a6ab0",
     lapis:"#00e0ff", sanguine:"#ff2d95", verdigris:"#39ff14", ochre:"#ffe600", plum:"#b14bff",
     term:{ bg:"#05010f", fg:"#39ff14", ansi:["#1a1030","#ff2d95","#39ff14","#ffe600","#00e0ff","#b14bff","#00e0ff","#e8ffe8","#4a3a7a","#ff6cb5","#7dff5c","#fff04d","#6cefff","#cb86ff","#6cefff","#ffffff"] } },
+  // generative "world": Old Growth — a deep conifer/redwood wood at dusk. Cool
+  // pine-shadow palette (moss, bark, birch) lit by ONE warm amber source raking
+  // from the upper-left; that amber is the `ochre` pigment, so atmosphere and
+  // palette share a source. The `grove` skin paints a faint static light pool +
+  // god-ray shafts and animates only ~a dozen slow dust motes over them
+  // (atmospheric, felt-not-watched); motion halts under prefers-reduced-motion.
+  // Accents picked from the wood: moss/verdigris, toadstool/sanguine, amber-sap/
+  // ochre, bluebell/lapis, foxglove/plum. Serif, to suit an ancient place.
+  grove:    { name:"old growth", mode:"dark", skin:"grove", font:"'EB Garamond','Noto Serif',Georgia,serif",
+    bg:"#10150e", paper:"#1b2218", ink:"#d8e0c8", inkSoft:"#a3b390", inkFaint:"#6f7e5e",
+    lapis:"#6f97c2", sanguine:"#cb5b3a", verdigris:"#82a85f", ochre:"#d59a3f", plum:"#a878b4",
+    term:{ bg:"#0c110b", fg:"#d8e0c8", ansi:["#1a2016","#cb5b3a","#82a85f","#d59a3f","#6f97c2","#a878b4","#6fa98f","#d8e0c8","#4a5640","#df7355","#9cc077","#e6b85e","#88add2","#c294cc","#8cc4a8","#eef2e2"] } },
 };
-const THEME_ORDER = ["codex","lapis","koi","phosphor","graphite","nord","zenburn","frappe","gruvbox","rosepine","flow","aqua","geocities"];
+const THEME_ORDER = ["codex","lapis","koi","phosphor","graphite","nord","zenburn","frappe","gruvbox","rosepine","flow","aqua","geocities","grove"];
 const THEME_MIGRATE = { matrix: "phosphor", dragon: "koi" };  // renamed themes
 
 // resolve a stored key to a current, valid theme key (handles renames)

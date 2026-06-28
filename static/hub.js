@@ -1811,6 +1811,87 @@ setInterval(() => {
     };
   };
 
+  // old-growth sketch: ONE warm light source raking from the upper-left — a soft
+  // amber pool + a few faint god-ray shafts (essentially static), with ~a dozen
+  // slow dust motes drifting through, brighter where they near the light. All on
+  // additive blend so the warm light glows over the cool pine-shadow base.
+  // Atmospheric by design: low alpha, low frame rate, motion off when reduced.
+  const makeGroveSketch = (theme, container) => {
+    const [bgR, bgG, bgB] = _hx(theme.bg);
+    const [amR, amG, amB] = _hx(theme.ochre);          // the warm light
+    const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
+    return (p) => {
+      let motes = [], sprite, src;
+      const count = () => Math.max(8, Math.min(18, Math.floor(p.width * p.height / 90000)));
+      const makeSprite = () => {                         // soft round glow, drawn once
+        const s = 64, g = p.createGraphics(s, s), ctx = g.drawingContext;
+        const r = ctx.createRadialGradient(s/2, s/2, 0, s/2, s/2, s/2);
+        r.addColorStop(0, "rgba(255,255,255,1)");
+        r.addColorStop(0.3, "rgba(255,246,220,0.85)");
+        r.addColorStop(1, "rgba(255,246,220,0)");
+        ctx.fillStyle = r; ctx.fillRect(0, 0, s, s);
+        return g;
+      };
+      class Mote {
+        constructor() { this.reset(true); }
+        reset(init) {
+          this.x = p.random(p.width);
+          this.y = init ? p.random(p.height) : p.random(-30, p.height * 0.4);
+          this.r = p.random(1.1, 3.2);
+          this.vx = p.random(0.05, 0.22); this.vy = p.random(0.04, 0.15); // drift with the light
+          this.ph = p.random(p.TWO_PI); this.tw = p.random(0.004, 0.011); // slow twinkle
+          this.base = p.random(0.16, 0.46);
+        }
+        step() {
+          this.x += this.vx + Math.sin(this.ph) * 0.05; this.y += this.vy; this.ph += this.tw;
+          if (this.x > p.width + 12 || this.y > p.height + 12) this.reset(false);
+        }
+        draw() {
+          const d = 1 - p.constrain(p.dist(this.x, this.y, src.x, src.y) / (p.width * 0.95), 0, 1);
+          const a = this.base * (0.35 + 0.65 * d) * (0.72 + 0.28 * Math.sin(this.ph));
+          const s = this.r * 6;
+          p.tint(255, 255, 255, a * 255);
+          p.image(sprite, this.x - s/2, this.y - s/2, s, s);
+        }
+      }
+      const drawLight = () => {                          // pool + shafts, additive
+        const ctx = p.drawingContext;
+        let g = ctx.createRadialGradient(src.x, src.y, 0, src.x, src.y, p.width * 0.85);
+        g.addColorStop(0, `rgba(${amR},${amG},${amB},0.11)`);
+        g.addColorStop(1, `rgba(${amR},${amG},${amB},0)`);
+        ctx.fillStyle = g; ctx.fillRect(0, 0, p.width, p.height);
+        ctx.save(); ctx.translate(src.x, src.y); ctx.rotate(0.6);  // ~34° off vertical
+        for (const [ang, w] of [[0, 150], [0.17, 95], [-0.15, 115], [0.32, 70]]) {
+          ctx.save(); ctx.rotate(ang);
+          const len = p.width * 1.4, sg = ctx.createLinearGradient(0, 0, 0, len);
+          sg.addColorStop(0, `rgba(${amR},${amG},${amB},0.05)`);
+          sg.addColorStop(1, `rgba(${amR},${amG},${amB},0)`);
+          ctx.fillStyle = sg; ctx.fillRect(-w/2, 0, w, len);
+          ctx.restore();
+        }
+        ctx.restore();
+      };
+      const scene = (stepMotes) => {
+        p.background(bgR, bgG, bgB);
+        p.push(); p.blendMode(p.ADD);
+        drawLight();
+        for (const m of motes) { if (stepMotes) m.step(); m.draw(); }
+        p.pop();
+      };
+      p.setup = () => {
+        p.createCanvas(p.windowWidth, p.windowHeight).parent(container);
+        p.pixelDensity(1); p.frameRate(30);
+        sprite = makeSprite();
+        src = p.createVector(p.width * 0.08, -p.height * 0.06);
+        for (let i = 0; i < count(); i++) motes.push(new Mote());
+        if (reduced) { scene(false); p.noLoop(); }       // one still frame, then rest
+      };
+      p.draw = () => scene(true);
+      p.windowResized = () => { p.resizeCanvas(p.windowWidth, p.windowHeight);
+        src = p.createVector(p.width * 0.08, -p.height * 0.06); };
+    };
+  };
+
   const SKIN = {
     crt: {
       css: `
@@ -1862,6 +1943,32 @@ setInterval(() => {
         document.body.appendChild(container);
         let inst = null, alive = true;
         loadP5().then(() => { if (alive) inst = new p5(makeFlowSketch(theme, container), container); })
+          .catch(() => {});
+        return () => { alive = false; if (inst) inst.remove(); container.remove(); };
+      },
+    },
+    // generative world: Old Growth. Same behind-content canvas pattern as
+    // flowfield — body bg transparent, a dark base on the container to avoid a
+    // pre-p5 flash, panels made near-opaque so the motes stay strictly behind
+    // text. A faint top wash protects header legibility over the brightest area.
+    grove: {
+      css: `
+        body[data-theme="grove"] { background:transparent;
+          --card-bg:rgba(27,34,24,.82); --card-hot:rgba(27,34,24,.92); --input-bg:rgba(27,34,24,.62); }
+        body[data-theme="grove"] #modal,
+        body[data-theme="grove"] .sess-modal,
+        body[data-theme="grove"] .theme-modal,
+        body[data-theme="grove"] .act-modal { background:rgba(16,21,14,.95); }
+        .grove-fx { position:fixed; inset:0; z-index:-1; pointer-events:none; background:#10150e; }
+        .grove-fx canvas { display:block; }
+        .grove-fx::after { content:""; position:absolute; inset:0;
+          background:linear-gradient(to bottom, rgba(16,21,14,.5), transparent 22%); }`,
+      mount(theme) {
+        const container = document.createElement("div");
+        container.className = "grove-fx";
+        document.body.appendChild(container);
+        let inst = null, alive = true;
+        loadP5().then(() => { if (alive) inst = new p5(makeGroveSketch(theme, container), container); })
           .catch(() => {});
         return () => { alive = false; if (inst) inst.remove(); container.remove(); };
       },
