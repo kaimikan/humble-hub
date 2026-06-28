@@ -2180,7 +2180,11 @@ setInterval(() => {
       letter-spacing:.06em; font-size:.85rem; color:var(--ink); }
     .theme-section { margin:1rem 0 .2rem; padding-top:.75rem; font-variant:small-caps;
       letter-spacing:.12em; font-size:.78rem; color:var(--ink-soft);
-      border-top:1px solid var(--ink-faint); }`;
+      border-top:1px solid var(--ink-faint); }
+    .theme-lab-link { align-self:flex-start; margin-top:.5rem; font-variant:small-caps;
+      letter-spacing:.1em; font-size:.74rem; color:var(--ink-soft); text-decoration:none;
+      border-bottom:1px dotted var(--ink-faint); padding-bottom:1px; }
+    .theme-lab-link:hover { color:var(--ink); border-color:var(--ink-soft); }`;
   document.head.appendChild(pStyle);
 
   const overlay = document.createElement("div");
@@ -2227,6 +2231,14 @@ setInterval(() => {
     worlds.forEach(k => wrow.appendChild(makeCard(k)));
     modal.appendChild(wrow);
   }
+  // link to the draft sandbox — where worlds are prototyped before they ship here
+  const labLink = document.createElement("a");
+  labLink.className = "theme-lab-link";
+  labLink.href = "/static/theme-worlds.html";
+  labLink.target = "_blank"; labLink.rel = "noopener";
+  labLink.textContent = "theme lab ↗";
+  labLink.title = "experiment with draft worlds before they ship here";
+  modal.appendChild(labLink);
   overlay.appendChild(modal);
   document.body.appendChild(overlay);
 

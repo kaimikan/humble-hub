@@ -49,6 +49,15 @@ mounts/tears it down and the picker lists it automatically. Five accent pigments
 (`lapis`/`sanguine`/`verdigris`/`ochre`/`plum`) keep stable semantics across
 every theme.
 
+**Prototype new worlds visually in the theme lab first** —
+`static/theme-worlds.html` (a standalone page, linked from the picker's
+*special · worlds* row, reachable on the phone over `tailscale serve`). Append a
+`{ palette, sketch }` entry to its `DRAFTS` array to preview a candidate live as
+a sample tile (palette + type + generative canvas + a mini sampler card), judge
+it side-by-side, then **graduate the approved one** into `themes.js` + a `SKIN`
+entry. The lab is the staging ground; drafts never touch the live picker until
+they ship. This visual-first loop is the expected way to design any new theme.
+
 On the phone the **back button closes the topmost open overlay before leaving**
 (idea 24). One self-contained handler at the end of hub.js keeps a single
 history entry armed while anything is open and closes layers in z-order on

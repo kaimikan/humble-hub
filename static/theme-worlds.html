@@ -1,0 +1,323 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>theme worlds · lab</title>
+<!--
+  Theme-worlds LAB — a sandbox for prototyping hub "worlds" (palette + font +
+  generative skin) BEFORE they graduate into static/themes.js + the live picker.
+  Each draft is one entry in DRAFTS below: a palette + a sketch factory. Add a
+  candidate by appending an entry; nothing here touches the live hub.
+  Reuses /static/themes.js (for _hx + the shipped THEME palettes) and p5.
+-->
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #161618; color: #d6d6d8;
+    font: 15px/1.5 system-ui, "Segoe UI", sans-serif; -webkit-text-size-adjust: 100%; }
+  header.lab { padding: 1.4rem 1.4rem .4rem; }
+  header.lab h1 { margin: 0; font-size: 1.15rem; font-weight: 600;
+    font-variant: small-caps; letter-spacing: .12em; color: #efeff1; }
+  header.lab p { margin: .35rem 0 0; color: #9a9aa0; font-size: .85rem; max-width: 60ch; }
+  header.lab code { background: #26262a; padding: .05rem .35rem; border-radius: 3px; font-size: .82em; }
+
+  .grid { display: grid; gap: 1.1rem; padding: 1.1rem 1.4rem 3rem;
+    grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); }
+
+  /* a tile is a small live "world": canvas behind, a sampler card floating over */
+  .tile { position: relative; height: 300px; border-radius: 8px; overflow: hidden;
+    border: 1px solid rgba(255,255,255,.12); cursor: zoom-in;
+    background: var(--bg); font-family: var(--font); }
+  .tile canvas { position: absolute; inset: 0; display: block; z-index: 0; }
+  .tile .ui { position: absolute; inset: 0; padding: .85rem; display: flex;
+    flex-direction: column; gap: .6rem; pointer-events: none; z-index: 1; }
+  .tile .badge { align-self: flex-start; font-size: .62rem; font-variant: small-caps;
+    letter-spacing: .1em; padding: .12rem .5rem; border-radius: 999px;
+    background: rgba(0,0,0,.35); color: #fff; }
+  .tile[data-shipped] .badge { background: var(--verdigris); }
+
+  /* mini project card — mirrors the real hub card so palette + type read true */
+  .samp-card { background: var(--card-bg); border: 1px solid var(--ink-faint);
+    border-radius: 4px; padding: .6rem .7rem; color: var(--ink); }
+  .samp-card .ttl { font-weight: 600; font-size: .95rem; letter-spacing: .02em; }
+  .samp-card .ex { font-style: italic; color: var(--ink-soft); font-size: .82rem;
+    margin: .25rem 0 .5rem; }
+  .samp-card .btns { display: flex; gap: .4rem; flex-wrap: wrap; }
+  .samp-card button { font: inherit; font-size: .72rem; font-variant: small-caps;
+    letter-spacing: .04em; padding: .22rem .6rem; border-radius: 2px; cursor: pointer;
+    background: transparent; border: 1px solid currentColor; }
+  .samp-card .b-open { color: var(--sanguine); }
+  .samp-card .b-claude { color: var(--lapis); }
+  .samp-card .b-files { color: var(--verdigris); }
+
+  .samp-row { display: flex; align-items: center; gap: .6rem; margin-top: auto; }
+  .dots { display: flex; gap: .3rem; }
+  .dots span { width: .7rem; height: .7rem; border-radius: 50%; }
+  /* tiny terminal swatch — terminals stay dark across every theme */
+  .term { flex: 1; background: #0e120d; border: 1px solid rgba(255,255,255,.1);
+    border-radius: 3px; padding: .2rem .4rem; font: .68rem/1.4 "JetBrains Mono", monospace;
+    white-space: nowrap; overflow: hidden; }
+  .term .g { color: var(--verdigris); } .term .b { color: var(--lapis); }
+  .term .y { color: var(--ochre); } .term .f { color: var(--ink); }
+
+  .name { font-family: var(--font); color: var(--ink); }
+  .name b { font-weight: 600; letter-spacing: .03em; }
+  .name span { color: var(--ink-soft); font-size: .8rem; }
+
+  /* expand overlay */
+  #x { position: fixed; inset: 0; z-index: 50; background: rgba(8,8,10,.9);
+    display: none; align-items: center; justify-content: center; padding: 2.5vmin; }
+  #x.on { display: flex; }
+  #x .big { position: relative; width: min(900px, 96vw); height: min(620px, 88vh);
+    border-radius: 10px; overflow: hidden; border: 1px solid rgba(255,255,255,.16);
+    background: var(--bg); font-family: var(--font); }
+  #x .big canvas { position: absolute; inset: 0; z-index: 0; }
+  #x .big .ui { position: absolute; inset: 0; padding: 1.4rem; display: flex;
+    flex-direction: column; gap: 1rem; pointer-events: none; z-index: 1; }
+  #x .big .samp-card { max-width: 420px; }
+  #x .close { position: fixed; top: 1rem; right: 1.2rem; width: 2.3rem; height: 2.3rem;
+    border-radius: 50%; border: 0; background: rgba(0,0,0,.5); color: #fff;
+    font-size: 1.05rem; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+  @media (prefers-reduced-motion: reduce) { header.lab p::after {
+    content: " · motion reduced (static previews)"; color: #c0a86a; } }
+</style>
+</head>
+<body>
+<header class="lab">
+  <h1>theme worlds · lab</h1>
+  <p>A sandbox for prototyping hub worlds before they graduate into
+  <code>themes.js</code>. Tap a tile to expand. Nothing here is live — drafts
+  ship to the real picker only once approved.</p>
+</header>
+<div class="grid" id="grid"></div>
+
+<div id="x"><button class="close" id="x-close" title="close">✕</button><div class="big" id="x-big"></div></div>
+
+<script src="/static/vendor/p5.min.js"></script>
+<script src="/static/themes.js"></script>
+<script>
+"use strict";
+const REDUCED = matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+// ---- generative sketches (instance mode); each: (palette, container) => sketch
+function softSprite(p, hex, coreA = 1) {
+  const s = 64, g = p.createGraphics(s, s), c = g.drawingContext, [r, gg, b] = _hx(hex);
+  const grad = c.createRadialGradient(s/2, s/2, 0, s/2, s/2, s/2);
+  grad.addColorStop(0, `rgba(${r},${gg},${b},${coreA})`);
+  grad.addColorStop(0.3, `rgba(${r},${gg},${b},${coreA*0.7})`);
+  grad.addColorStop(1, `rgba(${r},${gg},${b},0)`);
+  c.fillStyle = grad; c.fillRect(0, 0, s, s);
+  return g;
+}
+const dims = c => [c.clientWidth || 340, c.clientHeight || 300];
+
+// OLD GROWTH (shipped) — warm light pool + faint shafts + slow dust motes
+function makeGrove(pal, container) {
+  const [bgR, bgG, bgB] = _hx(pal.bg), [amR, amG, amB] = _hx(pal.ochre);
+  return (p) => {
+    let motes = [], sprite, src;
+    const N = () => Math.max(7, Math.min(16, Math.floor(p.width * p.height / 14000)));
+    class Mote {
+      constructor() { this.reset(true); }
+      reset(i) { this.x = p.random(p.width); this.y = i ? p.random(p.height) : p.random(-20, p.height*0.4);
+        this.r = p.random(1, 2.8); this.vx = p.random(.05,.22); this.vy = p.random(.04,.15);
+        this.ph = p.random(p.TWO_PI); this.tw = p.random(.004,.011); this.base = p.random(.16,.46); }
+      step() { this.x += this.vx + Math.sin(this.ph)*.05; this.y += this.vy; this.ph += this.tw;
+        if (this.x > p.width+12 || this.y > p.height+12) this.reset(false); }
+      draw() { const d = 1 - p.constrain(p.dist(this.x,this.y,src.x,src.y)/(p.width*.95),0,1);
+        const a = this.base*(.35+.65*d)*(.72+.28*Math.sin(this.ph)), s = this.r*6;
+        p.tint(255,255,255,a*255); p.image(sprite, this.x-s/2, this.y-s/2, s, s); }
+    }
+    const light = () => { const ctx = p.drawingContext;
+      let g = ctx.createRadialGradient(src.x,src.y,0,src.x,src.y,p.width*.85);
+      g.addColorStop(0,`rgba(${amR},${amG},${amB},.11)`); g.addColorStop(1,`rgba(${amR},${amG},${amB},0)`);
+      ctx.fillStyle = g; ctx.fillRect(0,0,p.width,p.height);
+      ctx.save(); ctx.translate(src.x,src.y); ctx.rotate(.6);
+      for (const [a,w] of [[0,150],[.17,95],[-.15,115],[.32,70]]) { ctx.save(); ctx.rotate(a);
+        const len = p.width*1.4, sg = ctx.createLinearGradient(0,0,0,len);
+        sg.addColorStop(0,`rgba(${amR},${amG},${amB},.05)`); sg.addColorStop(1,`rgba(${amR},${amG},${amB},0)`);
+        ctx.fillStyle = sg; ctx.fillRect(-w/2,0,w,len); ctx.restore(); } ctx.restore(); };
+    const scene = (mv) => { p.background(bgR,bgG,bgB); p.push(); p.blendMode(p.ADD); light();
+      for (const m of motes) { if (mv) m.step(); m.draw(); } p.pop(); };
+    p.setup = () => { const [w,h] = dims(container); p.createCanvas(w,h).parent(container);
+      p.pixelDensity(1); p.frameRate(30); sprite = softSprite(p, pal.ochre);
+      src = p.createVector(p.width*.08, -p.height*.06);
+      for (let i=0;i<N();i++) motes.push(new Mote()); if (REDUCED) { scene(false); p.noLoop(); } };
+    p.draw = () => scene(true);
+    p.windowResized = () => { const [w,h] = dims(container); p.resizeCanvas(w,h);
+      src = p.createVector(p.width*.08, -p.height*.06); };
+  };
+}
+
+// FIREFLIES — near-black wood; warm glowing drifters that blink (sharp pulse)
+function makeFireflies(pal, container) {
+  const [bgR, bgG, bgB] = _hx(pal.bg);
+  return (p) => {
+    let flies = [], sprite;
+    const N = () => Math.max(6, Math.min(15, Math.floor(p.width * p.height / 12000)));
+    class Fly {
+      constructor() { this.reset(); }
+      reset() { this.x = p.random(p.width); this.y = p.random(p.height); this.r = p.random(1.6,3.2);
+        this.ang = p.random(p.TWO_PI); this.spd = p.random(.1,.35);
+        this.ph = p.random(p.TWO_PI); this.bl = p.random(.012,.03); this.base = p.random(.55,1); }
+      step() { this.ang += (p.noise(this.x*.01,this.y*.01,p.frameCount*.005)-.5)*.3;
+        this.x += Math.cos(this.ang)*this.spd; this.y += Math.sin(this.ang)*this.spd; this.ph += this.bl;
+        if (this.x<-10) this.x=p.width+10; if (this.x>p.width+10) this.x=-10;
+        if (this.y<-10) this.y=p.height+10; if (this.y>p.height+10) this.y=-10; }
+      draw() { let t = Math.sin(this.ph); t = t*t*t; const a = this.base*Math.max(0,t);
+        if (a <= .002) return; const s = this.r*7; p.tint(255,255,255,a*255);
+        p.image(sprite, this.x-s/2, this.y-s/2, s, s); }
+    }
+    const scene = (mv) => { p.background(bgR,bgG,bgB); p.push(); p.blendMode(p.ADD);
+      for (const f of flies) { if (mv) f.step(); f.draw(); } p.pop(); };
+    p.setup = () => { const [w,h] = dims(container); p.createCanvas(w,h).parent(container);
+      p.pixelDensity(1); p.frameRate(30); sprite = softSprite(p, pal.glow || pal.ochre);
+      for (let i=0;i<N();i++) flies.push(new Fly()); if (REDUCED) { scene(false); p.noLoop(); } };
+    p.draw = () => scene(true);
+    p.windowResized = () => { const [w,h] = dims(container); p.resizeCanvas(w,h); };
+  };
+}
+
+// DAPPLED CANOPY — light theme; warm sun patches (screen) + leaf shadow (multiply) drift
+function makeDappled(pal, container) {
+  const [bgR, bgG, bgB] = _hx(pal.bg);
+  return (p) => {
+    let blobs = [];
+    const mk = warm => ({ nx: p.random(1e3), ny: p.random(1e3), r: p.random(38,108),
+      sp: p.random(.0006,.0017), warm });
+    const paint = () => { const ctx = p.drawingContext;
+      for (const b of blobs) { b.nx += b.sp; b.ny += b.sp;
+        const x = p.noise(b.nx)*p.width, y = p.noise(b.ny)*p.height;
+        const g = ctx.createRadialGradient(x,y,0,x,y,b.r);
+        if (b.warm) { ctx.globalCompositeOperation = "screen";
+          g.addColorStop(0,"rgba(255,243,198,.55)"); g.addColorStop(1,"rgba(255,243,198,0)"); }
+        else { ctx.globalCompositeOperation = "multiply";
+          g.addColorStop(0,"rgba(44,72,32,.42)"); g.addColorStop(1,"rgba(44,72,32,0)"); }
+        ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x,y,b.r,0,7); ctx.fill(); }
+      ctx.globalCompositeOperation = "source-over"; };
+    const scene = () => { p.background(bgR,bgG,bgB); paint(); };
+    p.setup = () => { const [w,h] = dims(container); p.createCanvas(w,h).parent(container);
+      p.pixelDensity(1); p.frameRate(24);
+      for (let i=0;i<5;i++) blobs.push(mk(true)); for (let i=0;i<4;i++) blobs.push(mk(false));
+      if (REDUCED) { scene(); p.noLoop(); } };
+    p.draw = scene;
+    p.windowResized = () => { const [w,h] = dims(container); p.resizeCanvas(w,h); };
+  };
+}
+
+// UNDERSTORY — earthy floor; a few pale spores rising slowly (palette-forward, minimal)
+function makeUnderstory(pal, container) {
+  const [bgR, bgG, bgB] = _hx(pal.bg);
+  return (p) => {
+    let spores = [], sprite;
+    const N = () => Math.max(4, Math.min(9, Math.floor(p.width * p.height / 22000)));
+    class Spore {
+      constructor() { this.reset(true); }
+      reset(i) { this.x = p.random(p.width); this.y = i ? p.random(p.height) : p.height+10;
+        this.r = p.random(1,2.3); this.vy = -p.random(.06,.16); this.drift = p.random(-.05,.05);
+        this.ph = p.random(p.TWO_PI); this.tw = p.random(.005,.012); this.base = p.random(.12,.3); }
+      step() { this.y += this.vy; this.x += this.drift + Math.sin(this.ph)*.04; this.ph += this.tw;
+        if (this.y < -10) this.reset(false); }
+      draw() { const a = this.base*(.7+.3*Math.sin(this.ph)), s = this.r*6;
+        p.tint(255,255,255,a*255); p.image(sprite, this.x-s/2, this.y-s/2, s, s); }
+    }
+    const scene = (mv) => { p.background(bgR,bgG,bgB); p.push(); p.blendMode(p.ADD);
+      for (const s of spores) { if (mv) s.step(); s.draw(); } p.pop(); };
+    p.setup = () => { const [w,h] = dims(container); p.createCanvas(w,h).parent(container);
+      p.pixelDensity(1); p.frameRate(24); sprite = softSprite(p, "#d8ccae");
+      for (let i=0;i<N();i++) spores.push(new Spore()); if (REDUCED) { scene(false); p.noLoop(); } };
+    p.draw = () => scene(true);
+    p.windowResized = () => { const [w,h] = dims(container); p.resizeCanvas(w,h); };
+  };
+}
+
+// ---- DRAFTS registry (append to grow the lab) ------------------------------
+const grove = THEME.grove;  // the shipped baseline, straight from the registry
+const DRAFTS = [
+  { ...grove, key: "grove", name: "old growth", blurb: "deep conifer dusk · light shafts + dust motes",
+    sketch: makeGrove, shipped: true },
+  { key: "fireflies", name: "fireflies", mode: "dark", blurb: "enchanted night wood · glowing drifters",
+    font: "'EB Garamond','Noto Serif',Georgia,serif",
+    bg: "#0a120c", paper: "#141d15", ink: "#d8e8d0", inkSoft: "#93a890", inkFaint: "#5f7560",
+    lapis: "#6f8fc8", sanguine: "#d65c6a", verdigris: "#6fb083", ochre: "#f0cf63", plum: "#a981c8",
+    glow: "#f4d873", sketch: makeFireflies },
+  { key: "dappled", name: "dappled canopy", mode: "light", blurb: "sunlit summer forest · shifting light",
+    font: "'EB Garamond','Noto Serif',Georgia,serif",
+    bg: "#eef2dc", paper: "#f8faec", ink: "#243018", inkSoft: "#4f5e3a", inkFaint: "#8a9870",
+    lapis: "#3f7fc4", sanguine: "#c0492f", verdigris: "#4e8a3c", ochre: "#cf9a2a", plum: "#8a4dc4",
+    sketch: makeDappled },
+  { key: "understory", name: "understory", mode: "dark", blurb: "forest floor · ferns, moss, spores",
+    font: "'EB Garamond','Noto Serif',Georgia,serif",
+    bg: "#17130d", paper: "#221b12", ink: "#e6dcc4", inkSoft: "#b0a487", inkFaint: "#786a52",
+    lapis: "#6f93b0", sanguine: "#c75a43", verdigris: "#7a9b54", ochre: "#d8a24a", plum: "#9d72a8",
+    sketch: makeUnderstory },
+];
+
+// ---- render ----------------------------------------------------------------
+function setVars(el, d) {
+  const dark = d.mode === "dark";
+  const [pr, pg, pb] = _hx(d.paper);
+  el.style.setProperty("--bg", d.bg);
+  el.style.setProperty("--paper", d.paper);
+  el.style.setProperty("--ink", d.ink);
+  el.style.setProperty("--ink-soft", d.inkSoft);
+  el.style.setProperty("--ink-faint", d.inkFaint);
+  el.style.setProperty("--card-bg", `rgba(${pr},${pg},${pb},${dark ? .82 : .86})`);
+  for (const k of ["lapis", "sanguine", "verdigris", "ochre", "plum"]) el.style.setProperty(`--${k}`, d[k]);
+  el.style.setProperty("--font", d.font);
+}
+
+function sampler(d, big) {
+  const dots = ["lapis", "sanguine", "verdigris", "ochre", "plum"]
+    .map(k => `<span style="background:${d[k]}"></span>`).join("");
+  return `<div class="ui">
+    <span class="badge">${d.shipped ? "shipped" : "draft"} · ${d.mode}</span>
+    <div class="samp-card">
+      <div class="ttl">sample-project</div>
+      <div class="ex">"a short blurb of what the project is — placeholder copy to preview the type."</div>
+      <div class="btns"><button class="b-open">▷ open</button><button class="b-claude">claude ▾</button><button class="b-files">files</button></div>
+    </div>
+    <div class="samp-row">
+      <div class="dots">${dots}</div>
+      <div class="term"><span class="g">~/sample-project</span> <span class="b">$</span> <span class="f">git status</span> <span class="y">✦</span></div>
+    </div>
+    <div class="name" style="${big ? "" : "margin-top:.1rem"}"><b>${d.name}</b> <span>· ${d.blurb}</span></div>
+  </div>`;
+}
+
+const instances = [];
+function mountTile(d) {
+  const tile = document.createElement("div");
+  tile.className = "tile";
+  if (d.shipped) tile.dataset.shipped = "1";
+  setVars(tile, d);
+  tile.innerHTML = sampler(d, false);
+  tile.addEventListener("click", () => expand(d));
+  document.getElementById("grid").appendChild(tile);
+  // canvas (z-index:0) sits behind the .ui overlay (z-index:1); p5 appends its
+  // canvas in setup() — DOM order doesn't matter, the z-index layering does
+  requestAnimationFrame(() => instances.push(new p5(d.sketch(d, tile), tile)));
+}
+
+// expand overlay
+let xInst = null;
+function expand(d) {
+  const x = document.getElementById("x"), big = document.getElementById("x-big");
+  setVars(big, d); big.innerHTML = sampler(d, true);
+  x.classList.add("on");
+  requestAnimationFrame(() => { xInst = new p5(d.sketch(d, big), big); });
+}
+function closeX() {
+  const x = document.getElementById("x");
+  if (xInst) { xInst.remove(); xInst = null; }
+  x.classList.remove("on");
+}
+document.getElementById("x-close").addEventListener("click", closeX);
+document.getElementById("x").addEventListener("click", e => { if (e.target.id === "x") closeX(); });
+document.addEventListener("keydown", e => { if (e.key === "Escape") closeX(); });
+
+DRAFTS.forEach(mountTile);
+</script>
+</body>
+</html>
