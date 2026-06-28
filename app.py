@@ -846,8 +846,8 @@ def terminal_page(name: str, resume: bool = False, attach: str = "",
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="icon" href="/static/favicon.ico" sizes="any">
 <link rel="icon" href="/static/icon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="/static/vendor/xterm.min.css">
-<script src="/static/themes.js"></script>
+<link rel="stylesheet" href="{sv('/static/vendor/xterm.min.css')}">
+<script src="{sv('/static/themes.js')}"></script>
 <script>
   // skin the page chrome from the saved hub theme's TERMINAL palette (always
   // dark) before first paint — no flash. The terminal itself is themed below.
@@ -896,8 +896,8 @@ def terminal_page(name: str, resume: bool = False, attach: str = "",
   </header>
   <div id="term"></div>
   <div id="kbar"></div>
-  <script src="/static/vendor/xterm.min.js"></script>
-  <script src="/static/vendor/addon-fit.min.js"></script>
+  <script src="{sv('/static/vendor/xterm.min.js')}"></script>
+  <script src="{sv('/static/vendor/addon-fit.min.js')}"></script>
   <script>
     const term = new Terminal({{
       fontFamily: "'JetBrains Mono', 'Hack', 'Noto Sans Mono', monospace",
@@ -1072,6 +1072,19 @@ ICONS = {
 
 def icon(name: str, cls: str = "i") -> str:
     return f'<svg class="{cls}" viewBox="0 0 24 24" aria-hidden="true">{ICONS[name]}</svg>'
+
+
+def sv(path: str) -> str:
+    """Cache-busting static URL: append the file's mtime as `?v=`. StaticFiles
+    sends only ETag/Last-Modified, and some browsers (notably Android Chrome)
+    heuristically reuse the cached copy WITHOUT revalidating — so an edited
+    hub.js/themes.js can stay stale for hours. A changing query string forces a
+    refetch the moment the file changes, on every browser."""
+    f = HUB_DIR / path.lstrip("/")
+    try:
+        return f"{path}?v={int(f.stat().st_mtime)}"
+    except OSError:
+        return path
 TYPE_LABELS = {
     "site": "site",
     "app": "app",
@@ -1181,7 +1194,7 @@ def index():
 <link rel="apple-touch-icon" href="/static/apple-touch-icon.png">
 <link rel="manifest" href="/static/manifest.webmanifest">
 <meta name="theme-color" content="#43331c">
-<link rel="stylesheet" href="/static/vendor/xterm.min.css">
+<link rel="stylesheet" href="{sv('/static/vendor/xterm.min.css')}">
 <style>
   :root {{ color-scheme: light;
     --font-family:"EB Garamond", "Noto Serif", Georgia, serif;
@@ -1485,8 +1498,8 @@ def index():
   </aside>
   <div id="pills"></div>
 
-  <script src="/static/vendor/xterm.min.js"></script>
-  <script src="/static/vendor/addon-fit.min.js"></script>
-  <script src="/static/themes.js"></script>
-  <script src="/static/hub.js"></script>
+  <script src="{sv('/static/vendor/xterm.min.js')}"></script>
+  <script src="{sv('/static/vendor/addon-fit.min.js')}"></script>
+  <script src="{sv('/static/themes.js')}"></script>
+  <script src="{sv('/static/hub.js')}"></script>
 </body></html>"""
