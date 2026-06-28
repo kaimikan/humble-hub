@@ -1309,7 +1309,7 @@ function activate(key) {
   if (!s.opened) {
     s.term.open(s.host);
     s.opened = true;
-    attachTouchScroll(s.host); // phone: swipes become wheel events claude understands
+    attachTouchScroll(s.host, s); // phone: swipes → SGR mouse-wheel reports claude scrolls smoothly
   }
   // fit when layout has actually settled (two consecutive frames with the
   // same non-zero width) instead of a fixed timer — cold loads lay out late
@@ -1345,9 +1345,12 @@ function toggleDrawerFull() {
 }
 
 // TUIs (claude code) have no native scrollback to pan, so finger swipes do
-// nothing on a phone. Translate vertical swipes into wheel events — xterm.js
-// forwards those to the app as scroll (mouse-reporting) sequences.
-function attachTouchScroll(host) {
+// nothing on a phone. We send Claude SGR mouse-wheel reports directly: it still
+// has mouse mode on (we only stopped xterm from entering it, to free up text
+// selection), so it understands wheel reports and scrolls a few lines per one —
+// smooth, line-by-line, the way it felt before. (Desktop keeps the snappier
+// wheel→PgUp/PgDn; only touch uses this finer path.)
+function attachTouchScroll(host, s) {
   let lastY = null;
   host.addEventListener("touchstart", e => { lastY = e.touches[0].clientY; }, { passive: true });
   host.addEventListener("touchmove", e => {
@@ -1355,9 +1358,12 @@ function attachTouchScroll(host) {
     const y = e.touches[0].clientY, dy = lastY - y;
     if (Math.abs(dy) >= 10) {
       lastY = y;
-      const target = host.querySelector(".xterm-viewport") || host;
-      target.dispatchEvent(new WheelEvent("wheel",
-        { deltaY: dy * 2.5, bubbles: true, cancelable: true }));
+      if (s.ws.readyState === 1) {
+        const btn = dy > 0 ? 65 : 64;  // swipe up = scroll down (65); down = up (64)
+        const col = Math.max(1, Math.floor(s.term.cols / 2));
+        const row = Math.max(1, Math.floor(s.term.rows / 2));
+        s.ws.send(JSON.stringify({ type: "input", data: `\x1b[<${btn};${col};${row}M` }));
+      }
     }
     e.preventDefault(); // we own touch here — no native pan fighting
   }, { passive: false });

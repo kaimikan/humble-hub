@@ -125,10 +125,14 @@ Constraints:
   `static/hub.js` and the `/terminal/` template in `app.py`. Deliberate
   trade-off: **click-to-navigate is disabled**. **Scroll:** without mouse
   reporting xterm turns the wheel into arrow keys (Claude navigates, doesn't
-  scroll — it scrolls on PgUp/PgDn), so a capture-phase `wheel` handler
-  intercepts it and sends `\x1b[5~`/`\x1b[6~` (PgUp/PgDn) instead, throttled
-  (this also carries the phone swipe-scroll, whose touch handler synthesises
-  wheel events — re-verify on the real device). Env knobs:
+  scroll — it scrolls on PgUp/PgDn), so on **desktop** a capture-phase `wheel`
+  handler intercepts it and sends `\x1b[5~`/`\x1b[6~` (PgUp/PgDn), throttled
+  (snappy, a page per notch). On **phone** the touch handler instead sends SGR
+  mouse-wheel reports straight to the pty (`\x1b[<64/65;col;rowM`) — Claude still
+  has mouse mode on (only xterm was stopped from entering it), so it scrolls a
+  few lines per report: smooth, line-by-line. `attachTouchScroll` in
+  `static/hub.js` and the inline touch handler in the `/terminal/` template.
+  Env knobs:
   `HUB_PERSIST=0` restores in-process ptys,
   `HUB_CLAUDE_CMD` overrides the command (tests use bash),
   `HUB_PTY_DIR` relocates sockets. Lifecycle test:

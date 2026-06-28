@@ -1027,8 +1027,10 @@ def terminal_page(name: str, resume: bool = False, attach: str = "",
       kbar.appendChild(btn);
     }}
 
-    // phone: translate vertical swipes into wheel events (TUIs have no
-    // native scrollback for finger panning)
+    // phone: swipes → SGR mouse-wheel reports straight to the pty. Claude still
+    // has mouse mode on (we only stopped xterm from entering it, to free text
+    // selection), so it scrolls a few lines per report — smooth, line-by-line.
+    // (Desktop keeps the snappier wheel→PgUp/PgDn; only touch uses this path.)
     let _ty = null;
     const termEl = document.getElementById("term");
     termEl.addEventListener("touchstart", e => {{ _ty = e.touches[0].clientY; }}, {{passive:true}});
@@ -1037,8 +1039,12 @@ def terminal_page(name: str, resume: bool = False, attach: str = "",
       const y = e.touches[0].clientY, dy = _ty - y;
       if (Math.abs(dy) >= 10) {{
         _ty = y;
-        const t = termEl.querySelector(".xterm-viewport") || termEl;
-        t.dispatchEvent(new WheelEvent("wheel", {{deltaY: dy * 2.5, bubbles: true, cancelable: true}}));
+        if (ws.readyState === 1) {{
+          const btn = dy > 0 ? 65 : 64;  // swipe up = scroll down (65); down = up (64)
+          const col = Math.max(1, Math.floor(term.cols / 2));
+          const row = Math.max(1, Math.floor(term.rows / 2));
+          ws.send(JSON.stringify({{type:"input", data:`\\x1b[<${{btn}};${{col}};${{row}}M`}}));
+        }}
       }}
       e.preventDefault();
     }}, {{passive:false}});
