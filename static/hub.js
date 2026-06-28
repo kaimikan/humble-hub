@@ -294,7 +294,7 @@ function renderNotes() {
         content.append(tag);
       }
       content.append(txt);
-      if (item.images && item.images.length) content.append(thumbStrip(item.images));
+      if (item.images && item.images.length) content.append(thumbStrip(item.images, item));
       li.append(left, idx, content, menuBtn);
       ul.appendChild(li);
     });
@@ -459,6 +459,8 @@ function openRowMenu(e, kind, item) {
   }
   add(item.project ? `project: ${item.project} ▸` : "set project ▸",
       () => openProjectPicker(item, r));
+  add(item.images && item.images.length ? "attach more images" : "attach image",
+      () => attachToItem(item));
   add("remove", () => askDelete(kind, idx()), true);
   document.body.appendChild(menu);
   rowMenuEl = menu;
@@ -650,19 +652,81 @@ function renderAttachStrip(kind) {
   strip.classList.toggle("has", pendingAttach[kind].length > 0);
 }
 
-// thumbnails shown on a filed note / inbox card; click opens the full image
-function thumbStrip(ids) {
+// thumbnails on a filed note; click a thumb → lightbox, corner ✕ → detach.
+// `owner` (the jot item) is passed when the strip is editable; omit for read-only.
+function thumbStrip(ids, owner) {
   const strip = document.createElement("div");
   strip.className = "jot-thumbs";
   ids.forEach(id => {
-    const a = document.createElement("a");
-    a.href = `/attachments/${id}`; a.target = "_blank"; a.rel = "noopener";
+    const wrap = document.createElement("span");
+    wrap.className = "jot-thumb";
     const img = document.createElement("img");
     img.src = `/attachments/${id}`; img.loading = "lazy";
-    a.appendChild(img);
-    strip.appendChild(a);
+    img.onclick = () => openLightbox(id);
+    wrap.appendChild(img);
+    if (owner) {
+      const x = document.createElement("button");
+      x.type = "button"; x.className = "thumb-x"; x.textContent = "✕"; x.title = "remove image";
+      x.onclick = e => { e.stopPropagation(); detachImage(owner, id); };
+      wrap.appendChild(x);
+    }
+    strip.appendChild(wrap);
   });
   return strip;
+}
+
+// detach an image from a jot (the file itself stays on disk — harmless)
+function detachImage(item, id) {
+  if (!item.images) return;
+  const i = item.images.indexOf(id);
+  if (i >= 0) item.images.splice(i, 1);
+  if (!item.images.length) delete item.images;
+  renderNotes();
+  saveNotes();
+}
+
+// add image(s) to an EXISTING jot (from the row ⋯ menu). A throwaway file input
+// is briefly mounted — some mobile browsers ignore .click() on a detached input.
+async function attachToItem(item) {
+  const inp = document.createElement("input");
+  inp.type = "file"; inp.accept = "image/*"; inp.multiple = true; inp.hidden = true;
+  document.body.appendChild(inp);
+  inp.onchange = async () => {
+    const ids = await uploadFiles(inp.files);
+    inp.remove();
+    if (ids.length) {
+      item.images = (item.images || []).concat(ids);
+      renderNotes();
+      saveNotes();
+    }
+  };
+  inp.click();
+}
+
+// full-image lightbox — replaces opening attachments in a new tab. One overlay,
+// built lazily, reused for every image (note thumbs + inbox cards). On phones
+// this is better than a new tab: full-screen, pinch-zoom, dismiss without
+// leaving the hub. Backdrop tap / ✕ / Esc all close it.
+function openLightbox(id) {
+  let lb = document.getElementById("lightbox");
+  if (!lb) {
+    lb = document.createElement("div");
+    lb.id = "lightbox"; lb.hidden = true;
+    const x = document.createElement("button");
+    x.className = "lb-x"; x.type = "button"; x.textContent = "✕"; x.title = "close";
+    const img = document.createElement("img"); img.alt = "";
+    lb.append(x, img);
+    lb.addEventListener("click", e => { if (e.target === lb || e.target === x) closeLightbox(); });
+    document.addEventListener("keydown", e => { if (e.key === "Escape") closeLightbox(); });
+    document.body.appendChild(lb);
+  }
+  lb.querySelector("img").src = `/attachments/${id}`;
+  lb.hidden = false;
+}
+
+function closeLightbox() {
+  const lb = document.getElementById("lightbox");
+  if (lb) { lb.hidden = true; lb.querySelector("img").src = ""; }
 }
 
 function imgsToInbox(ids) {
@@ -710,11 +774,11 @@ function renderInbox() {
   items.forEach((item, i) => {
     const li = document.createElement("li");
     li.className = "inbox-row";
-    const a = document.createElement("a");
-    a.href = `/attachments/${item.img}`; a.target = "_blank"; a.rel = "noopener";
+    const a = document.createElement("span");
     a.className = "inbox-thumb";
     const img = document.createElement("img");
     img.src = `/attachments/${item.img}`; img.loading = "lazy";
+    img.onclick = () => openLightbox(item.img);
     a.appendChild(img);
 
     const body = document.createElement("div");
@@ -793,10 +857,27 @@ function saveNotesNow() {
       border:1px solid var(--ink-faint); }
     .attach-x { position:absolute; top:-7px; right:-7px; width:17px; height:17px;
       border-radius:50%; border:0; background:var(--ink); color:var(--parchment);
-      font-size:.62rem; line-height:1; cursor:pointer; padding:0; }
-    .jot-thumbs { display:flex; flex-wrap:wrap; gap:.35rem; margin-top:.35rem; }
+      font-size:.62rem; line-height:1; cursor:pointer; padding:0;
+      display:flex; align-items:center; justify-content:center; }
+    .jot-thumbs { display:flex; flex-wrap:wrap; gap:.4rem; margin-top:.35rem; }
+    .jot-thumb { position:relative; display:inline-block; line-height:0; }
     .jot-thumbs img { width:54px; height:54px; object-fit:cover; border-radius:3px;
       border:1px solid var(--ink-faint); cursor:zoom-in; }
+    .thumb-x { position:absolute; top:-7px; right:-7px; width:17px; height:17px;
+      border-radius:50%; border:0; background:var(--ink); color:var(--parchment);
+      font-size:.62rem; line-height:1; cursor:pointer; padding:0; opacity:0;
+      transition:opacity .12s; display:flex; align-items:center; justify-content:center; }
+    .jot-thumb:hover .thumb-x { opacity:1; }
+    @media (pointer:coarse) { .thumb-x { opacity:1; } }  /* no hover on touch */
+    .inbox-thumb img { cursor:zoom-in; }
+    #lightbox { position:fixed; inset:0; z-index:200; background:rgba(20,14,4,.86);
+      display:flex; align-items:center; justify-content:center; padding:2.5vmin; }
+    #lightbox[hidden] { display:none; }
+    #lightbox img { max-width:96vw; max-height:92vh; object-fit:contain; border-radius:4px;
+      box-shadow:0 6px 30px rgba(0,0,0,.5); }
+    .lb-x { position:fixed; top:1rem; right:1.1rem; width:2.3rem; height:2.3rem;
+      border-radius:50%; border:0; background:rgba(0,0,0,.55); color:#fff;
+      font-size:1.05rem; line-height:1; cursor:pointer; }
     #inbox-open.has-items { color:var(--ink); font-weight:600; }
     #inbox-open .has-items, #inbox-count { font-variant-numeric:tabular-nums; }
     .inbox-add { display:inline-flex; align-items:center; gap:.4rem; cursor:pointer;
