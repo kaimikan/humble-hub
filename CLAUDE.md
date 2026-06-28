@@ -14,7 +14,11 @@ projects by reading the transcripts under `~/.claude/projects/<encoded-cwd>/`
 is local voice dictation: a recorded audio blob (from the phone toolbar's
 🎤en/🎤бг buttons) → ffmpeg → 16 kHz PCM → the shared Whisper daemon's Unix
 socket (`whisper-dictation.sock`, the babble-building/Babi engine) → text,
-with `lang=en|bg`. No build step, no database.
+with `lang=en|bg`. `POST /api/upload` accepts multipart images and normalises
+each to a downscaled JPEG via Pillow (HEIC included; orientation baked in,
+EXIF/GPS stripped on re-encode) under `data/attachments/` (git-ignored), served
+read-only at `/attachments/<id>`. No build step, no database — notes and
+uploads are plain files under `data/`.
 
 Front-end logic lives in `static/hub.js` (served via StaticFiles, re-read per
 request — JS/CSS changes deploy with just a browser refresh, no restart). New
@@ -24,7 +28,26 @@ same reason (see the empty-state and to-do-filter blocks). The jot modal
 events, mouse+touch), and a per-row ⋯ menu to promote/demote/remove. Rows show
 sequential reference numbers (for terse references like "to-do 3") — ranked
 over the full list so they're filter-stable; to-dos number active items only
-(done are skipped), ideas number all.
+(done are skipped), ideas number all. Jots can carry **image attachments**: the
+📎 on the compose inputs files an image with the new note (with no text, it
+drops into the image **inbox** instead); the per-row ⋯ menu attaches to an
+existing jot; a ✕ on a thumbnail detaches it; thumbnails open an in-page
+**lightbox** (no new tab). The **inbox** (📥 / `notes.inbox`) captures
+standalone image drops — handy from the phone over `tailscale serve` — to
+triage into to-dos/ideas later. Detached image files are left on disk (harmless).
+
+Themes live in `static/themes.js`: the `THEME` registry drives the hub's CSS
+variables, the picker preview, and each theme's 16-colour terminal palette
+(terminals stay dark even under light hub themes). A theme may carry a `skin` —
+extra scoped CSS and/or a mounted overlay, in the `SKIN` map in hub.js —
+including generative **p5.js "worlds"** (the flow-field; `grove`, the *old
+growth* forest with amber light shafts + dust motes) that lazy-load p5 on
+selection and tear down on theme change. The picker auto-groups any
+`skin`-carrying theme under "special · worlds". To add a world: a `THEME` entry
+with `skin:"name"` plus a matching `SKIN[name]` (`{ css, mount? }`) — `apply()`
+mounts/tears it down and the picker lists it automatically. Five accent pigments
+(`lapis`/`sanguine`/`verdigris`/`ochre`/`plum`) keep stable semantics across
+every theme.
 
 Tests live in `tests/`. UI suites drive the live app with Playwright (venv at
 `~/.venvs/playwright`): `test_jot.py`, `test_sessions.py`, `test_phone_ux.py`
@@ -48,7 +71,18 @@ Constraints:
   but sessions started before that deploy, and any non-attach fallback
   session, still die with the service. Check `/api/ptys` / your cgroup before
   advising a restart. Static files (`static/`) and `data/notes.json` are
-  re-read per request and need no restart.
+  re-read per request and need no restart — and `app.py` links its JS/CSS via
+  `sv()`, which appends `?v=<mtime>` for cache-busting so browsers (notably
+  Android Chrome, which otherwise heuristically serves a stale cached copy)
+  refetch the instant a file changes. **`app.py` changes do need a restart** —
+  and `py_compile` is not enough to vet one: it checks syntax only, so a missing
+  dep or a bad route definition still crash the app on startup. Load it for real
+  first (`.venv/bin/python -c "import app"`), then restart, then `curl` the port.
+
+- **Dependencies** beyond the base `fastapi`/`uvicorn`/`websockets`: image
+  uploads need `pillow`, `pillow-heif`, and `python-multipart` (all in
+  `install.sh`). A venv missing them crashes the app on startup — the
+  `/api/upload` route fails to build (this caused an outage 2026-06-27).
 
 - **Persistent sessions**: `tools/hub_ptyd.py` holds each chat's pty and
   serves it on a Unix socket under `~/.local/state/hub/ptys/` (framed
