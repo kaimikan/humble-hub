@@ -67,6 +67,16 @@ The daemon also tracks the DEC private modes the program sets at startup
 (alt screen, bracketed paste, mouse tracking) and replays them to
 late-attaching clients, which would otherwise have missed them.
 
+Newer Claude Code turns on terminal **mouse reporting** (so clicks navigate
+between messages) — but that hands every drag to the program, breaking plain
+text selection and right-click copy. The hub deliberately **suppresses mouse
+reporting** client-side (a parser handler swallows the mouse-tracking DECSET
+sequences), trading click-to-navigate for a normal terminal: a plain drag
+selects text. Since xterm's selection is canvas-drawn rather than a DOM
+selection, the browser's own copy can't see it, so the terminal copies it for
+you — a settled selection lands on the clipboard automatically (no key combo,
+no right-click needed).
+
 New chats can pick a permission-mode preset (default / accept-edits / plan);
 there is deliberately no bypass-permissions preset. A resume picker and the
 conversation manager (below) wire `claude --resume <id>` through the same

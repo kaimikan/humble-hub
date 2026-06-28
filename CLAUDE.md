@@ -113,7 +113,23 @@ Constraints:
   (`?attach=<token>`); disconnect = detach, `{"type":"kill"}` (drawer ✕) ends
   the session; multiple clients may attach (drawer + ⤢ full page mirror the
   same chat). `GET /api/ptys` lists live sessions → reattach pills after a
-  reload. Env knobs: `HUB_PERSIST=0` restores in-process ptys,
+  reload. **Copy/selection:** newer Claude Code turns on mouse reporting (clicks
+  navigate between messages), which hands every drag to the program and breaks
+  text selection + right-click copy. The hub **suppresses mouse reporting**
+  client-side — two `term.parser.registerCsiHandler({prefix:"?",final:"h"/"l"})`
+  swallow the mouse-tracking DECSET/DECRST modes (1000/1002/1003/1006…) so xterm
+  never enters mouse mode (covers live AND replayed-on-attach sequences). A plain
+  drag then selects natively; since the xterm selection is canvas-drawn (not a
+  DOM selection) the browser can't copy it, so `onSelectionChange` auto-copies a
+  settled selection (debounced). Wired in both terminals — `createSession` in
+  `static/hub.js` and the `/terminal/` template in `app.py`. Deliberate
+  trade-off: **click-to-navigate is disabled**. **Scroll:** without mouse
+  reporting xterm turns the wheel into arrow keys (Claude navigates, doesn't
+  scroll — it scrolls on PgUp/PgDn), so a capture-phase `wheel` handler
+  intercepts it and sends `\x1b[5~`/`\x1b[6~` (PgUp/PgDn) instead, throttled
+  (this also carries the phone swipe-scroll, whose touch handler synthesises
+  wheel events — re-verify on the real device). Env knobs:
+  `HUB_PERSIST=0` restores in-process ptys,
   `HUB_CLAUDE_CMD` overrides the command (tests use bash),
   `HUB_PTY_DIR` relocates sockets. Lifecycle test:
   `tests/test_persist.py` (its own uvicorn on :7799 — never touches the

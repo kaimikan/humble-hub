@@ -886,6 +886,11 @@ def terminal_page(name: str, resume: bool = False, attach: str = "",
   #kbar svg {{ width:1.15em; height:1.15em; fill:none; stroke:currentColor; stroke-width:2;
     stroke-linecap:round; stroke-linejoin:round; vertical-align:-.18em; }}
   .xterm, .xterm-viewport {{ touch-action:none; }}
+  #hub-toast {{ position:fixed; left:50%; bottom:1.4rem; transform:translateX(-50%) translateY(1rem);
+    background:var(--t-panel,#24283b); color:var(--t-fg,#c0caf5); border:1px solid var(--t-border,#3b4261);
+    border-radius:6px; padding:.4rem .85rem; font:.85rem/1.2 "JetBrains Mono","Noto Sans Mono",monospace;
+    opacity:0; pointer-events:none; transition:opacity .2s, transform .2s; z-index:50; }}
+  #hub-toast.show {{ opacity:1; transform:translateX(-50%) translateY(0); }}
   @keyframes micpulse {{ 50% {{ opacity:.55; }} }}
 </style></head>
 <body>
@@ -906,6 +911,13 @@ def terminal_page(name: str, resume: bool = False, attach: str = "",
     }});
     const fit = new FitAddon.FitAddon();
     term.loadAddon(fit);
+    // Suppress the mouse-reporting Claude Code turns on: swallow the DECSET/
+    // DECRST sequences that enable mouse tracking so xterm never enters mouse
+    // mode — a plain drag then selects natively (and auto-copies, below).
+    const MOUSE_MODES = new Set([9, 1000, 1001, 1002, 1003, 1005, 1006, 1015, 1016]);
+    const swallowMouse = p => p.length > 0 && p.every(n => typeof n === "number" && MOUSE_MODES.has(n));
+    term.parser.registerCsiHandler({{ prefix: "?", final: "h" }}, p => swallowMouse(p));
+    term.parser.registerCsiHandler({{ prefix: "?", final: "l" }}, p => swallowMouse(p));
     term.open(document.getElementById("term"));
     fit.fit();
     term.focus();
@@ -934,6 +946,58 @@ def terminal_page(name: str, resume: bool = False, attach: str = "",
       fit.fit();
       ws.readyState === 1 && ws.send(JSON.stringify({{type:"resize", cols:term.cols, rows:term.rows}}));
     }}).observe(document.getElementById("term"));
+
+    // --- selection → clipboard --------------------------------------------
+    // Claude Code enables mouse reporting, so a plain drag is forwarded to the
+    // app (that's what powers click-to-navigate). Hold SHIFT to select instead
+    // — xterm's force-selection modifier. The selection is canvas-drawn, NOT a
+    // DOM selection, so the browser's own Ctrl+C can't see it; we copy a
+    // settled selection ourselves. Ctrl+Shift+C/V like Konsole/GNOME Terminal.
+    function hubToast(msg) {{
+      let el = document.getElementById("hub-toast");
+      if (!el) {{ el = document.createElement("div"); el.id = "hub-toast"; document.body.appendChild(el); }}
+      el.textContent = msg; el.classList.add("show");
+      clearTimeout(hubToast._t);
+      hubToast._t = setTimeout(() => el.classList.remove("show"), 1800);
+    }}
+    function copyText(text) {{
+      const done = ok => hubToast(ok ? "copied selection" : "copy blocked");
+      if (navigator.clipboard && navigator.clipboard.writeText) {{
+        navigator.clipboard.writeText(text).then(() => done(true)).catch(() => execCopy(text, done));
+      }} else {{ execCopy(text, done); }}
+    }}
+    function execCopy(text, done) {{
+      try {{
+        const ta = document.createElement("textarea");
+        ta.value = text; ta.style.cssText = "position:fixed;top:0;left:0;opacity:0";
+        document.body.appendChild(ta); ta.select();
+        const ok = document.execCommand("copy"); ta.remove(); done(ok);
+      }} catch (e) {{ done(false); }}
+    }}
+    // With mouse reporting suppressed (above), a plain drag selects natively.
+    // The xterm selection is canvas-drawn (not a DOM selection), so the browser
+    // can't copy it — we copy the settled selection ourselves. onSelectionChange
+    // fires during the drag, so debounce to its end.
+    let copyTimer = null;
+    term.onSelectionChange(() => {{
+      const sel = term.getSelection();
+      clearTimeout(copyTimer);
+      if (sel && sel.trim()) copyTimer = setTimeout(() => copyText(sel), 150);
+    }});
+
+    // Wheel → PgUp/PgDn. Mouse reporting is suppressed, so xterm would turn the
+    // wheel into arrow keys (which Claude treats as navigation, not scroll — it
+    // scrolls on PgUp/PgDn). Intercept first (capture + stopPropagation) and
+    // send page keys instead. Throttled so a fast spin doesn't jump many pages.
+    let lastWheel = 0;
+    document.getElementById("term").addEventListener("wheel", e => {{
+      e.preventDefault(); e.stopPropagation();
+      const now = performance.now();
+      if (now - lastWheel < 60) return;
+      lastWheel = now;
+      if (ws.readyState === 1)
+        ws.send(JSON.stringify({{type:"input", data: e.deltaY < 0 ? "\\x1b[5~" : "\\x1b[6~"}}));
+    }}, {{ capture: true, passive: false }});
 
     // on-screen key toolbar (touch): arrows/Enter/Space/Esc/Tab/Ctrl-C → pty.
     // No term.focus() after sends — refocusing xterm's hidden textarea pops

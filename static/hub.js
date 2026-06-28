@@ -1120,6 +1120,35 @@ function openDrawer(project, opt = false) {
 // page's current selection.
 let activeTheme = "codex";
 
+// Copy to the clipboard with a fallback for non-secure contexts (plain-http
+// over the LAN, where navigator.clipboard is unavailable); brief toast either
+// way. Reuses the same #hub-toast element the dictation feature uses.
+function copyText(text) {
+  const done = ok => hubToast(ok ? "copied selection" : "copy blocked");
+  if (navigator.clipboard?.writeText) {
+    navigator.clipboard.writeText(text).then(() => done(true)).catch(() => execCopy(text, done));
+  } else {
+    execCopy(text, done);
+  }
+}
+function execCopy(text, done) {
+  try {
+    const ta = document.createElement("textarea");
+    ta.value = text;
+    ta.style.cssText = "position:fixed;top:0;left:0;opacity:0";
+    document.body.appendChild(ta); ta.select();
+    const ok = document.execCommand("copy");
+    ta.remove(); done(ok);
+  } catch (e) { done(false); }
+}
+function hubToast(msg) {
+  let el = document.getElementById("hub-toast");
+  if (!el) { el = document.createElement("div"); el.id = "hub-toast"; document.body.appendChild(el); }
+  el.textContent = msg; el.classList.add("show");
+  clearTimeout(hubToast._t);
+  hubToast._t = setTimeout(() => el.classList.remove("show"), 1800);
+}
+
 function createSession(key, project, o) {
   const host = document.createElement("div");
   host.className = "term-host";
@@ -1132,6 +1161,17 @@ function createSession(key, project, o) {
   });
   const fit = new FitAddon.FitAddon();
   term.loadAddon(fit);
+  // Suppress the mouse-reporting Claude Code turns on: swallow the DECSET/DECRST
+  // sequences that enable mouse tracking so xterm never enters mouse mode. That
+  // restores the pre-update feel — a plain drag selects text natively (and the
+  // onSelectionChange handler below auto-copies it) instead of being eaten as a
+  // click-to-navigate event. Covers live AND replayed-on-attach sequences, since
+  // both pass through the parser.
+  const MOUSE_MODES = new Set([9, 1000, 1001, 1002, 1003, 1005, 1006, 1015, 1016]);
+  const swallowMouse = p =>
+    p.length > 0 && p.every(n => typeof n === "number" && MOUSE_MODES.has(n));
+  term.parser.registerCsiHandler({ prefix: "?", final: "h" }, p => swallowMouse(p));
+  term.parser.registerCsiHandler({ prefix: "?", final: "l" }, p => swallowMouse(p));
   // term.open() is deferred to activate(): opening into a hidden host breaks
   // the renderer on cold loads (the Ctrl+Shift+R blank-drawer bug). xterm
   // buffers writes before open, so early ws output is safe.
@@ -1153,6 +1193,39 @@ function createSession(key, project, o) {
   const s = { key, name: project, token, label: o.label || disp(project),
     ws, term, fit, host, status: "working", lastOut: Date.now(), sawOutput: false };
   sessions.set(key, s);
+
+  // --- selection → clipboard --------------------------------------------
+  // With mouse reporting suppressed (above), a plain drag selects natively. The
+  // xterm selection is canvas-drawn, NOT a DOM selection, so the browser's own
+  // Ctrl+C / right-click "Copy" can't see it — we copy the settled selection
+  // ourselves. onSelectionChange fires during the drag, so debounce to its end.
+  let copyTimer = null;
+  term.onSelectionChange(() => {
+    const sel = term.getSelection();
+    clearTimeout(copyTimer);
+    if (sel && sel.trim()) copyTimer = setTimeout(() => copyText(sel), 150);
+  });
+  // Wheel → PgUp/PgDn. With mouse reporting suppressed, xterm's alt-screen
+  // fallback turns the wheel into arrow keys, which Claude treats as navigation,
+  // not scroll (it scrolls on PgUp/PgDn). So intercept the wheel first (capture
+  // + stopPropagation, before xterm's own handler) and send page keys instead —
+  // restores wheel-scroll without needing physical PgUp/PgDn keys. Throttled so
+  // a fast spin (or a phone swipe's synthesized wheels) doesn't jump many pages.
+  let lastWheel = 0;
+  host.addEventListener("wheel", e => {
+    e.preventDefault();
+    e.stopPropagation();
+    const now = performance.now();
+    if (now - lastWheel < 60) return;
+    lastWheel = now;
+    if (ws.readyState === 1)
+      ws.send(JSON.stringify({ type: "input", data: e.deltaY < 0 ? "\x1b[5~" : "\x1b[6~" }));
+  }, { capture: true, passive: false });
+  // one-time discoverability nudge
+  if (!localStorage.getItem("hubSelTip")) {
+    localStorage.setItem("hubSelTip", "1");
+    setTimeout(() => hubToast("tip: drag to select — it copies automatically"), 900);
+  }
 
   ws.onopen = () => refit(s);
   ws.onmessage = e => {
