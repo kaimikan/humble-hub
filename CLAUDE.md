@@ -49,6 +49,15 @@ mounts/tears it down and the picker lists it automatically. Five accent pigments
 (`lapis`/`sanguine`/`verdigris`/`ochre`/`plum`) keep stable semantics across
 every theme.
 
+On the phone the **back button closes the topmost open overlay before leaving**
+(idea 24). One self-contained handler at the end of hub.js keeps a single
+history entry armed while anything is open and closes layers in z-order on
+`popstate` (lightbox → theme → action → sessions → jot/inbox → drawer-minimise),
+re-synced by a `MutationObserver` on `hidden`/body-`class` — so it needs no
+rewiring of the individual open/close paths. **Any new modal-like layer must be
+added to its `topClosers()` list** to participate (transient popovers — the row
+⋯ menu, project picker — are intentionally excluded; they dismiss on any tap/Esc).
+
 Tests live in `tests/`. UI suites drive the live app with Playwright (venv at
 `~/.venvs/playwright`): `test_jot.py`, `test_sessions.py`, `test_phone_ux.py`
 — they intercept `/api/notes` and `/api/sessions` with fixtures so real data

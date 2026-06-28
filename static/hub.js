@@ -2364,3 +2364,58 @@ setInterval(() => {
   const chats = document.getElementById("sess-open");
   if (chats) chats.after(btn); else document.querySelector(".controls") && document.querySelector(".controls").appendChild(btn);
 })();
+
+// --- mobile back button: close the topmost overlay before leaving (idea 24) ---
+// Fully centralized — keeps ONE history entry armed while anything is open; the
+// Android/browser back button fires popstate, which closes the topmost layer
+// instead of exiting. No rewiring of the individual open/close paths (so they
+// can't desync): a MutationObserver re-arms/disarms the guard whenever an
+// overlay's `hidden` attribute or the drawer's body class changes.
+(() => {
+  // open dismissible layers, TOPMOST FIRST (by z-index), each with how to close
+  // it: lightbox(200) > theme(80) > act(72) > sessions(70) > jot/inbox(60) >
+  // terminal drawer(50; minimise = non-destructive, the pty session lives on).
+  const topClosers = () => {
+    const out = [], vis = el => el && !el.hidden;
+    const lb = document.getElementById("lightbox");      if (vis(lb)) out.push(closeLightbox);
+    const th = document.querySelector(".theme-overlay");  if (vis(th)) out.push(() => { th.hidden = true; });
+    const ac = document.querySelector(".act-overlay");    if (vis(ac)) out.push(() => { ac.hidden = true; });
+    const ss = document.querySelector(".sess-overlay");
+    if (vis(ss)) out.push(() => (window.closeSessions ? window.closeSessions() : (ss.hidden = true)));
+    const jot = document.getElementById("overlay");      if (vis(jot)) out.push(closeJot);
+    if (document.body.classList.contains("drawer-open"))
+      out.push(() => { minimizeDrawer(); document.body.classList.remove("drawer-full"); });
+    return out;
+  };
+
+  let armed = false, handling = false, suppress = false;
+  const sync = () => {
+    const open = topClosers().length > 0;
+    if (open && !armed) { armed = true; history.pushState({ hubOverlay: 1 }, ""); }
+    else if (!open && armed && !handling) {
+      // everything was closed via the UI — silently discard our guard entry so
+      // the next back press leaves the app (no dead/no-op back press).
+      armed = false; suppress = true; history.back();
+    }
+  };
+
+  window.addEventListener("popstate", () => {
+    if (suppress) { suppress = false; return; }   // our own guard-unwind — ignore
+    const closers = topClosers();
+    if (closers.length) {
+      handling = true;
+      closers[0]();          // close the topmost layer…
+      handling = false;
+      armed = false;         // …the guard entry was consumed by this back…
+      sync();                // …re-arm if layers remain underneath.
+    } else {
+      armed = false;         // nothing to close → let the navigation stand
+    }
+  });
+
+  // re-sync on any overlay show/hide (`hidden`) or drawer open/close (body class)
+  new MutationObserver(sync).observe(document.body,
+    { attributes: true, attributeFilter: ["hidden"], subtree: true });
+  new MutationObserver(sync).observe(document.body,
+    { attributes: true, attributeFilter: ["class"] });
+})();
