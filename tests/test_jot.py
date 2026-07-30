@@ -6,6 +6,7 @@ touched. Run with the project's playwright venv:
 
     ~/.venvs/playwright/bin/python tests/test_jot.py
 """
+import datetime
 import json
 import sys
 
@@ -146,6 +147,26 @@ def run(page):
     check("all filter shows everything",
           texts(page, "todos") == ["alpha", "bravo-done", "charlie"],
           str(texts(page, "todos")))
+
+    # --- doneAt stamp + faint completion date on done rows ------------------
+    saved.clear()
+    page.click("#todos li:has-text('charlie') input[type=checkbox]")
+    page.wait_for_timeout(600)  # debounced save
+    last = saved[-1] if saved else {}
+    charlie = next((t for t in last.get("todos", []) if t["text"] == "charlie"), {})
+    check("marking done stamps doneAt", isinstance(charlie.get("doneAt"), int),
+          json.dumps(charlie))
+    dates = page.eval_on_selector_all("#todos li .done-at",
+                                      "els => els.map(e => e.textContent)")
+    today = datetime.date.today().isoformat()
+    check("done row shows the faint completion date", dates == [f"✓ {today}"],
+          str(dates))
+    page.click("#undo-toast button")
+    page.wait_for_timeout(600)
+    last = saved[-1] if saved else {}
+    charlie = next((t for t in last.get("todos", []) if t["text"] == "charlie"), {})
+    check("undo clears doneAt again",
+          not charlie.get("done") and "doneAt" not in charlie, json.dumps(charlie))
 
     # --- reference numbers --------------------------------------------------
     def idxs(list_id):

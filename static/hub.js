@@ -247,6 +247,14 @@ function toggleArchive(name) {
 // done/not-done filter for the to-do list (ideas have no done state).
 // Defaults to "active" — finished items are the least interesting at a glance.
 let todoFilter = "active";
+// every done-flip goes through here so the completion date stays truthful:
+// stamped when a to-do is finished, gone the moment it's active again
+function setDone(item, done) {
+  item.done = done;
+  if (done) item.doneAt = Math.floor(Date.now() / 1000);
+  else delete item.doneAt;
+}
+
 function matchesTodoFilter(kind, item) {
   if (kind !== "todos" || todoFilter === "all") return true;
   return todoFilter === "done" ? !!item.done : !item.done;
@@ -340,12 +348,12 @@ function renderNotes() {
         box.type = "checkbox";
         box.checked = !!item.done;
         box.onchange = () => {
-          item.done = box.checked;
+          setDone(item, box.checked);
           renderNotes(); saveNotes();
           // stray taps while scrolling/clicking through rows kept marking
           // things done — recovery beats confirmation: one tap takes it back
           if (item.done) undoToast("marked done",
-            () => { item.done = false; renderNotes(); saveNotes(); });
+            () => { setDone(item, false); renderNotes(); saveNotes(); });
         };
         left.appendChild(box);
       }
@@ -385,6 +393,16 @@ function renderNotes() {
         content.append(tag);
       }
       content.append(txt);
+      // done rows carry their completion date (older items predate the stamp)
+      if (item.done && item.doneAt) {
+        const d = new Date(item.doneAt * 1000);
+        const when = document.createElement("span");
+        when.className = "done-at";
+        when.textContent = `✓ ${d.getFullYear()}-`
+          + `${String(d.getMonth() + 1).padStart(2, "0")}-`
+          + `${String(d.getDate()).padStart(2, "0")}`;
+        content.append(when);
+      }
       if (item.images && item.images.length) content.append(thumbStrip(item.images, item));
       li.append(left, idx, content, menuBtn);
       ul.appendChild(li);
@@ -415,7 +433,7 @@ function convertItem(from, i) {
   const to = from === "todos" ? "ideas" : "todos";
   const [item] = notes[from].splice(i, 1);
   if (to === "todos") item.done = item.done || false;
-  else delete item.done; // ideas carry no done state
+  else { delete item.done; delete item.doneAt; } // ideas carry no done state
   notes[to].push(item);
   renderNotes();
   saveNotes();
@@ -543,7 +561,7 @@ function openRowMenu(e, kind, item) {
   };
   if (kind === "todos") {
     add(item.done ? "mark active" : "mark done",
-        () => { item.done = !item.done; renderNotes(); saveNotes(); });
+        () => { setDone(item, !item.done); renderNotes(); saveNotes(); });
     add("→ make idea", () => convertItem("todos", idx()));
   } else {
     add("→ make to-do", () => convertItem("ideas", idx()));
@@ -1186,6 +1204,8 @@ function saveNotesNow() {
       font-size:.62rem; font-variant:small-caps; letter-spacing:.04em; color:var(--ink-soft);
       border:1px solid var(--ink-faint); border-radius:999px; padding:.02rem .45rem; }
     .jot-col li .jot-tag:hover { border-color:var(--ink-soft); color:var(--ink); }
+    .jot-col li .done-at { font-size:.68rem; font-style:italic; color:var(--ink-faint);
+      font-variant-numeric:tabular-nums; }
     /* searchable set-project picker */
     .row-menu-search { position:sticky; top:0; margin:.25rem; padding:.3rem .5rem; font:inherit;
       font-size:.8rem; border:1px solid var(--ink-faint); border-radius:2px;

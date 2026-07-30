@@ -50,7 +50,10 @@ before pasting. The jot project filter shows per-project note counts, busiest
 first, plus a pinned "untagged · N" option (sentinel `UNTAGGED` — adding while
 in that view files the item untagged). To-do checkboxes are custom-inked
 (`appearance:none`), and marking done raises an `undoToast` — accidental taps
-get one-tap recovery, no confirmation friction. Inbox items hold **one or more images** (`imgs` array; legacy `img`
+get one-tap recovery, no confirmation friction. Every done-flip goes through
+`setDone()`, which stamps `doneAt` (epoch) on completion and deletes it on
+revert; done rows render the date as a faint `✓ YYYY-MM-DD` (items finished
+before the stamp existed simply lack it). Inbox items hold **one or more images** (`imgs` array; legacy `img`
 read via `inboxImgs()`): a multi-file drop forms ONE item, "+ image" grows it,
 per-thumb ✕ appears at ≥2, and promote carries every image onto the note.
 
