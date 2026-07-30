@@ -74,6 +74,21 @@ function refilter() {
     card.style.display = hit ? "" : "none";
     if (hit) visible++;
   });
+  // a band head shows only while its band has visible cards
+  document.querySelectorAll("#grid .band-head").forEach(h => {
+    const any = [...document.querySelectorAll(
+      `#grid .card[data-band="${h.dataset.band}"]`)]
+      .some(c => c.style.display !== "none");
+    h.style.display = any ? "" : "none";
+  });
+  // searching reaches into the archive: unfold on a hit, refold what we unfolded
+  const archBox = document.getElementById("archive");
+  if (archBox && !archBox.hidden) {
+    const hits = [...archBox.querySelectorAll(".card")]
+      .some(c => c.style.display !== "none");
+    if (q && hits && !archBox.open) { archBox.open = true; archBox.dataset.auto = "1"; }
+    if (!q && archBox.dataset.auto) { archBox.open = false; delete archBox.dataset.auto; }
+  }
   updateEmptyState(visible, q);
 }
 
@@ -124,7 +139,7 @@ document.querySelectorAll(".menu").forEach(m => {
   m.addEventListener("mouseenter", () => {
     const items = m.querySelector(".menu-items");
     items.classList.toggle("up",
-      m.getBoundingClientRect().bottom + 140 > window.innerHeight);
+      m.getBoundingClientRect().bottom + 175 > window.innerHeight);
   });
 });
 
@@ -135,6 +150,7 @@ let notes = { todos: [], ideas: [] };
 async function loadNotes() {
   notes = await (await fetch("/api/notes")).json();
   renderNotes();
+  reorderCards();   // bands depend on favorites + archived from the notes doc
 }
 
 let saveTimer = null;
@@ -147,18 +163,59 @@ function saveNotes() {
   }), 400);
 }
 
-// --- favourites (idea #6): ★ pins a project to the top of the shelf; stored
-// in notes.json (same doc as the jots) so it's shared across phone + laptop.
+// --- shelf bands: ★ pinned / in motion / the rest, with an archive fold.
+// Mirrors the server-side banding in app.py index() so ★ and archive toggles
+// re-band without a reload; favorites + archived live in notes.json (same doc
+// as the jots) so they're shared across phone + laptop.
+const ACTIVE_DAYS = 30;                    // mirrored by ACTIVE_DAYS in app.py
+const BAND_LABELS = { pinned: "pinned", motion: "in motion", rest: "the rest" };
+
 function reorderCards() {
-  const grid = document.querySelector(".grid");
-  if (!grid) return;
+  const grid = document.getElementById("grid");
+  const archBox = document.getElementById("archive");
+  if (!grid || !archBox) return;
   const favs = new Set(notes.favorites || []);
-  [...grid.querySelectorAll(".card")].sort((a, b) => {
-    const fa = favs.has(a.dataset.name), fb = favs.has(b.dataset.name);
-    if (fa !== fb) return fa ? -1 : 1;            // favourites first…
-    return a.dataset.name.localeCompare(b.dataset.name); // …then alphabetical
-  }).forEach(c => grid.appendChild(c));
+  const archived = new Set(notes.archived || []);
+  const horizon = Date.now() / 1000 - ACTIVE_DAYS * 86400;
+  const cards = [...document.querySelectorAll(".card")];
+  cards.forEach(c => {
+    c.dataset.band = archived.has(c.dataset.name) ? "archive"
+      : favs.has(c.dataset.name) ? "pinned"
+      : (+c.dataset.act || 0) >= horizon ? "motion" : "rest";
+  });
+  const rank = { pinned: 0, motion: 1, rest: 2 };
+  const shelved = cards.filter(c => c.dataset.band !== "archive").sort((a, b) => {
+    if (rank[a.dataset.band] !== rank[b.dataset.band])
+      return rank[a.dataset.band] - rank[b.dataset.band];
+    if (a.dataset.band === "motion") return (+b.dataset.act) - (+a.dataset.act);
+    return a.dataset.name.localeCompare(b.dataset.name);
+  });
+  // rebuild the main grid: a head above each band (unless it's the only one)
+  grid.querySelectorAll(".band-head").forEach(h => h.remove());
+  const many = new Set(shelved.map(c => c.dataset.band)).size > 1;
+  let prev = null;
+  shelved.forEach(c => {
+    if (many && c.dataset.band !== prev) {
+      prev = c.dataset.band;
+      const h = document.createElement("div");
+      h.className = "band-head";
+      h.dataset.band = prev;
+      h.textContent = BAND_LABELS[prev];
+      grid.appendChild(h);
+    }
+    grid.appendChild(c);
+  });
+  const arch = cards.filter(c => c.dataset.band === "archive")
+    .sort((a, b) => a.dataset.name.localeCompare(b.dataset.name));
+  arch.forEach(c => archBox.querySelector(".grid").appendChild(c));
+  archBox.hidden = arch.length === 0;
+  const n = document.getElementById("arch-count");
+  if (n) n.textContent = arch.length;
+  document.querySelectorAll(".m-arch").forEach(b =>
+    b.textContent = archived.has(b.dataset.arch) ? "unarchive" : "archive");
+  refilter();   // keep band heads consistent with any active search/filter
 }
+
 document.addEventListener("click", e => {
   const btn = e.target.closest(".b-fav");
   if (!btn) return;
@@ -169,6 +226,15 @@ document.addEventListener("click", e => {
   saveNotes();
   reorderCards();
 });
+
+function toggleArchive(name) {
+  notes.archived = notes.archived || [];
+  const i = notes.archived.indexOf(name);
+  if (i >= 0) notes.archived.splice(i, 1);
+  else notes.archived.push(name);
+  saveNotes();
+  reorderCards();
+}
 
 // done/not-done filter for the to-do list (ideas have no done state).
 // Defaults to "active" — finished items are the least interesting at a glance.

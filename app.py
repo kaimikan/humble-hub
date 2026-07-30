@@ -19,7 +19,9 @@ import struct
 import subprocess
 import sys
 import termios
+import time
 import uuid
+import zlib
 from pathlib import Path
 
 from fastapi import (
@@ -31,7 +33,7 @@ from fastapi import (
     WebSocket,
     WebSocketDisconnect,
 )
-from fastapi.responses import HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from PIL import Image, ImageOps
 import pillow_heif
@@ -137,7 +139,7 @@ def detect(path: Path) -> dict:
     "type" field keeps the project in its own category while still getting the
     controls — e.g. linux-learning stays "notes" but can serve its mkdocs site.
     """
-    svc, forced_type = {}, None
+    svc, forced_type, glyph_char = {}, None, ""
     manifest = path / "hub.json"
     if manifest.is_file():
         try:
@@ -146,6 +148,8 @@ def detect(path: Path) -> dict:
                 svc = {"serve": m["serve"], "port": int(m["port"])}
             if m.get("type"):
                 forced_type = m["type"]
+            if m.get("glyph"):
+                glyph_char = str(m["glyph"])[:3]
         except (json.JSONDecodeError, ValueError, TypeError):
             pass  # malformed manifest → heuristics only
 
@@ -155,7 +159,23 @@ def detect(path: Path) -> dict:
     elif svc:
         info["type"] = "service"
     info.update(svc)
+    if glyph_char:
+        info["glyph_char"] = glyph_char
+    for cand in ("icon.svg", "favicon.svg", "static/icon.svg", "static/favicon.svg"):
+        if (path / cand).is_file():
+            info["icon_file"] = cand
+            break
     return info
+
+
+def last_session_mtime(path: Path) -> int:
+    """Newest Claude-session transcript for the project — chatting counts as
+    working on it even when nothing was committed."""
+    d = CLAUDE_PROJECTS / _encode_cwd(path)
+    try:
+        return int(max((f.stat().st_mtime for f in d.glob("*.jsonl")), default=0))
+    except OSError:
+        return 0
 
 
 def scan() -> list:
@@ -163,15 +183,16 @@ def scan() -> list:
     for path in sorted(PROJECTS_DIR.iterdir()):
         if not path.is_dir() or SKIP.match(path.name) or path == HUB_DIR:
             continue
-        projects.append(
-            {
-                "name": path.name,
-                "path": str(path),
-                "excerpt": readme_excerpt(path),
-                **detect(path),
-                **git_info(path),
-            }
-        )
+        p = {
+            "name": path.name,
+            "path": str(path),
+            "excerpt": readme_excerpt(path),
+            **detect(path),
+            **git_info(path),
+        }
+        p["last_active"] = max(int(p.get("last_commit_at") or 0),
+                               last_session_mtime(path))
+        projects.append(p)
     return projects
 
 
@@ -241,6 +262,17 @@ def launch_app(name: str):
 def open_folder(name: str):
     subprocess.Popen(["dolphin", str(project_path(name))])
     return {"ok": True}
+
+
+@app.get("/api/projects/{name}/icon")
+def project_icon(name: str):
+    """A project's own mark (icon.svg/favicon.svg), when it has one — the
+    card's glyph chain prefers it over the auto monogram."""
+    path = project_path(name)
+    rel = detect(path).get("icon_file")
+    if not rel:
+        raise HTTPException(404, "project has no icon file")
+    return FileResponse(path / rel)
 
 
 @app.get("/api/projects")
@@ -1165,16 +1197,27 @@ TYPE_LABELS = {
 }
 
 
+# the five stable accent pigments (see themes.js) — a name-hash picks one per
+# project so its monogram keeps the same tint across visits and themes
+PIGMENTS = ("lapis", "sanguine", "verdigris", "ochre", "plum")
+
+
+def monogram(name: str) -> str:
+    words = [w for w in name.split("-") if w]
+    return (words[0][:2] if len(words) == 1
+            else "".join(w[0] for w in words[:3])).upper()
+
+
 def glyph(p: dict) -> str:
-    """Hand-inked glyph for a project — .desktop icon hints beat type defaults."""
-    icon_hint = ""
-    if p.get("desktop"):
-        for line in Path(p["desktop"]).read_text(errors="replace").splitlines():
-            if line.startswith("Icon="):
-                icon_hint = line[5:].lower()
-    if "audio" in icon_hint or "music" in icon_hint:
-        return icon("audio")
-    return icon(p["type"])
+    """The project's mark: its own icon file beats a hub.json "glyph" character
+    beats the auto ink monogram (initials on a pigment-tinted plate)."""
+    if p.get("icon_file"):
+        return (f'<img class="glyph-img" alt=""'
+                f' src="/api/projects/{html.escape(p["name"])}/icon">')
+    pigment = PIGMENTS[zlib.crc32(p["name"].encode()) % len(PIGMENTS)]
+    mark = p.get("glyph_char") or monogram(p["name"])
+    wide = " mono3" if len(mark) >= 3 else ""
+    return f'<span class="mono{wide} p-{pigment}">{html.escape(mark)}</span>'
 
 
 def card(p: dict, favs: set = frozenset(), peers: list = ()) -> str:
@@ -1197,6 +1240,8 @@ def card(p: dict, favs: set = frozenset(), peers: list = ()) -> str:
             <button onclick="openDrawer('{name}')">fresh chat</button>
             <button onclick="openDrawer('{name}', true)">resume chat</button>
             <button onclick="act('{name}','terminal')">in konsole</button>
+            <button class="m-arch" data-arch="{name}"
+              onclick="toggleArchive('{name}')">archive</button>
           </div>
         </div>""",
         f"""<button class="b-files" onclick="act('{name}','folder')" title="Open in Dolphin">files</button>""",
@@ -1229,7 +1274,8 @@ def card(p: dict, favs: set = frozenset(), peers: list = ()) -> str:
     svc_dot = (f"""<span class="svc-dot" data-svc="{name}" title="stopped">{icon("dot")}</span>"""
                if p.get("serve") else "")
     return f"""
-    <div class="card" data-type="{p['type']}" data-name="{name}" data-text="{search_blob}">
+    <div class="card" data-type="{p['type']}" data-name="{name}"
+         data-act="{p.get('last_active', 0)}" data-text="{search_blob}">
       <div class="head">
         <span class="glyph">{glyph(p)}</span>
         <h2>{name}</h2>
@@ -1242,19 +1288,50 @@ def card(p: dict, favs: set = frozenset(), peers: list = ()) -> str:
     </div>"""
 
 
+ACTIVE_DAYS = 30  # "in motion" horizon — mirrored by ACTIVE_DAYS in hub.js
+BAND_LABELS = {"pinned": "pinned", "motion": "in motion", "rest": "the rest"}
+
+
 @app.get("/", response_class=HTMLResponse)
 def index():
-    favs = set(get_notes().get("favorites", []))
-    # favourites first (stable sort keeps each group alphabetical)
-    projects = sorted(scan(), key=lambda p: p["name"] not in favs)
+    notes = get_notes()
+    favs = set(notes.get("favorites", []))
+    archived = set(notes.get("archived", []))
+    projects = scan()
     # map declared ports → projects, to flag conflicts (idea #10)
     port_use: dict = {}
     for p in projects:
         if p.get("port"):
             port_use.setdefault(p["port"], []).append(p["name"])
+
+    # the shelf self-organizes into bands — pinned (★), in motion (touched
+    # within ACTIVE_DAYS, most recent first), the rest (alphabetical) — with
+    # archived projects folded away below. hub.js reorderCards() mirrors this
+    # so ★/archive toggles re-band without a reload.
+    horizon = time.time() - ACTIVE_DAYS * 86400
+
+    def band(p):
+        if p["name"] in archived:
+            return "archive"
+        if p["name"] in favs:
+            return "pinned"
+        return "motion" if p.get("last_active", 0) >= horizon else "rest"
+
+    bands: dict = {"pinned": [], "motion": [], "rest": [], "archive": []}
+    for p in projects:
+        bands[band(p)].append(p)
+    bands["motion"].sort(key=lambda p: -p.get("last_active", 0))
+
+    def render(p):
+        return card(p, favs,
+                    [n for n in port_use.get(p.get("port"), []) if n != p["name"]])
+
+    shelved = [k for k in ("pinned", "motion", "rest") if bands[k]]
     cards = "".join(
-        card(p, favs, [n for n in port_use.get(p.get("port"), []) if n != p["name"]])
-        for p in projects)
+        (f'<div class="band-head" data-band="{k}">{BAND_LABELS[k]}</div>'
+         if len(shelved) > 1 else "") + "".join(render(p) for p in bands[k])
+        for k in shelved)
+    arch_cards = "".join(render(p) for p in bands["archive"])
     return f"""<!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8"><title>the humble hub</title>
@@ -1286,7 +1363,7 @@ def index():
      edge — left of the drawer when one is open */
   #shelf {{ height:100%; overflow-y:auto; box-sizing:border-box;
     padding:2.2rem 1.2rem; transition:margin-right .22s ease; }}
-  #shelf > header, #shelf > .grid, #shelf > #jot {{ max-width:1100px;
+  #shelf > header, #shelf > .grid, #shelf > #jot, #shelf > #archive {{ max-width:1100px;
     margin-left:auto; margin-right:auto; }}
   /* jottings: to-do + ideas, opened as modals from the controls row */
   .jot-open {{ background:transparent; border:1px solid var(--ink-soft);
@@ -1428,7 +1505,30 @@ def index():
   /* lift the hovered card so its dropdown isn't painted under later cards */
   .card:hover {{ z-index:10; }}
   .head {{ display:flex; align-items:center; gap:.6rem; }}
-  .glyph {{ font-size:1.45rem; line-height:1; }}
+  .glyph {{ line-height:1; display:flex; }}
+  /* the project's mark: tinted monogram plate, or its own icon file */
+  .mono {{ width:2.05rem; height:2.05rem; display:flex; align-items:center;
+    justify-content:center; font-size:.88rem; font-weight:700;
+    letter-spacing:.03em; border:1px solid currentColor; border-radius:2px;
+    background:color-mix(in srgb, currentColor 10%, transparent); }}
+  .mono3 {{ font-size:.7rem; letter-spacing:0; }}
+  .p-lapis {{ color:var(--lapis); }} .p-sanguine {{ color:var(--sanguine); }}
+  .p-verdigris {{ color:var(--verdigris); }} .p-ochre {{ color:var(--ochre); }}
+  .p-plum {{ color:var(--plum); }}
+  .glyph-img {{ width:2.05rem; height:2.05rem; object-fit:contain; }}
+  /* shelf bands: pinned / in motion / the rest */
+  .band-head {{ grid-column:1/-1; display:flex; align-items:center; gap:.7rem;
+    font-variant:small-caps; letter-spacing:.14em; font-size:.85rem;
+    color:var(--ink-soft); margin:.5rem 0 -.5rem; }}
+  .band-head::after {{ content:""; flex:1; border-top:1px solid var(--ink-faint);
+    opacity:.55; }}
+  #archive {{ margin-top:1.8rem; }}
+  #archive summary {{ cursor:pointer; font-variant:small-caps;
+    letter-spacing:.14em; font-size:.85rem; color:var(--ink-soft);
+    width:max-content; }}
+  #archive summary:hover {{ color:var(--ink); }}
+  #archive .grid {{ margin-top:1.1rem; }}
+  #archive .card {{ opacity:.78; }}
   .card h2 {{ margin:0; font-size:1.12rem; font-weight:600; flex:1;
               font-variant:small-caps; letter-spacing:.05em; }}
   .kind {{ font-style:italic; color:var(--ink-faint); font-size:.82rem; }}
@@ -1515,7 +1615,11 @@ def index():
       </span>
     </div>
   </header>
-  <div class="grid">{cards}</div>
+  <div class="grid" id="grid">{cards}</div>
+  <details id="archive" {'' if arch_cards else 'hidden'}>
+    <summary>archive · <span id="arch-count">{len(bands["archive"])}</span></summary>
+    <div class="grid">{arch_cards}</div>
+  </details>
   </div>
 
   <div id="overlay" hidden>

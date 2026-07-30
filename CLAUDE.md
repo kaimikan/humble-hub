@@ -20,6 +20,23 @@ EXIF/GPS stripped on re-encode) under `data/attachments/` (git-ignored), served
 read-only at `/attachments/<id>`. No build step, no database — notes and
 uploads are plain files under `data/`.
 
+The **shelf self-organizes into bands**: *pinned* (★ favorites, alphabetical) →
+*in motion* (touched within `ACTIVE_DAYS`=30, most recent first; "touched" =
+max of last commit and newest Claude-session transcript mtime, see
+`last_session_mtime`) → *the rest* (alphabetical), with an **archive** fold
+(`<details>`) below the grid for retired projects. Banding is computed twice on
+purpose: server-side in `index()` for the initial paint, and client-side in
+`reorderCards()` (hub.js) so ★/archive toggles re-band without a reload — keep
+the two in sync (`ACTIVE_DAYS` is mirrored). `archived` lives in `notes.json`
+next to `favorites`; the card menu's archive/unarchive item toggles it. Search
+reaches into the archive (auto-unfolds on a hit, refolds on clear). Each card's
+**glyph** is a chain: the project's own icon file (`icon.svg`/`favicon.svg`,
+root or `static/`, served via `/api/projects/{name}/icon`) beats a `hub.json`
+`"glyph"` character (≤3 chars) beats an auto ink **monogram** — initials on a
+plate tinted by a stable name-hash over the five accent pigments. Regression
+suite: `tests/test_shelf.py` (hermetic, same intercept pattern as the jot
+tests).
+
 Front-end logic lives in `static/hub.js` (served via StaticFiles, re-read per
 request — JS/CSS changes deploy with just a browser refresh, no restart). New
 UI styles are injected from hub.js rather than the `app.py` template for the
