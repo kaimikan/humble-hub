@@ -268,9 +268,14 @@ function setJotSearch(value) {
   renderNotes();
 }
 
-// project filter (T42): jots can be tagged with a project; filter to one
+// project filter (T42): jots can be tagged with a project; filter to one —
+// or to the untagged ones (a sentinel no real project name can collide with)
+const UNTAGGED = " untagged";
 let jotProject = "";
-function matchesJotProject(item) { return !jotProject || item.project === jotProject; }
+function matchesJotProject(item) {
+  if (jotProject === UNTAGGED) return !item.project;
+  return !jotProject || item.project === jotProject;
+}
 function setJotProject(p) { jotProject = (jotProject === p ? "" : p); renderNotes(); }
 // projects with items in the CURRENT view (kind + the to-do status filter) —
 // the filter only offers what's actually there to filter to. Returns
@@ -288,15 +293,17 @@ function refreshProjectFilter() {
   if (!btn) return;
   const scoped = filterProjects();
   // drop a stale selection only when the current list has no such project at all
-  if (jotProject && !notes[jotKind].some(i => i.project === jotProject)) jotProject = "";
+  if (jotProject && jotProject !== UNTAGGED
+      && !notes[jotKind].some(i => i.project === jotProject)) jotProject = "";
   btn.style.display = (scoped.length || jotProject) ? "" : "none";
-  btn.querySelector(".lbl").textContent = jotProject || "all projects";
+  btn.querySelector(".lbl").textContent =
+    jotProject === UNTAGGED ? "untagged" : jotProject || "all projects";
 }
 
 // surface the inherited project in the add-input placeholder, so adding an item
 // while a project filter is active visibly tags it
 function updateAddHints() {
-  const sfx = jotProject ? ` → ${jotProject}` : "";
+  const sfx = jotProject && jotProject !== UNTAGGED ? ` → ${jotProject}` : "";
   const ti = document.getElementById("todos-input");
   const ii = document.getElementById("ideas-input");
   if (ti) ti.placeholder = "add a task…" + sfx;
@@ -332,7 +339,14 @@ function renderNotes() {
         const box = document.createElement("input");
         box.type = "checkbox";
         box.checked = !!item.done;
-        box.onchange = () => { item.done = box.checked; renderNotes(); saveNotes(); };
+        box.onchange = () => {
+          item.done = box.checked;
+          renderNotes(); saveNotes();
+          // stray taps while scrolling/clicking through rows kept marking
+          // things done — recovery beats confirmation: one tap takes it back
+          if (item.done) undoToast("marked done",
+            () => { item.done = false; renderNotes(); saveNotes(); });
+        };
         left.appendChild(box);
       }
       const handle = document.createElement("span");
@@ -718,7 +732,8 @@ function addItem(ev, kind) {
   if (!text && imgs.length) { imgsToInbox(imgs); clearAttach(kind); return false; }
   if (text) {
     const item = kind === "todos" ? { text, done: false } : { text };
-    if (jotProject) item.project = jotProject; // adding while filtered tags it
+    // adding while filtered tags it (the untagged view files, well, untagged)
+    if (jotProject && jotProject !== UNTAGGED) item.project = jotProject;
     if (imgs.length) { item.images = imgs.slice(); clearAttach(kind); }
     notes[kind].push(item);
     input.value = "";
@@ -1001,6 +1016,23 @@ function removeInbox(i) {
   saveNotesNow();
 }
 
+// a toast with a way back — shown after actions worth a second thought
+// (marking a to-do done). One at a time; the newest replaces the last.
+function undoToast(msg, fn) {
+  document.getElementById("undo-toast")?.remove();
+  const el = document.createElement("div");
+  el.id = "undo-toast";
+  const txt = document.createElement("span");
+  txt.textContent = msg;
+  const b = document.createElement("button");
+  b.type = "button";
+  b.textContent = "undo";
+  b.onclick = () => { el.remove(); fn(); };
+  el.append(txt, b);
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), 6000);
+}
+
 // immediate (non-debounced) save — inbox writes use this so a phone capture
 // survives the tab being closed right after the drop
 function saveNotesNow() {
@@ -1019,6 +1051,26 @@ function saveNotesNow() {
   style.textContent = `
     .jot-add { display:flex; align-items:center; gap:.45rem; }
     .jot-add input { flex:1; min-width:0; }
+    /* hand-inked checkbox — a deliberate little box, not the browser widget */
+    .jot-col li input[type="checkbox"] { appearance:none; -webkit-appearance:none;
+      width:1.15rem; height:1.15rem; margin:0; flex:none; cursor:pointer;
+      position:relative; border:1.5px solid var(--ink-soft); border-radius:2px;
+      background:var(--input-bg); }
+    .jot-col li input[type="checkbox"]:hover { border-color:var(--ink); }
+    .jot-col li input[type="checkbox"]:checked { border-color:var(--verdigris, #4f6b3a); }
+    .jot-col li input[type="checkbox"]:checked::after { content:"✓"; position:absolute;
+      inset:0; display:flex; align-items:center; justify-content:center;
+      color:var(--verdigris, #4f6b3a); font-size:.95rem; font-weight:700; line-height:1; }
+    .jot-col li .row-left { gap:.35rem; }
+    #undo-toast { position:fixed; bottom:1.4rem; left:50%; transform:translateX(-50%);
+      z-index:300; display:flex; align-items:center; gap:.7rem;
+      background:var(--paper, #f6edd6); color:var(--ink); border:1.5px solid var(--ink-soft);
+      outline:1px solid var(--ink-faint); outline-offset:3px; border-radius:2px;
+      padding:.45rem .85rem; font-size:.88rem; box-shadow:2px 3px 12px rgba(40,30,15,.4); }
+    #undo-toast button { border:1px solid var(--ink-soft); border-radius:2px;
+      background:transparent; color:var(--ink); font:inherit; font-size:.8rem;
+      font-variant:small-caps; letter-spacing:.05em; padding:.18rem .6rem; cursor:pointer; }
+    #undo-toast button:hover { background:var(--ink); color:var(--parchment); }
     .attach-btn { cursor:pointer; font-size:1.25rem; line-height:1; padding:.15rem .3rem;
       opacity:.55; user-select:none; flex:none; display:inline-flex; align-items:center; }
     .attach-btn:hover { opacity:1; }
@@ -1193,7 +1245,11 @@ function saveNotesNow() {
   projBtn.innerHTML = '<span class="lbl">all projects</span>';
   projBtn.onclick = e => {
     e.stopPropagation();
+    const untagged = notes[jotKind]
+      .filter(it => matchesTodoFilter(jotKind, it) && !it.project).length;
     const opts = [{ label: "all projects", value: "", pinned: true },
+                  ...(untagged ? [{ label: `untagged · ${untagged}`, value: UNTAGGED,
+                                    pinned: true }] : []),
                   ...filterProjects().map(([p, n]) => ({ label: `${p} · ${n}`, value: p }))];
     openSearchablePicker(projBtn.getBoundingClientRect(), opts, jotProject,
       val => { jotProject = val; renderNotes(); });
@@ -2435,10 +2491,25 @@ setInterval(() => {
     .theme-section { margin:1rem 0 .2rem; padding-top:.75rem; font-variant:small-caps;
       letter-spacing:.12em; font-size:.78rem; color:var(--ink-soft);
       border-top:1px solid var(--ink-faint); }
-    .glyph-toggle { display:flex; align-items:center; gap:.5rem; cursor:pointer;
-      font-size:.85rem; color:var(--ink); }
-    .glyph-toggle input { accent-color:var(--verdigris, #4f6b3a); }
-    .glyph-toggle .sub { color:var(--ink-soft); font-style:italic; font-size:.78rem; }
+    /* shelf glyph style: two option cards previewing REAL marks off the shelf */
+    .glyph-row { display:flex; gap:.9rem; flex-wrap:wrap; }
+    .glyph-card { display:flex; flex-direction:column; align-items:center; gap:.55rem;
+      border:1.5px solid rgba(128,128,128,.45); border-radius:3px; cursor:pointer;
+      background:var(--card-bg); color:var(--ink); font:inherit; font-variant:normal;
+      letter-spacing:normal; padding:.8rem 1.1rem .55rem; min-width:11rem; }
+    .glyph-card:hover { border-color:rgba(128,128,128,.8); color:var(--ink);
+      background:var(--card-hot); box-shadow:0 3px 10px rgba(0,0,0,.3);
+      transform:translateY(-1px); }
+    .glyph-card.current { border-color:transparent; outline:2.5px solid rgba(128,128,128,.85); }
+    .glyph-card.current .g-name::before { content:"✓ "; }
+    .glyph-card .g-strip { display:flex; align-items:center; gap:.5rem; }
+    .glyph-card .g-strip .tglyph { display:block; width:1.6rem; height:1.6rem; }
+    .glyph-card .g-strip .mono { display:flex; }
+    .glyph-card .g-strip .glyph-img { display:block; }
+    .glyph-card .g-name { font-variant:small-caps; letter-spacing:.06em;
+      font-size:.82rem; }
+    .glyph-card .g-sub { font-style:italic; font-size:.72rem; color:var(--ink-soft);
+      margin-top:-.35rem; }
     .theme-lab-link { align-self:flex-start; margin-top:.5rem; font-variant:small-caps;
       letter-spacing:.1em; font-size:.74rem; color:var(--ink-soft); text-decoration:none;
       border-bottom:1px dotted var(--ink-faint); padding-bottom:1px; }
@@ -2490,25 +2561,59 @@ setInterval(() => {
     modal.appendChild(wrow);
   }
   // shelf preferences ride along in the theme modal: per-project marks
-  // (monogram/icon, the default) vs the hand-inked per-type glyphs. Persists
-  // per device in localStorage; the CSS swap lives in the app.py template.
+  // (monogram/icon, the default) vs the hand-inked per-type glyphs, shown as
+  // two option cards previewing marks cloned from the LIVE shelf — the sample
+  // is by construction what the grid will look like. Persists per device in
+  // localStorage; the CSS swap (body.type-glyphs) lives in the app.py template.
   const gsec = document.createElement("div");
   gsec.className = "theme-section";
-  gsec.textContent = "shelf";
+  gsec.textContent = "shelf · project marks";
   modal.appendChild(gsec);
-  const gl = document.createElement("label");
-  gl.className = "glyph-toggle";
-  gl.innerHTML = '<input type="checkbox"> category glyphs'
-    + ' <span class="sub">one inked mark per type — instead of per-project marks</span>';
-  modal.appendChild(gl);
-  const gt = gl.querySelector("input");
-  gt.checked = localStorage.getItem("hubGlyphs") === "type";
-  const applyGlyphs = () =>
-    document.body.classList.toggle("type-glyphs", gt.checked);
-  gt.onchange = () => {
-    localStorage.setItem("hubGlyphs", gt.checked ? "type" : "project");
-    applyGlyphs();
+  const applyGlyphs = () => {
+    const mode = localStorage.getItem("hubGlyphs") === "type" ? "type" : "project";
+    document.body.classList.toggle("type-glyphs", mode === "type");
+    document.querySelectorAll(".glyph-card").forEach(c =>
+      c.classList.toggle("current", c.dataset.mode === mode));
   };
+  const sampleMarks = mode => {
+    const out = [], seen = new Set();
+    for (const card of document.querySelectorAll("#grid .card")) {
+      const el = card.querySelector(mode === "type" ? ".glyph .tglyph"
+                                                    : ".glyph :not(.tglyph)");
+      // one of each: distinct types for the inked icons, distinct pigments
+      // (or an icon file) for the project marks — a fair spread of each style
+      const key = mode === "type" ? card.dataset.type
+                : el?.className + (el?.tagName === "IMG" ? el.src : "");
+      if (!el || seen.has(key)) continue;
+      seen.add(key);
+      out.push(el.cloneNode(true));
+      if (out.length === 3) break;
+    }
+    return out;
+  };
+  const mkGlyphCard = (mode, label, sub) => {
+    const c = document.createElement("button");
+    c.className = "glyph-card";
+    c.dataset.mode = mode;
+    const strip = document.createElement("span");
+    strip.className = "g-strip";
+    strip.append(...sampleMarks(mode));
+    const name = document.createElement("span");
+    name.className = "g-name";
+    name.textContent = label;
+    const s = document.createElement("span");
+    s.className = "g-sub";
+    s.textContent = sub;
+    c.append(strip, name, s);
+    c.onclick = () => { localStorage.setItem("hubGlyphs", mode); applyGlyphs(); };
+    return c;
+  };
+  const grow = document.createElement("div");
+  grow.className = "glyph-row";
+  grow.append(
+    mkGlyphCard("project", "per project", "its icon, or an inked monogram"),
+    mkGlyphCard("type", "per category", "one mark for each kind — site, app, code…"));
+  modal.appendChild(grow);
   applyGlyphs();
 
   // link to the draft sandbox — where worlds are prototyped before they ship here

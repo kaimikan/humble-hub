@@ -34,9 +34,10 @@ reaches into the archive (auto-unfolds on a hit, refolds on clear). Each card's
 root or `static/`, served via `/api/projects/{name}/icon`) beats a `hub.json`
 `"glyph"` character (≤3 chars) beats an auto ink **monogram** — initials on a
 plate tinted by a stable name-hash over the five accent pigments. Cards render
-BOTH marks (the per-project one + the old per-type icon, class `tglyph`); a
-"shelf" toggle in the theme modal swaps them via `body.type-glyphs`
-(localStorage `hubGlyphs`, per-project is the default). Band heads carry a
+BOTH marks (the per-project one + the old per-type icon, class `tglyph`); the
+theme modal's "shelf · project marks" section offers the two styles as option
+cards whose samples are cloned from the live grid, swapping via
+`body.type-glyphs` (localStorage `hubGlyphs`, per-project is the default). Band heads carry a
 `band-hint` explaining what earns a project its band. Regression suite:
 `tests/test_shelf.py` (hermetic, same intercept pattern as the jot tests).
 
@@ -46,7 +47,10 @@ or any live drawer session. The note text (+ attachment paths under
 `data/attachments/`) is bracketed-pasted into the chat's input — never
 auto-submitted; `injectIntoSession` waits for first pty output on fresh chats
 before pasting. The jot project filter shows per-project note counts, busiest
-first. Inbox items hold **one or more images** (`imgs` array; legacy `img`
+first, plus a pinned "untagged · N" option (sentinel `UNTAGGED` — adding while
+in that view files the item untagged). To-do checkboxes are custom-inked
+(`appearance:none`), and marking done raises an `undoToast` — accidental taps
+get one-tap recovery, no confirmation friction. Inbox items hold **one or more images** (`imgs` array; legacy `img`
 read via `inboxImgs()`): a multi-file drop forms ONE item, "+ image" grows it,
 per-thumb ✕ appears at ≥2, and promote carries every image onto the note.
 
