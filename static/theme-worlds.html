@@ -232,6 +232,246 @@ function makeUnderstory(pal, container) {
   };
 }
 
+// STAR ATLAS — indigo night; twinkling stars, constellations that draw
+// themselves, a rare shooting star for whoever happens to be looking
+function makeAtlas(pal, container) {
+  const [bgR, bgG, bgB] = _hx(pal.bg), [iR, iG, iB] = _hx(pal.ink);
+  return (p) => {
+    let stars = [], constel, shoot = null, tints;
+    const N = () => Math.max(40, Math.min(110, Math.floor(p.width * p.height / 1400)));
+    const mkStar = () => ({ x: p.random(p.width), y: p.random(p.height),
+      r: p.random(.5, 1.6), ph: p.random(p.TWO_PI), tw: p.random(.008, .02),
+      base: p.random(.25, .9), c: p.random() < .12 ? tints[(p.random(tints.length)) | 0] : null });
+    const mkConstel = () => { const cx = p.random(p.width * .15, p.width * .85),
+      cy = p.random(p.height * .2, p.height * .8), pts = [];
+      const n = 4 + ((p.random(3)) | 0);
+      for (let i = 0; i < n; i++) pts.push({ x: cx + p.random(-75, 75), y: cy + p.random(-55, 55) });
+      return { pts, t: 0 }; };
+    const drawConstel = (c) => { const seg = c.pts.length - 1;
+      const alpha = c.t < .7 ? 1 : 1 - (c.t - .7) / .3;         // draw → hold → fade
+      const prog = p.constrain(c.t / .35, 0, 1) * seg;
+      p.stroke(iR, iG, iB, 52 * alpha); p.strokeWeight(.8);
+      for (let i = 0; i < seg; i++) { const f = p.constrain(prog - i, 0, 1); if (f <= 0) break;
+        const a = c.pts[i], b = c.pts[i + 1];
+        p.line(a.x, a.y, a.x + (b.x - a.x) * f, a.y + (b.y - a.y) * f); }
+      p.noStroke(); p.fill(iR, iG, iB, 150 * alpha);
+      for (let i = 0; i <= Math.min(seg, Math.ceil(prog)); i++) p.circle(c.pts[i].x, c.pts[i].y, 2.4); };
+    const scene = (mv) => { p.background(bgR, bgG, bgB); p.noStroke();
+      for (const s of stars) { if (mv) s.ph += s.tw;
+        const a = s.base * (.55 + .45 * Math.sin(s.ph));
+        if (s.c) p.fill(s.c[0], s.c[1], s.c[2], a * 235); else p.fill(iR, iG, iB, a * 205);
+        p.circle(s.x, s.y, s.r * 2); }
+      if (mv) { constel.t += 1 / (30 * 14); if (constel.t > 1) constel = mkConstel(); }
+      drawConstel(constel);
+      if (mv && !shoot && p.random() < .0012)
+        shoot = { x: p.random(p.width), y: p.random(p.height * .4), a: p.random(.5, 1.1), life: 1 };
+      if (shoot) { const v = 9, dx = Math.cos(shoot.a) * v, dy = Math.sin(shoot.a) * v;
+        p.stroke(iR, iG, iB, 190 * shoot.life); p.strokeWeight(1.4);
+        p.line(shoot.x, shoot.y, shoot.x - dx * 4, shoot.y - dy * 4); p.noStroke();
+        if (mv) { shoot.x += dx; shoot.y += dy; shoot.life -= .033; if (shoot.life <= 0) shoot = null; } } };
+    p.setup = () => { const [w, h] = dims(container); p.createCanvas(w, h).parent(container);
+      p.pixelDensity(1); p.frameRate(30);
+      tints = [pal.lapis, pal.ochre, pal.sanguine].map(_hx);
+      for (let i = 0; i < N(); i++) stars.push(mkStar()); constel = mkConstel();
+      if (REDUCED) { constel.t = .5; scene(false); p.noLoop(); } };
+    p.draw = () => scene(true);
+    p.windowResized = () => { const [w, h] = dims(container); p.resizeCanvas(w, h); };
+  };
+}
+
+// ABYSS — bioluminescent deep: dark until you move; plankton glows near the
+// pointer, taps bloom. Light as interaction, darkness as the default.
+function makeAbyss(pal, container) {
+  const [bgR, bgG, bgB] = _hx(pal.bg);
+  return (p) => {
+    let motes = [], sprites, bloom = null;
+    const N = () => Math.max(20, Math.min(60, Math.floor(p.width * p.height / 2600)));
+    const mk = () => ({ x: p.random(p.width), y: p.random(p.height), r: p.random(1, 2.6),
+      a: p.random(p.TWO_PI), spd: p.random(.06, .22), ph: p.random(p.TWO_PI),
+      tw: p.random(.005, .014), s: (p.random(sprites.length)) | 0 });
+    const lightAt = (x, y) => { let d = 1e9;
+      if (p.mouseX > 0 && p.mouseX < p.width && p.mouseY > 0 && p.mouseY < p.height)
+        d = p.dist(x, y, p.mouseX, p.mouseY);
+      let l = Math.max(0, 1 - d / 180) ** 2;                     // pointer lantern
+      if (bloom) l = Math.max(l, Math.max(0, 1 - p.dist(x, y, bloom.x, bloom.y) / bloom.r) * bloom.life);
+      return l; };
+    const scene = (mv) => { p.background(bgR, bgG, bgB); p.push(); p.blendMode(p.ADD);
+      for (const m of motes) { if (mv) { m.a += (p.noise(m.x * .008, m.y * .008) - .5) * .2;
+          m.x += Math.cos(m.a) * m.spd; m.y += Math.sin(m.a) * m.spd; m.ph += m.tw;
+          if (m.x < -8) m.x = p.width + 8; if (m.x > p.width + 8) m.x = -8;
+          if (m.y < -8) m.y = p.height + 8; if (m.y > p.height + 8) m.y = -8; }
+        const a = .05 + .1 * Math.sin(m.ph) ** 2 + .85 * lightAt(m.x, m.y), s = m.r * 8;
+        p.tint(255, 255, 255, p.constrain(a, 0, 1) * 255);
+        p.image(sprites[m.s], m.x - s / 2, m.y - s / 2, s, s); }
+      p.pop();
+      if (bloom && mv) { bloom.r += 3.2; bloom.life -= .02; if (bloom.life <= 0) bloom = null; } };
+    p.setup = () => { const [w, h] = dims(container); p.createCanvas(w, h).parent(container);
+      p.pixelDensity(1); p.frameRate(30);
+      sprites = [softSprite(p, pal.verdigris), softSprite(p, pal.lapis), softSprite(p, pal.glow || pal.verdigris)];
+      for (let i = 0; i < N(); i++) motes.push(mk());
+      if (REDUCED) { scene(false); p.noLoop(); } };
+    p.draw = () => scene(true);
+    p.mousePressed = () => { if (p.mouseX >= 0 && p.mouseX <= p.width && p.mouseY >= 0 && p.mouseY <= p.height)
+      bloom = { x: p.mouseX, y: p.mouseY, r: 30, life: 1 }; };
+    p.windowResized = () => { const [w, h] = dims(container); p.resizeCanvas(w, h); };
+  };
+}
+
+// PHYSARUM — slime-mold agents lay pheromone trails on a coarse field that
+// diffuses and decays: a living network slowly growing behind the shelf
+function makePhysarum(pal, container) {
+  const [bgR, bgG, bgB] = _hx(pal.bg), [tR, tG, tB] = _hx(pal.verdigris);
+  return (p) => {
+    const SCALE = 4, SENSE = 7, TURN = .42, STEP = 1.1;
+    let W, H, field, next, agents, img;
+    const N = () => Math.max(220, Math.min(600, Math.floor(p.width * p.height / 170)));
+    const wrap = (v, m) => (v % m + m) % m;
+    const at = (x, y) => field[wrap(y | 0, H) * W + wrap(x | 0, W)];
+    const stepAgents = () => { for (const a of agents) {
+        const l = at(a.x + Math.cos(a.a - .45) * SENSE, a.y + Math.sin(a.a - .45) * SENSE);
+        const c = at(a.x + Math.cos(a.a) * SENSE, a.y + Math.sin(a.a) * SENSE);
+        const r = at(a.x + Math.cos(a.a + .45) * SENSE, a.y + Math.sin(a.a + .45) * SENSE);
+        if (c >= l && c >= r) ; else if (l > r) a.a -= TURN; else a.a += TURN;
+        a.a += p.random(-.06, .06);            // jitter — keeps filaments fine
+        a.x = wrap(a.x + Math.cos(a.a) * STEP, W); a.y = wrap(a.y + Math.sin(a.a) * STEP, H);
+        const i = (a.y | 0) * W + (a.x | 0); field[i] = Math.min(1, field[i] + .11); } };
+    const diffuse = () => { for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+        const x0 = x ? x - 1 : W - 1, x1 = x < W - 1 ? x + 1 : 0;
+        const y0 = (y ? y - 1 : H - 1) * W, y1 = (y < H - 1 ? y + 1 : 0) * W, ym = y * W;
+        next[ym + x] = (field[ym + x] * 4 + field[ym + x0] + field[ym + x1]
+          + field[y0 + x] + field[y1 + x]) / 8 * .93; }
+      [field, next] = [next, field]; };
+    const paint = () => { img.loadPixels();
+      for (let i = 0; i < W * H; i++) { const v = Math.min(1, field[i]) ** 1.6, k = i * 4;
+        img.pixels[k] = bgR + (tR - bgR) * v; img.pixels[k + 1] = bgG + (tG - bgG) * v;
+        img.pixels[k + 2] = bgB + (tB - bgB) * v; img.pixels[k + 3] = 255; }
+      img.updatePixels(); p.image(img, 0, 0, p.width, p.height); };
+    p.setup = () => { const [w, h] = dims(container); p.createCanvas(w, h).parent(container);
+      p.pixelDensity(1); p.frameRate(30);
+      W = Math.ceil(w / SCALE); H = Math.ceil(h / SCALE);
+      field = new Float32Array(W * H); next = new Float32Array(W * H);
+      agents = Array.from({ length: N() }, () => {  // seed as a loose ring — the
+        const a = p.random(p.TWO_PI);               // net grows outward from home
+        return { x: W / 2 + Math.cos(a) * p.random(W / 7), y: H / 2 + Math.sin(a) * p.random(H / 7),
+          a: p.random(p.TWO_PI) }; });
+      if (REDUCED) { for (let i = 0; i < 300; i++) { stepAgents(); diffuse(); }
+        img = p.createImage(W, H); paint(); p.noLoop(); return; }
+      img = p.createImage(W, H); };
+    p.draw = () => { stepAgents(); diffuse(); paint(); };
+    p.windowResized = () => { const [w, h] = dims(container); p.resizeCanvas(w, h); };
+  };
+}
+
+// DARKROOM — everything under the red safelight; prints develop in the dark.
+// The brave part is the palette: five pigments doing their jobs in ONE hue.
+function makeDarkroom(pal, container) {
+  const [bgR, bgG, bgB] = _hx(pal.bg);
+  return (p) => {
+    let prints = [], lampPh = 0;
+    const mkPrint = () => ({ x: p.random(p.width * .08, p.width * .62),
+      y: p.random(p.height * .1, p.height * .6), w: p.random(46, 86), t: p.random(-.4, 0),
+      blobs: Array.from({ length: 3 + ((p.random(3)) | 0) },
+        () => ({ dx: p.random(.15, .85), dy: p.random(.15, .85), r: p.random(.12, .34) })) });
+    const lamp = () => { const ctx = p.drawingContext, breathe = .1 + .025 * Math.sin(lampPh);
+      const g = ctx.createRadialGradient(p.width * .9, -p.height * .1, 0,
+        p.width * .9, -p.height * .1, p.width * .95);
+      g.addColorStop(0, `rgba(214,66,48,${breathe})`); g.addColorStop(1, "rgba(214,66,48,0)");
+      ctx.fillStyle = g; ctx.fillRect(0, 0, p.width, p.height); };
+    const scene = (mv) => { p.background(bgR, bgG, bgB); if (mv) lampPh += .012; lamp();
+      for (const pr of prints) { if (mv) pr.t += 1 / (30 * 16);
+        if (pr.t > 1) Object.assign(pr, mkPrint());
+        const dev = p.constrain(pr.t / .55, 0, 1);               // develop slowly…
+        const a = pr.t < .82 ? dev : dev * (1 - (pr.t - .82) / .18);  // …then lift out
+        if (a <= 0) continue; const h = pr.w * 1.28; p.noStroke();
+        p.fill(30, 8, 7, 210 * a); p.rect(pr.x - 3, pr.y - 3, pr.w + 6, h + 6, 2); // paper edge
+        p.fill(16, 4, 4, 235 * a); p.rect(pr.x, pr.y, pr.w, h, 1);
+        for (const b of pr.blobs) { p.fill(120, 34, 26, 90 * a * dev);
+          p.circle(pr.x + b.dx * pr.w, pr.y + b.dy * h, b.r * pr.w * 2); } } };
+    p.setup = () => { const [w, h] = dims(container); p.createCanvas(w, h).parent(container);
+      p.pixelDensity(1); p.frameRate(24);
+      for (let i = 0; i < 3; i++) { const pr = mkPrint(); pr.t = p.random(.1, .8); prints.push(pr); }
+      if (REDUCED) { scene(false); p.noLoop(); } };
+    p.draw = () => scene(true);
+    p.windowResized = () => { const [w, h] = dims(container); p.resizeCanvas(w, h); };
+  };
+}
+
+// RAIN ON THE WINDOW — lamplight bokeh behind wet glass; drops bead, then run
+function makeRain(pal, container) {
+  const [bgR, bgG, bgB] = _hx(pal.bg);
+  return (p) => {
+    let bokeh = [], runners = [], beads = [], sprites;
+    const mkBokeh = () => ({ x: p.random(p.width), y: p.random(p.height * .75),
+      r: p.random(18, 52), a: p.random(.05, .16), s: (p.random(sprites.length)) | 0,
+      ph: p.random(p.TWO_PI) });
+    const mkRunner = () => ({ x: p.random(p.width), y: p.random(-p.height * .3, 0),
+      v: p.random(1.2, 2.6), wob: p.random(p.TWO_PI) });
+    const mkBead = () => ({ x: p.random(p.width), y: p.random(p.height),
+      r: p.random(.7, 1.8), ph: p.random(p.TWO_PI) });
+    const scene = (mv) => { p.background(bgR, bgG, bgB, mv ? 46 : 255);  // veil → streak trails
+      p.push(); p.blendMode(p.ADD);
+      for (const b of bokeh) { if (mv) b.ph += .006;
+        const s = b.r * (1 + .04 * Math.sin(b.ph));
+        p.tint(255, 255, 255, b.a * 255); p.image(sprites[b.s], b.x - s, b.y - s, s * 2, s * 2); }
+      p.pop(); p.noStroke();
+      for (const d of beads) { if (mv) d.ph += .01;
+        p.fill(210, 224, 238, 46 + 26 * Math.sin(d.ph)); p.circle(d.x, d.y, d.r * 2); }
+      for (const r of runners) { if (mv) { r.wob += .12;
+          r.x += Math.sin(r.wob) * .5; r.y += r.v; r.v += .015;
+          if (r.y > p.height + 8) Object.assign(r, mkRunner()); }
+        p.fill(224, 236, 248, 150); p.circle(r.x, r.y, 2.6);
+        p.fill(224, 236, 248, 60); p.circle(r.x, r.y - 4, 1.8); } };
+    p.setup = () => { const [w, h] = dims(container); p.createCanvas(w, h).parent(container);
+      p.pixelDensity(1); p.frameRate(30);
+      sprites = [pal.lapis, pal.ochre, pal.sanguine, pal.glow || pal.ochre].map(c => softSprite(p, c, .8));
+      const nb = Math.max(5, Math.min(11, (p.width * p.height / 14000) | 0));
+      for (let i = 0; i < nb; i++) bokeh.push(mkBokeh());
+      for (let i = 0; i < Math.max(4, p.width / 90 | 0); i++) runners.push(mkRunner());
+      for (let i = 0; i < 26; i++) beads.push(mkBead());
+      p.background(bgR, bgG, bgB); if (REDUCED) { scene(false); p.noLoop(); } };
+    p.draw = () => scene(true);
+    p.windowResized = () => { const [w, h] = dims(container); p.resizeCanvas(w, h);
+      p.background(bgR, bgG, bgB); };
+  };
+}
+
+// UKIYO-E — washi paper, an indigo wave band with foam curls, a sparse petal
+// drift, one vermilion seal. Lives or dies on restraint.
+function makeUkiyo(pal, container) {
+  const [bgR, bgG, bgB] = _hx(pal.bg), [wR, wG, wB] = _hx(pal.lapis), [sR, sG, sB] = _hx(pal.sanguine);
+  return (p) => {
+    let petals = [], ph = 0;
+    const mkPetal = (init) => ({ x: p.random(p.width), y: init ? p.random(p.height) : -8,
+      r: p.random(2.4, 4.2), rot: p.random(p.TWO_PI), vr: p.random(-.02, .02),
+      vy: p.random(.25, .55), sway: p.random(p.TWO_PI), sw: p.random(.008, .02) });
+    const wave = () => { const baseY = p.height * .82;
+      for (let L = 0; L < 3; L++) { const yo = L * 9, amp = 7 - L * 1.6;
+        p.noFill(); p.stroke(wR, wG, wB, 200 - L * 48); p.strokeWeight(2.2 - L * .5);
+        p.beginShape(); for (let x = -6; x <= p.width + 6; x += 7)
+          p.vertex(x, baseY + yo + Math.sin(x * .045 + ph + L * .7) * amp); p.endShape(); }
+      p.noStroke(); p.fill(bgR, bgG, bgB, 255);                  // paper under the crests
+      for (let x = 10; x < p.width; x += 34) {                   // foam curls on the top line
+        const y = p.height * .82 + Math.sin(x * .045 + ph) * 7;
+        p.fill(wR, wG, wB, 170); p.circle(x, y - 3, 5); p.fill(bgR, bgG, bgB); p.circle(x - 1.4, y - 4.2, 3.4); } };
+    const seal = () => { p.noStroke(); p.fill(sR, sG, sB, 235);
+      p.rect(p.width - 34, p.height * .18, 18, 18, 2); p.fill(bgR, bgG, bgB, 200);
+      p.rect(p.width - 30, p.height * .18 + 4, 4, 10); p.rect(p.width - 24, p.height * .18 + 4, 4, 6); };
+    const scene = (mv) => { p.background(bgR, bgG, bgB); if (mv) ph += .006; wave(); seal();
+      p.noStroke(); for (const pt of petals) { if (mv) { pt.sway += pt.sw; pt.rot += pt.vr;
+          pt.x += Math.sin(pt.sway) * .45; pt.y += pt.vy;
+          if (pt.y > p.height + 8) Object.assign(pt, mkPetal(false)); }
+        p.push(); p.translate(pt.x, pt.y); p.rotate(pt.rot);
+        p.fill(224, 170, 184, 200); p.ellipse(0, 0, pt.r * 2, pt.r * 1.15); p.pop(); } };
+    p.setup = () => { const [w, h] = dims(container); p.createCanvas(w, h).parent(container);
+      p.pixelDensity(1); p.frameRate(30);
+      const n = Math.max(4, Math.min(8, (p.width / 70) | 0));
+      for (let i = 0; i < n; i++) petals.push(mkPetal(true));
+      if (REDUCED) { scene(false); p.noLoop(); } };
+    p.draw = () => scene(true);
+    p.windowResized = () => { const [w, h] = dims(container); p.resizeCanvas(w, h); };
+  };
+}
+
 // ---- DRAFTS registry (append to grow the lab) ------------------------------
 const grove = THEME.grove;  // the shipped baseline, straight from the registry
 const DRAFTS = [
@@ -252,6 +492,36 @@ const DRAFTS = [
     bg: "#17130d", paper: "#221b12", ink: "#e6dcc4", inkSoft: "#b0a487", inkFaint: "#786a52",
     lapis: "#6f93b0", sanguine: "#c75a43", verdigris: "#7a9b54", ochre: "#d8a24a", plum: "#9d72a8",
     sketch: makeUnderstory },
+  { key: "atlas", name: "star atlas", mode: "dark", blurb: "indigo night · constellations draw themselves",
+    font: "'EB Garamond','Noto Serif',Georgia,serif",
+    bg: "#0b1026", paper: "#141a36", ink: "#dfe4f2", inkSoft: "#9aa4c4", inkFaint: "#5d6788",
+    lapis: "#7f9fd8", sanguine: "#d87a6a", verdigris: "#7fc8b0", ochre: "#e8c878", plum: "#a98fd0",
+    sketch: makeAtlas },
+  { key: "abyss", name: "abyss", mode: "dark", blurb: "bioluminescent deep · dark until you move",
+    font: "'EB Garamond','Noto Serif',Georgia,serif",
+    bg: "#04090c", paper: "#0a1418", ink: "#cfe8e4", inkSoft: "#8bafa9", inkFaint: "#527069",
+    lapis: "#5fa8c8", sanguine: "#d86a78", verdigris: "#54d8b0", ochre: "#d8c070", plum: "#9d84d0",
+    glow: "#7ff0cf", sketch: makeAbyss },
+  { key: "physarum", name: "physarum", mode: "dark", blurb: "slime-mold net · a web quietly connecting things",
+    font: "'JetBrains Mono','Hack',monospace",
+    bg: "#0b0f0a", paper: "#141a12", ink: "#d8e6cf", inkSoft: "#97ab8c", inkFaint: "#5e705a",
+    lapis: "#78a0b8", sanguine: "#c86858", verdigris: "#8fd070", ochre: "#cfba60", plum: "#a486c0",
+    sketch: makePhysarum },
+  { key: "darkroom", name: "darkroom", mode: "dark", blurb: "red safelight · prints developing in the dark",
+    font: "'JetBrains Mono','Hack',monospace",
+    bg: "#140505", paper: "#1e0908", ink: "#e8b4a8", inkSoft: "#b07d72", inkFaint: "#70453e",
+    lapis: "#a06a80", sanguine: "#e05545", verdigris: "#997a52", ochre: "#d89a58", plum: "#8f5a70",
+    sketch: makeDarkroom },
+  { key: "rain", name: "rain on the window", mode: "dark", blurb: "lamplight bokeh · drops running down the glass",
+    font: "'EB Garamond','Noto Serif',Georgia,serif",
+    bg: "#0c0e14", paper: "#151823", ink: "#dce2ec", inkSoft: "#9ba4b8", inkFaint: "#5e6678",
+    lapis: "#6f9fd8", sanguine: "#d87868", verdigris: "#78b898", ochre: "#e0b060", plum: "#a488cc",
+    glow: "#f0d8a0", sketch: makeRain },
+  { key: "ukiyo", name: "ukiyo-e", mode: "light", blurb: "washi + indigo wave · one vermilion seal",
+    font: "'EB Garamond','Noto Serif',Georgia,serif",
+    bg: "#f2ead8", paper: "#f9f4e6", ink: "#2c3138", inkSoft: "#5c6470", inkFaint: "#9aa0a8",
+    lapis: "#2a4a72", sanguine: "#c73e2a", verdigris: "#4a7a5c", ochre: "#b8862e", plum: "#7a4a80",
+    sketch: makeUkiyo },
 ];
 
 // ---- render ----------------------------------------------------------------
