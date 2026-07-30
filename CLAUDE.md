@@ -33,9 +33,22 @@ reaches into the archive (auto-unfolds on a hit, refolds on clear). Each card's
 **glyph** is a chain: the project's own icon file (`icon.svg`/`favicon.svg`,
 root or `static/`, served via `/api/projects/{name}/icon`) beats a `hub.json`
 `"glyph"` character (≤3 chars) beats an auto ink **monogram** — initials on a
-plate tinted by a stable name-hash over the five accent pigments. Regression
-suite: `tests/test_shelf.py` (hermetic, same intercept pattern as the jot
-tests).
+plate tinted by a stable name-hash over the five accent pigments. Cards render
+BOTH marks (the per-project one + the old per-type icon, class `tglyph`); a
+"shelf" toggle in the theme modal swaps them via `body.type-glyphs`
+(localStorage `hubGlyphs`, per-project is the default). Band heads carry a
+`band-hint` explaining what earns a project its band. Regression suite:
+`tests/test_shelf.py` (hermetic, same intercept pattern as the jot tests).
+
+Jots can be **sent into a claude chat** (row ⋯ → "→ claude ▸"): a picker
+offers a fresh chat for the note's project (untagged → the root `~` session)
+or any live drawer session. The note text (+ attachment paths under
+`data/attachments/`) is bracketed-pasted into the chat's input — never
+auto-submitted; `injectIntoSession` waits for first pty output on fresh chats
+before pasting. The jot project filter shows per-project note counts, busiest
+first. Inbox items hold **one or more images** (`imgs` array; legacy `img`
+read via `inboxImgs()`): a multi-file drop forms ONE item, "+ image" grows it,
+per-thumb ✕ appears at ≥2, and promote carries every image onto the note.
 
 Front-end logic lives in `static/hub.js` (served via StaticFiles, re-read per
 request — JS/CSS changes deploy with just a browser refresh, no restart). New

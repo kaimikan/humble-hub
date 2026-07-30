@@ -1277,7 +1277,7 @@ def card(p: dict, favs: set = frozenset(), peers: list = ()) -> str:
     <div class="card" data-type="{p['type']}" data-name="{name}"
          data-act="{p.get('last_active', 0)}" data-text="{search_blob}">
       <div class="head">
-        <span class="glyph">{glyph(p)}</span>
+        <span class="glyph">{glyph(p)}{icon(p["type"], "i tglyph")}</span>
         <h2>{name}</h2>
         {svc_dot}<span class="kind">{TYPE_LABELS[p["type"]]}</span>
         <button class="b-fav{fav_on}" data-fav="{name}" title="favorite — pin to top">{icon("star")}</button>
@@ -1289,7 +1289,11 @@ def card(p: dict, favs: set = frozenset(), peers: list = ()) -> str:
 
 
 ACTIVE_DAYS = 30  # "in motion" horizon — mirrored by ACTIVE_DAYS in hub.js
-BAND_LABELS = {"pinned": "pinned", "motion": "in motion", "rest": "the rest"}
+BAND_HEADS = {  # label + the hint that says what earns a project its band
+    "pinned": ("pinned", "your ★ picks"),
+    "motion": ("in motion", f"touched in the last {ACTIVE_DAYS} days"),
+    "rest": ("the rest", "quiet for a month or more"),
+}
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -1328,7 +1332,8 @@ def index():
 
     shelved = [k for k in ("pinned", "motion", "rest") if bands[k]]
     cards = "".join(
-        (f'<div class="band-head" data-band="{k}">{BAND_LABELS[k]}</div>'
+        (f'<div class="band-head" data-band="{k}">{BAND_HEADS[k][0]}'
+         f'<span class="band-hint">{BAND_HEADS[k][1]}</span></div>'
          if len(shelved) > 1 else "") + "".join(render(p) for p in bands[k])
         for k in shelved)
     arch_cards = "".join(render(p) for p in bands["archive"])
@@ -1516,10 +1521,16 @@ def index():
   .p-verdigris {{ color:var(--verdigris); }} .p-ochre {{ color:var(--ochre); }}
   .p-plum {{ color:var(--plum); }}
   .glyph-img {{ width:2.05rem; height:2.05rem; object-fit:contain; }}
+  /* per-type glyph alternative — the theme modal's shelf toggle swaps to it */
+  .tglyph {{ display:none; width:1.45rem; height:1.45rem; }}
+  body.type-glyphs .glyph .mono, body.type-glyphs .glyph .glyph-img {{ display:none; }}
+  body.type-glyphs .tglyph {{ display:block; }}
   /* shelf bands: pinned / in motion / the rest */
   .band-head {{ grid-column:1/-1; display:flex; align-items:center; gap:.7rem;
     font-variant:small-caps; letter-spacing:.14em; font-size:.85rem;
     color:var(--ink-soft); margin:.5rem 0 -.5rem; }}
+  .band-hint {{ font-variant:normal; letter-spacing:.02em; font-size:.72rem;
+    font-style:italic; color:var(--ink-faint); }}
   .band-head::after {{ content:""; flex:1; border-top:1px solid var(--ink-faint);
     opacity:.55; }}
   #archive {{ margin-top:1.8rem; }}

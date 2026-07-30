@@ -168,7 +168,11 @@ function saveNotes() {
 // re-band without a reload; favorites + archived live in notes.json (same doc
 // as the jots) so they're shared across phone + laptop.
 const ACTIVE_DAYS = 30;                    // mirrored by ACTIVE_DAYS in app.py
-const BAND_LABELS = { pinned: "pinned", motion: "in motion", rest: "the rest" };
+const BAND_HEADS = {   // label + the hint that says what earns a project its band
+  pinned: ["pinned", "your ★ picks"],
+  motion: ["in motion", `touched in the last ${ACTIVE_DAYS} days`],
+  rest: ["the rest", "quiet for a month or more"],
+};
 
 function reorderCards() {
   const grid = document.getElementById("grid");
@@ -200,7 +204,11 @@ function reorderCards() {
       const h = document.createElement("div");
       h.className = "band-head";
       h.dataset.band = prev;
-      h.textContent = BAND_LABELS[prev];
+      h.textContent = BAND_HEADS[prev][0];
+      const hint = document.createElement("span");
+      hint.className = "band-hint";
+      hint.textContent = BAND_HEADS[prev][1];
+      h.appendChild(hint);
       grid.appendChild(h);
     }
     grid.appendChild(c);
@@ -265,11 +273,14 @@ let jotProject = "";
 function matchesJotProject(item) { return !jotProject || item.project === jotProject; }
 function setJotProject(p) { jotProject = (jotProject === p ? "" : p); renderNotes(); }
 // projects with items in the CURRENT view (kind + the to-do status filter) —
-// the filter only offers what's actually there to filter to
+// the filter only offers what's actually there to filter to. Returns
+// [name, count] pairs, busiest project first (count breaks ties by name).
 function filterProjects() {
-  return [...new Set(notes[jotKind]
-    .filter(it => matchesTodoFilter(jotKind, it))
-    .map(i => i.project).filter(Boolean))].sort();
+  const counts = {};
+  notes[jotKind].filter(it => matchesTodoFilter(jotKind, it))
+    .forEach(i => { if (i.project) counts[i.project] = (counts[i.project] || 0) + 1; });
+  return Object.entries(counts)
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
 }
 
 function refreshProjectFilter() {
@@ -525,6 +536,7 @@ function openRowMenu(e, kind, item) {
   }
   add(item.project ? `project: ${item.project} ▸` : "set project ▸",
       () => openProjectPicker(item, r));
+  add("→ claude ▸", () => openChatSendPicker(kind, item, r));
   add(item.images && item.images.length ? "attach more images" : "attach image",
       () => attachToItem(item));
   add("remove", () => askDelete(kind, idx()), true);
@@ -534,6 +546,58 @@ function openRowMenu(e, kind, item) {
 }
 document.addEventListener("click", closeRowMenu);
 document.addEventListener("keydown", e => { if (e.key === "Escape") closeRowMenu(); });
+
+// --- send a jot into a claude chat (idea: notes as conversation starters) ---
+// The note is PASTED into the chat's input — never auto-submitted — so it can
+// be edited or prefaced before sending. Targets: a fresh chat for the note's
+// project (untagged notes go to the root "~" session over all of ~/Projects),
+// or any chat already alive in the drawer.
+function jotChatText(kind, item) {
+  const what = kind === "todos" ? "to-do" : "idea";
+  let msg = `From my hub ${what} list`
+    + (item.project ? ` (project: ${item.project})` : "") + `: ${item.text}`;
+  if (item.images && item.images.length) {
+    // attachments live on disk under the hub — hand claude real paths
+    const paths = item.images.map(id => `~/Projects/humble-hub/data/attachments/${id}`);
+    msg += `\nAttached image${paths.length > 1 ? "s" : ""}: ${paths.join(" ")}`;
+  }
+  return msg;
+}
+
+function injectIntoSession(s, text) {
+  // bracketed paste: claude code treats the block as one paste, and a
+  // multi-line note can't submit itself line by line
+  const payload = `\x1b[200~${text}\x1b[201~`;
+  const send = () => {
+    if (s.ws.readyState === 1) s.ws.send(JSON.stringify({ type: "input", data: payload }));
+  };
+  if (s.sawOutput) { send(); return; }
+  // a fresh chat: wait for claude to boot (first pty output), then a settle
+  // beat so the paste lands in its input box, not the void before it
+  const t0 = Date.now();
+  const timer = setInterval(() => {
+    if (s.ws.readyState > 1 || Date.now() - t0 > 20000) { clearInterval(timer); return; }
+    if (s.sawOutput) { clearInterval(timer); setTimeout(send, 900); }
+  }, 250);
+}
+
+function openChatSendPicker(kind, item, r) {
+  const live = [...sessions.values()].filter(s => s.ws.readyState <= 1);
+  const opts = [
+    { label: `new chat → ${item.project || "~"}`, value: "", pinned: true },
+    ...live.map(s => ({ label: `→ ${s.label}`, value: s.key })),
+  ];
+  openSearchablePicker(r, opts, null, val => {
+    const text = jotChatText(kind, item);
+    let s;
+    if (val) { s = sessions.get(val); if (s) activate(val); }
+    else { const project = item.project || "~"; openDrawer(project); s = sessions.get(project); }
+    if (!s) return;
+    injectIntoSession(s, text);
+    closeJot();   // the drawer needs the room; the note is already on its way
+    hubToast("note pasted into the chat — press enter there to send");
+  });
+}
 
 // --- jot modal ---
 
@@ -795,12 +859,19 @@ function closeLightbox() {
   if (lb) { lb.hidden = true; lb.querySelector("img").src = ""; }
 }
 
+// images picked/dropped TOGETHER form ONE inbox item — they usually belong to
+// the same thing (several photos of one object); drop separately to split them
 function imgsToInbox(ids) {
   notes.inbox = notes.inbox || [];
-  ids.forEach(id => notes.inbox.push({ img: id }));
+  if (ids.length) notes.inbox.push({ imgs: ids.slice() });
   renderNotes();
   if (document.getElementById("col-inbox").style.display !== "none") renderInbox();
   saveNotesNow();
+}
+
+// older inbox items carry a single `img`; everything reads through this
+function inboxImgs(item) {
+  return item.imgs || (item.img ? [item.img] : []);
 }
 
 async function dropToInbox(ev) {
@@ -842,10 +913,27 @@ function renderInbox() {
     li.className = "inbox-row";
     const a = document.createElement("span");
     a.className = "inbox-thumb";
-    const img = document.createElement("img");
-    img.src = `/attachments/${item.img}`; img.loading = "lazy";
-    img.onclick = () => openLightbox(item.img);
-    a.appendChild(img);
+    inboxImgs(item).forEach(id => {
+      const wrap = document.createElement("span");
+      wrap.className = "jot-thumb";
+      const img = document.createElement("img");
+      img.src = `/attachments/${id}`; img.loading = "lazy";
+      img.onclick = () => openLightbox(id);
+      wrap.appendChild(img);
+      if (inboxImgs(item).length > 1) {   // lone image: the row ✕ covers it
+        const x = document.createElement("button");
+        x.type = "button"; x.className = "thumb-x"; x.textContent = "✕";
+        x.title = "remove this image";
+        x.onclick = e => {
+          e.stopPropagation();
+          item.imgs = inboxImgs(item).filter(v => v !== id);
+          delete item.img;
+          renderInbox(); saveNotesNow();
+        };
+        wrap.appendChild(x);
+      }
+      a.appendChild(wrap);
+    });
 
     const body = document.createElement("div");
     body.className = "inbox-body";
@@ -859,7 +947,8 @@ function renderInbox() {
     row.className = "inbox-actions";
     const del = mkInboxBtn("✕", () => removeInbox(i)); del.classList.add("danger");
     row.append(mkInboxBtn("→ to-do", () => promoteInbox(i, "todos")),
-               mkInboxBtn("→ idea", () => promoteInbox(i, "ideas")), del);
+               mkInboxBtn("→ idea", () => promoteInbox(i, "ideas")),
+               mkInboxBtn("+ image", () => addToInboxItem(item)), del);
     body.append(cap, row);
     li.append(a, body);
     ul.appendChild(li);
@@ -872,13 +961,31 @@ function mkInboxBtn(label, fn) {
   return b;
 }
 
-// triage: turn an inbox image into a filed to-do/idea (caption becomes the text)
+// grow an inbox item: more shots of the same thing join the existing card
+function addToInboxItem(item) {
+  const inp = document.createElement("input");
+  inp.type = "file"; inp.accept = "image/*"; inp.multiple = true; inp.hidden = true;
+  document.body.appendChild(inp);
+  inp.onchange = async () => {
+    const ids = await uploadFiles(inp.files);
+    inp.remove();
+    if (ids.length) {
+      item.imgs = inboxImgs(item).concat(ids);
+      delete item.img;
+      renderInbox(); renderNotes(); saveNotesNow();
+    }
+  };
+  inp.click();
+}
+
+// triage: turn an inbox item into a filed to-do/idea (caption becomes the
+// text, every image rides along)
 function promoteInbox(i, kind) {
   const item = (notes.inbox || [])[i];
   if (!item) return;
   const text = (item.caption || "").trim() || "image note";
   const note = kind === "todos" ? { text, done: false } : { text };
-  note.images = [item.img];
+  note.images = inboxImgs(item);
   notes[kind].push(note);
   notes.inbox.splice(i, 1);
   renderInbox();
@@ -954,7 +1061,9 @@ function saveNotesNow() {
     #col-inbox ul { list-style:none; margin:0; padding:0; }
     .inbox-row { display:flex; gap:.7rem; align-items:flex-start; padding:.6rem 0;
       border-bottom:1px solid var(--ink-faint); }
-    .inbox-thumb { line-height:0; flex:none; }
+    /* an inbox item may hold several images — a wrapping column of thumbs */
+    .inbox-thumb { line-height:0; flex:none; display:flex; flex-direction:column;
+      gap:.4rem; max-width:84px; }
     .inbox-thumb img { width:84px; height:84px; object-fit:cover; border-radius:4px;
       border:1px solid var(--ink-faint); cursor:zoom-in; }
     .inbox-body { flex:1; min-width:0; display:flex; flex-direction:column; gap:.45rem; }
@@ -1085,7 +1194,7 @@ function saveNotesNow() {
   projBtn.onclick = e => {
     e.stopPropagation();
     const opts = [{ label: "all projects", value: "", pinned: true },
-                  ...filterProjects().map(p => ({ label: p, value: p }))];
+                  ...filterProjects().map(([p, n]) => ({ label: `${p} · ${n}`, value: p }))];
     openSearchablePicker(projBtn.getBoundingClientRect(), opts, jotProject,
       val => { jotProject = val; renderNotes(); });
   };
@@ -2326,6 +2435,10 @@ setInterval(() => {
     .theme-section { margin:1rem 0 .2rem; padding-top:.75rem; font-variant:small-caps;
       letter-spacing:.12em; font-size:.78rem; color:var(--ink-soft);
       border-top:1px solid var(--ink-faint); }
+    .glyph-toggle { display:flex; align-items:center; gap:.5rem; cursor:pointer;
+      font-size:.85rem; color:var(--ink); }
+    .glyph-toggle input { accent-color:var(--verdigris, #4f6b3a); }
+    .glyph-toggle .sub { color:var(--ink-soft); font-style:italic; font-size:.78rem; }
     .theme-lab-link { align-self:flex-start; margin-top:.5rem; font-variant:small-caps;
       letter-spacing:.1em; font-size:.74rem; color:var(--ink-soft); text-decoration:none;
       border-bottom:1px dotted var(--ink-faint); padding-bottom:1px; }
@@ -2376,6 +2489,28 @@ setInterval(() => {
     worlds.forEach(k => wrow.appendChild(makeCard(k)));
     modal.appendChild(wrow);
   }
+  // shelf preferences ride along in the theme modal: per-project marks
+  // (monogram/icon, the default) vs the hand-inked per-type glyphs. Persists
+  // per device in localStorage; the CSS swap lives in the app.py template.
+  const gsec = document.createElement("div");
+  gsec.className = "theme-section";
+  gsec.textContent = "shelf";
+  modal.appendChild(gsec);
+  const gl = document.createElement("label");
+  gl.className = "glyph-toggle";
+  gl.innerHTML = '<input type="checkbox"> category glyphs'
+    + ' <span class="sub">one inked mark per type — instead of per-project marks</span>';
+  modal.appendChild(gl);
+  const gt = gl.querySelector("input");
+  gt.checked = localStorage.getItem("hubGlyphs") === "type";
+  const applyGlyphs = () =>
+    document.body.classList.toggle("type-glyphs", gt.checked);
+  gt.onchange = () => {
+    localStorage.setItem("hubGlyphs", gt.checked ? "type" : "project");
+    applyGlyphs();
+  };
+  applyGlyphs();
+
   // link to the draft sandbox — where worlds are prototyped before they ship here
   const labLink = document.createElement("a");
   labLink.className = "theme-lab-link";
