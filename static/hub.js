@@ -278,7 +278,7 @@ function setJotSearch(value) {
 
 // project filter (T42): jots can be tagged with a project; filter to one —
 // or to the untagged ones (a sentinel no real project name can collide with)
-const UNTAGGED = " untagged";
+const UNTAGGED = "\u0000untagged";
 let jotProject = "";
 function matchesJotProject(item) {
   if (jotProject === UNTAGGED) return !item.project;
