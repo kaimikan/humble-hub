@@ -2438,17 +2438,20 @@ setInterval(() => {
         .xp-fx { position:fixed; inset:0; z-index:-1; pointer-events:none;
           background:linear-gradient(180deg,#3d7edb,#7fb2ec 60%,#cfe3f8); }
         .xp-fx canvas { display:block; }
-        body[data-theme="winxp"] .card { border-radius:8px 8px 3px 3px; overflow:hidden;
+        /* no overflow:hidden — it would clip the claude ▾ dropdown inside the
+           card; the titlebar rounds its own top corners to fit instead */
+        body[data-theme="winxp"] .card { border-radius:8px 8px 3px 3px;
           border:1px solid #0842a0; outline:0; background:#ece9d8;
           box-shadow:2px 3px 9px rgba(10,30,80,.35); }
         body[data-theme="winxp"] .card .head { margin:-1rem -1.2rem .2rem;
-          padding:.42rem .8rem;
+          padding:.42rem .8rem; border-radius:7px 7px 0 0;
           background:linear-gradient(180deg,#5da2f2 0%,#1a63d8 12%,#2a80ec 45%,#0e50b8 100%); }
         body[data-theme="winxp"] .card .head h2 { color:#fff; font-variant:normal;
           text-shadow:1px 1px 1px rgba(0,20,60,.6); }
         body[data-theme="winxp"] .card .head .kind { color:#cfe0ff; }
         body[data-theme="winxp"] .card .head .mono { color:#fff;
           border-color:rgba(255,255,255,.75); background:rgba(255,255,255,.16); }
+        body[data-theme="winxp"] .card .head .tglyph { color:#fff; }
         body[data-theme="winxp"] .card .head .b-fav { color:#ffe89a; }
         body[data-theme="winxp"] .card button,
         body[data-theme="winxp"] .card .btn,
@@ -2557,6 +2560,7 @@ setInterval(() => {
         body[data-theme="win95"] .card .head .kind { color:#bcd0ee; }
         body[data-theme="win95"] .card .head .mono { color:#fff;
           border-color:rgba(255,255,255,.75); background:rgba(255,255,255,.14); }
+        body[data-theme="win95"] .card .head .tglyph { color:#fff; }
         body[data-theme="win95"] .card .head .b-fav { color:#ffe89a; background:none;
           border:0; box-shadow:none; }
         body[data-theme="win95"] .card button,
