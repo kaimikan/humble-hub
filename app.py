@@ -1380,7 +1380,7 @@ def index():
   .sel-wrap {{ position:relative; display:inline-flex; align-items:center; }}
   .sel-wrap::after {{ content:"▾"; position:absolute; right:.55rem; pointer-events:none;
     color:var(--ink-soft); font-size:.7rem; }}
-  #mode-select {{ -webkit-appearance:none; appearance:none;
+  #mode-select {{ -webkit-appearance:none; -moz-appearance:none; appearance:none;
     background:transparent; border:1px solid var(--ink-soft); border-radius:2px;
     color:var(--ink); font:inherit; font-size:.84rem; font-variant:small-caps;
     letter-spacing:.06em; padding:.3rem 1.5rem .3rem .75rem; cursor:pointer; }}
@@ -1440,17 +1440,23 @@ def index():
                   padding:0 .6em; color:var(--ink-soft); }}
   .controls {{ margin-top:1.1rem; display:flex; gap:.7rem; justify-content:center;
                align-items:center; flex-wrap:wrap; }}
+  /* one height for every control in the row — buttons, the mode select, the
+     search field and the chips all sit on the same line, no odd one out */
+  .controls button, .controls .btn, .controls select, .controls input {{
+    height:1.95rem; box-sizing:border-box; }}
   #search {{ background:var(--input-bg); border:1px solid var(--ink-soft);
     border-radius:2px; color:var(--ink); font:inherit; font-size:.9rem;
-    padding:.35rem .7rem; width:240px; }}
+    padding:.3rem .7rem; width:240px; }}
   #search::placeholder {{ color:var(--ink-faint); font-style:italic; }}
   /* category chips are NEUTRAL — icon + text tell them apart; the pigments are
      reserved for the action buttons (lapis=claude, sanguine=go, verdigris=files)
      so a colour means one thing. Chips only carry an active/inactive state. */
+  #filters {{ display:inline-flex; align-items:center; gap:.45rem; }}
   .chip {{ background:transparent; border:1px solid var(--ink-soft);
     border-radius:999px; color:var(--ink-soft); font:inherit;
     font-size:.78rem; font-variant:small-caps; letter-spacing:.05em;
-    padding:.15rem .65rem; cursor:pointer; }}
+    padding:.15rem .7rem; cursor:pointer;
+    display:inline-flex; align-items:center; gap:.3em; }}
   /* hover must set its OWN background, else the global button:hover (dark fill)
      leaks in → dark text on dark fill (invisible). Only non-active chips hover. */
   .chip:hover:not(.active) {{ background:var(--card-hot); border-color:var(--ink); color:var(--ink); }}
@@ -1526,9 +1532,13 @@ def index():
   body.type-glyphs .glyph .mono, body.type-glyphs .glyph .glyph-img {{ display:none; }}
   body.type-glyphs .tglyph {{ display:block; }}
   /* shelf bands: pinned / in motion / the rest */
-  .band-head {{ grid-column:1/-1; display:flex; align-items:center; gap:.7rem;
+  .band-head {{ grid-column:1/-1; display:flex; align-items:baseline; gap:.7rem;
     font-variant:small-caps; letter-spacing:.14em; font-size:.85rem;
-    color:var(--ink-soft); margin:.5rem 0 -.5rem; }}
+    color:var(--ink-soft); margin:.5rem 0 -.5rem;
+    /* a bg-tinted halo keeps the heads legible over any world's wallpaper
+       (text-shadow inherits, so the hint gets it too) */
+    text-shadow:0 1px 4px var(--parchment), 0 0 2px var(--parchment); }}
+  .band-head::after {{ align-self:center; }}
   .band-hint {{ font-variant:normal; letter-spacing:.02em; font-size:.72rem;
     font-style:italic; color:var(--ink-faint); }}
   .band-head::after {{ content:""; flex:1; border-top:1px solid var(--ink-faint);
@@ -1597,7 +1607,7 @@ def index():
     <hr class="rule">
     <div class="controls">
       <div class="menu">
-        <button class="b-claude" onclick="openDrawer('~')">{CHAT_SVG} root claude ▾</button>
+        <button class="jot-open" onclick="openDrawer('~')">{CHAT_SVG} root claude ▾</button>
         <div class="menu-items">
           <button onclick="openDrawer('~')">fresh chat</button>
           <button onclick="openDrawer('~', true)">resume chat</button>

@@ -2456,6 +2456,7 @@ setInterval(() => {
         body[data-theme="winxp"] .card button,
         body[data-theme="winxp"] .card .btn,
         body[data-theme="winxp"] .chip,
+        body[data-theme="winxp"] #mode-select,
         body[data-theme="winxp"] .jot-open {
           border-radius:3px; border:1px solid #003c74; color:#1d2b45;
           background:linear-gradient(180deg,#ffffff,#ece9d8 45%,#d8d0bf);
@@ -2566,6 +2567,7 @@ setInterval(() => {
         body[data-theme="win95"] .card button,
         body[data-theme="win95"] .card .btn,
         body[data-theme="win95"] .chip,
+        body[data-theme="win95"] #mode-select,
         body[data-theme="win95"] .jot-open {
           border-radius:0; background:#c0c0c0;
           border:2px solid; border-color:#fff #404040 #404040 #fff;
@@ -2630,6 +2632,7 @@ setInterval(() => {
         body[data-theme="winamp"] .card button,
         body[data-theme="winamp"] .card .btn,
         body[data-theme="winamp"] .chip,
+        body[data-theme="winamp"] #mode-select,
         body[data-theme="winamp"] .jot-open {
           border-radius:0; background:#2a2a3a;
           border:1px solid; border-color:#44445c #101018 #101018 #44445c; }
