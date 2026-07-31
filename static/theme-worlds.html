@@ -619,36 +619,37 @@ const DRAFTS = [
     bg: "#f2ead8", paper: "#f9f4e6", ink: "#2c3138", inkSoft: "#5c6470", inkFaint: "#9aa0a8",
     lapis: "#2a4a72", sanguine: "#c73e2a", verdigris: "#4a7a5c", ochre: "#b8862e", plum: "#7a4a80",
     sketch: makeUkiyo },
-  { key: "bliss", name: "bliss", mode: "light", blurb: "luna chrome · gradient titlebars, start-green go",
+  { key: "winxp", name: "windows xp", mode: "light", shipped: true,
+    blurb: "luna chrome · gradient titlebars, start-green go",
     font: "Tahoma, Verdana, 'Segoe UI', sans-serif",
     bg: "#7fb2ec", paper: "#ece9d8", ink: "#1d2b45", inkSoft: "#48587a", inkFaint: "#8593ad",
     lapis: "#0a58ca", sanguine: "#d63f2a", verdigris: "#3a9e3c", ochre: "#e8a33d", plum: "#7d5bbe",
     sketch: makeBliss,
     chrome: `
-      .t-bliss .samp-card { border-radius: 8px 8px 3px 3px; padding: 0 0 .6rem;
+      .t-winxp .samp-card { border-radius: 8px 8px 3px 3px; padding: 0 0 .6rem;
         background: #ece9d8; border: 1px solid #0842a0; overflow: hidden;
         box-shadow: 2px 3px 9px rgba(10, 30, 80, .4); }
-      .t-bliss .samp-card .ttl { margin: 0 0 .5rem; padding: .32rem .65rem;
+      .t-winxp .samp-card .ttl { margin: 0 0 .5rem; padding: .32rem .65rem;
         background: linear-gradient(180deg, #5da2f2 0%, #1a63d8 12%, #2a80ec 45%, #0e50b8 100%);
         color: #fff; text-shadow: 1px 1px 1px rgba(0, 20, 60, .65); font-size: .88rem; }
-      .t-bliss .samp-card .ttl::after { content: "✕"; float: right; width: 1.15rem;
+      .t-winxp .samp-card .ttl::after { content: "✕"; float: right; width: 1.15rem;
         text-align: center; font-size: .72rem; border-radius: 3px; border: 1px solid #fff;
         background: linear-gradient(180deg, #f2a48c, #d84424 55%, #b02c10);
         text-shadow: none; }
-      .t-bliss .samp-card .ex, .t-bliss .samp-card .btns,
-      .t-bliss .samp-card .samp-in { margin-left: .65rem; margin-right: .65rem; }
-      .t-bliss .samp-card .ex { color: #48587a; }
-      .t-bliss .samp-card button { border-radius: 3px; border: 1px solid #003c74;
+      .t-winxp .samp-card .ex, .t-winxp .samp-card .btns,
+      .t-winxp .samp-card .samp-in { margin-left: .65rem; margin-right: .65rem; }
+      .t-winxp .samp-card .ex { color: #48587a; }
+      .t-winxp .samp-card button { border-radius: 3px; border: 1px solid #003c74;
         color: #1d2b45; font-variant: normal;
         background: linear-gradient(180deg, #fff, #ece9d8 45%, #d8d0bf);
         box-shadow: inset 0 -2px 3px rgba(160, 140, 100, .35), inset 0 1px 0 #fff; }
-      .t-bliss .samp-card .b-open { color: #fff; border-color: #2a6e2c;
+      .t-winxp .samp-card .b-open { color: #fff; border-color: #2a6e2c;
         background: linear-gradient(180deg, #8adf78, #3a9e3c 55%, #2a7e2c);
         box-shadow: inset 0 -2px 3px rgba(0, 60, 0, .4), inset 0 1px 0 #b8f0a8; }
-      .t-bliss .samp-in { width: auto; display: block; border-radius: 0;
+      .t-winxp .samp-in { width: auto; display: block; border-radius: 0;
         border: 1px solid #7f9db9; background: #fff; font-style: normal; }
-      .t-bliss .term { border-radius: 3px; border: 1px solid #0842a0; }` },
-  { key: "win95", name: "windows 95", mode: "light", blurb: "gray bevels · navy titlebars · a quiet teal",
+      .t-winxp .term { border-radius: 3px; border: 1px solid #0842a0; }` },
+  { key: "win95", name: "windows 95", mode: "light", shipped: true, blurb: "gray bevels · navy titlebars · a quiet teal",
     font: "Tahoma, 'MS Sans Serif', Verdana, sans-serif",
     bg: "#008080", paper: "#c0c0c0", ink: "#1a1a1a", inkSoft: "#3d3d3d", inkFaint: "#6f6f6f",
     lapis: "#000080", sanguine: "#b23a2a", verdigris: "#2f8a3c", ochre: "#c09018", plum: "#6a4fa0",
@@ -674,7 +675,7 @@ const DRAFTS = [
         border: 2px solid; border-color: #404040 #fff #fff #404040; font-style: normal; }
       .t-win95 .term { border-radius: 0; border: 2px solid;
         border-color: #404040 #fff #fff #404040; }` },
-  { key: "winamp", name: "winamp", mode: "dark", blurb: "brushed dark, gold rails · the eq lives below",
+  { key: "winamp", name: "winamp", mode: "dark", shipped: true, blurb: "brushed dark, gold rails · the eq lives below",
     font: "'JetBrains Mono', 'Hack', monospace",
     bg: "#14141e", paper: "#232330", ink: "#d8d8e8", inkSoft: "#9a9ab4", inkFaint: "#5e5e78",
     lapis: "#5f7fd8", sanguine: "#e05038", verdigris: "#3fd858", ochre: "#d8a830", plum: "#9a70d0",

@@ -84,9 +84,34 @@ const THEME = {
     bg:"#10150e", paper:"#1b2218", ink:"#d8e0c8", inkSoft:"#a3b390", inkFaint:"#6f7e5e",
     lapis:"#6f97c2", sanguine:"#cb5b3a", verdigris:"#82a85f", ochre:"#d59a3f", plum:"#a878b4",
     term:{ bg:"#0c110b", fg:"#d8e0c8", ansi:["#1a2016","#cb5b3a","#82a85f","#d59a3f","#6f97c2","#a878b4","#6fa98f","#d8e0c8","#4a5640","#df7355","#9cc077","#e6b85e","#88add2","#c294cc","#8cc4a8","#eef2e2"] } },
+  // chrome world: Bliss (Windows XP / Luna) — the hill as living wallpaper
+  // (gradient sky, drifting cumulus, green field: skin canvas) under Luna
+  // chrome: blue gradient titlebars, glossy dialog buttons, ONE Start-green
+  // primary per card. Tahoma is the period font. Terminal anchors on Campbell
+  // (the Windows Terminal default) — battle-tested legible ANSI.
+  winxp:    { name:"windows xp", mode:"light", skin:"winxp", font:"Tahoma,Verdana,'Segoe UI',sans-serif",
+    bg:"#7fb2ec", paper:"#ece9d8", ink:"#1d2b45", inkSoft:"#48587a", inkFaint:"#8593ad",
+    lapis:"#0a58ca", sanguine:"#d63f2a", verdigris:"#3a9e3c", ochre:"#e8a33d", plum:"#7d5bbe",
+    term:{ bg:"#0c0c0c", fg:"#cccccc", ansi:["#0c0c0c","#c50f1f","#13a10e","#c19c00","#0037da","#881798","#3a96dd","#cccccc","#767676","#e74856","#16c60c","#f9f1a5","#3b78ff","#b4009e","#61d6d6","#f2f2f2"] } },
+  // chrome world: Windows 95 — flat teal desktop with faint dither grain (the
+  // skin paints a tiling pattern, no live canvas), gray #c0c0c0 bevel chrome:
+  // navy gradient titlebars, outset buttons that press inset, sunken inputs.
+  // Terminal = Campbell over pure black with the classic silver foreground.
+  win95:    { name:"windows 95", mode:"light", skin:"win95", font:"Tahoma,'MS Sans Serif',Verdana,sans-serif",
+    bg:"#008080", paper:"#c0c0c0", ink:"#1a1a1a", inkSoft:"#3d3d3d", inkFaint:"#6f6f6f",
+    lapis:"#000080", sanguine:"#b23a2a", verdigris:"#2f8a3c", ochre:"#c09018", plum:"#6a4fa0",
+    term:{ bg:"#000000", fg:"#c0c0c0", ansi:["#0c0c0c","#c50f1f","#13a10e","#c19c00","#3b78ff","#881798","#3a96dd","#c0c0c0","#767676","#e74856","#16c60c","#f9f1a5","#5c8cff","#b4009e","#61d6d6","#f2f2f2"] } },
+  // chrome world: Winamp — the classic skin: brushed near-black steel, gold
+  // rails, beveled micro-buttons, LCD-green input, and the spectrum analyzer
+  // breathing along the bottom (skin canvas). Really whips the llama's ass.
+  // Terminal palette leans on the visualizer green + gold, hue-complete ANSI.
+  winamp:   { name:"winamp", mode:"dark", skin:"winamp", font:"'JetBrains Mono','Hack','Noto Sans Mono',monospace",
+    bg:"#14141e", paper:"#232330", ink:"#d8d8e8", inkSoft:"#9a9ab4", inkFaint:"#5e5e78",
+    lapis:"#5f7fd8", sanguine:"#e05038", verdigris:"#3fd858", ochre:"#d8a830", plum:"#9a70d0",
+    term:{ bg:"#0a0a12", fg:"#c8ccd8", ansi:["#1a1a26","#e05038","#3fd858","#d8a830","#5f7fd8","#9a70d0","#4fc8c0","#c8ccd8","#3c3c50","#f07060","#66e878","#e8c050","#82a0e8","#b48ce0","#70d8d0","#f0f0f8"] } },
 };
-const THEME_ORDER = ["codex","lapis","koi","phosphor","graphite","nord","zenburn","frappe","gruvbox","rosepine","flow","aqua","geocities","grove"];
-const THEME_MIGRATE = { matrix: "phosphor", dragon: "koi" };  // renamed themes
+const THEME_ORDER = ["codex","lapis","koi","phosphor","graphite","nord","zenburn","frappe","gruvbox","rosepine","flow","aqua","geocities","grove","winxp","win95","winamp"];
+const THEME_MIGRATE = { matrix: "phosphor", dragon: "koi", bliss: "winxp" };  // renamed themes
 
 // resolve a stored key to a current, valid theme key (handles renames)
 function resolveTheme(key) {

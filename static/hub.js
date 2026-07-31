@@ -2425,6 +2425,263 @@ setInterval(() => {
           document.querySelectorAll(".geo-spark").forEach(n => n.remove()); };
       },
     },
+    // chrome world: Bliss (Windows XP). Luna widgetry — card heads become blue
+    // gradient titlebars, glossy dialog buttons, ONE Start-green primary — over
+    // the hill as living wallpaper (raw-canvas: sky, drifting cumulus, field).
+    winxp: {
+      css: `
+        body[data-theme="winxp"] { background:transparent;
+          --card-bg:#ece9d8; --card-hot:#f6f4ea; --input-bg:#ffffff; }
+        .xp-fx { position:fixed; inset:0; z-index:-1; pointer-events:none;
+          background:linear-gradient(180deg,#3d7edb,#7fb2ec 60%,#cfe3f8); }
+        .xp-fx canvas { display:block; }
+        body[data-theme="winxp"] .card { border-radius:8px 8px 3px 3px; overflow:hidden;
+          border:1px solid #0842a0; outline:0; background:#ece9d8;
+          box-shadow:2px 3px 9px rgba(10,30,80,.35); }
+        body[data-theme="winxp"] .card .head { margin:-1rem -1.2rem .2rem;
+          padding:.42rem .8rem;
+          background:linear-gradient(180deg,#5da2f2 0%,#1a63d8 12%,#2a80ec 45%,#0e50b8 100%); }
+        body[data-theme="winxp"] .card .head h2 { color:#fff; font-variant:normal;
+          text-shadow:1px 1px 1px rgba(0,20,60,.6); }
+        body[data-theme="winxp"] .card .head .kind { color:#cfe0ff; }
+        body[data-theme="winxp"] .card .head .mono { color:#fff;
+          border-color:rgba(255,255,255,.75); background:rgba(255,255,255,.16); }
+        body[data-theme="winxp"] .card .head .b-fav { color:#ffe89a; }
+        body[data-theme="winxp"] .card button,
+        body[data-theme="winxp"] .card .btn,
+        body[data-theme="winxp"] .chip,
+        body[data-theme="winxp"] .jot-open {
+          border-radius:3px; border:1px solid #003c74; color:#1d2b45;
+          background:linear-gradient(180deg,#ffffff,#ece9d8 45%,#d8d0bf);
+          box-shadow:inset 0 -2px 3px rgba(160,140,100,.35), inset 0 1px 0 #fff; }
+        body[data-theme="winxp"] .card button:hover,
+        body[data-theme="winxp"] .card .btn:hover,
+        body[data-theme="winxp"] .chip:hover {
+          color:#0a1a35;
+          background:linear-gradient(180deg,#ffffff,#f6f2e4 45%,#e6dfcc 100%); }
+        body[data-theme="winxp"] .card .b-go { color:#fff; border-color:#2a6e2c;
+          background:linear-gradient(180deg,#8adf78,#3a9e3c 55%,#2a7e2c);
+          box-shadow:inset 0 -2px 3px rgba(0,60,0,.4), inset 0 1px 0 #b8f0a8; }
+        body[data-theme="winxp"] .chip.active,
+        body[data-theme="winxp"] .pill { color:#fff; border:1px solid #0842a0;
+          background:linear-gradient(180deg,#5da2f2,#1a63d8 50%,#0e50b8); }
+        body[data-theme="winxp"] .card .b-fav { background:none; border:0; box-shadow:none; }
+        body[data-theme="winxp"] input[type=text],
+        body[data-theme="winxp"] input[type=search] {
+          border-radius:0; border:1px solid #7f9db9; background:#fff;
+          font-style:normal; }
+        body[data-theme="winxp"] #modal,
+        body[data-theme="winxp"] .sess-modal,
+        body[data-theme="winxp"] .theme-modal,
+        body[data-theme="winxp"] .act-modal { background:#ece9d8;
+          border:1px solid #0842a0; border-radius:8px 8px 3px 3px; }
+        /* band heads sit on the bright sky — white ink with a soft shadow */
+        body[data-theme="winxp"] .band-head { color:#fff;
+          text-shadow:0 1px 2px rgba(10,40,100,.55); }
+        body[data-theme="winxp"] .band-hint { color:#e4eefc; }
+        body[data-theme="winxp"] .band-head::after { border-color:rgba(255,255,255,.6); }`,
+      mount() {
+        const box = document.createElement("div");
+        box.className = "xp-fx";
+        const cv = document.createElement("canvas");
+        box.appendChild(cv);
+        document.body.appendChild(box);
+        const ctx = cv.getContext("2d");
+        const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
+        let clouds = [], raf = 0, last = 0, alive = true;
+        const size = () => { cv.width = innerWidth; cv.height = innerHeight; };
+        const mkCloud = (init) => { const puffs = [], n = 3 + ((Math.random() * 3) | 0);
+          for (let i = 0; i < n; i++) puffs.push({ dx: Math.random() * 2.2 - 1.1,
+            dy: Math.random() * .65 - .35, r: .5 + Math.random() * .5 });
+          return { x: init ? Math.random() * cv.width : -90,
+            y: cv.height * (.05 + Math.random() * .34),
+            s: 28 + Math.random() * 34, v: .12 + Math.random() * .2, puffs }; };
+        const paint = () => { const w = cv.width, h = cv.height;
+          let g = ctx.createLinearGradient(0, 0, 0, h * .8);
+          g.addColorStop(0, "#3d7edb"); g.addColorStop(.6, "#7fb2ec"); g.addColorStop(1, "#cfe3f8");
+          ctx.fillStyle = g; ctx.fillRect(0, 0, w, h);
+          for (const c of clouds) for (const pf of c.puffs) {
+            const r = c.s * pf.r * 1.5, x = c.x + pf.dx * c.s, y = c.y + pf.dy * c.s;
+            const cg = ctx.createRadialGradient(x, y, 0, x, y, r);
+            cg.addColorStop(0, "rgba(255,255,255,.95)");
+            cg.addColorStop(.55, "rgba(255,255,255,.5)");
+            cg.addColorStop(1, "rgba(255,255,255,0)");
+            ctx.fillStyle = cg; ctx.beginPath(); ctx.arc(x, y, r, 0, 7); ctx.fill(); }
+          const hy = h * .8;
+          g = ctx.createLinearGradient(0, hy - 46, 0, h);
+          g.addColorStop(0, "#8ed04e"); g.addColorStop(.45, "#57ab30"); g.addColorStop(1, "#2f7a1e");
+          ctx.fillStyle = g; ctx.beginPath(); ctx.moveTo(0, h); ctx.lineTo(0, hy + 22);
+          ctx.bezierCurveTo(w * .3, hy - 40, w * .62, hy - 12, w, hy + 30);
+          ctx.lineTo(w, h); ctx.closePath(); ctx.fill();
+          const sh = ctx.createRadialGradient(w * .34, hy - 18, 0, w * .34, hy - 18, w * .5);
+          sh.addColorStop(0, "rgba(255,255,230,.22)"); sh.addColorStop(1, "rgba(255,255,230,0)");
+          ctx.fillStyle = sh; ctx.fillRect(0, hy - 70, w, h - hy + 70); };
+        const tick = (t) => { if (!alive) return;
+          raf = requestAnimationFrame(tick);
+          if (t - last < 33) return;                     // ~30 fps is plenty for clouds
+          last = t;
+          for (const c of clouds) { c.x += c.v;
+            if (c.x - c.s * 2.6 > cv.width) Object.assign(c, mkCloud(false)); }
+          paint(); };
+        const onResize = () => { size(); paint(); };
+        size();
+        const n = Math.max(4, Math.min(8, (innerWidth / 240) | 0));
+        for (let i = 0; i < n; i++) clouds.push(mkCloud(true));
+        paint();
+        if (!reduced) raf = requestAnimationFrame(tick);
+        addEventListener("resize", onResize);
+        return () => { alive = false; cancelAnimationFrame(raf);
+          removeEventListener("resize", onResize); box.remove(); };
+      },
+    },
+    // chrome world: Windows 95. Gray #c0c0c0 bevels everywhere — navy gradient
+    // titlebars, outset buttons that press inset, sunken inputs — on the flat
+    // teal desktop. The dither grain is a one-off generated tile set as the
+    // body background image; no live canvas, nothing animates.
+    win95: {
+      css: `
+        body[data-theme="win95"] { background:#008080;
+          --card-bg:#c0c0c0; --card-hot:#cbcbc4; --input-bg:#ffffff; }
+        body[data-theme="win95"] .card { border-radius:0; background:#c0c0c0;
+          border:2px solid; border-color:#fff #404040 #404040 #fff;
+          outline:1px solid #000; outline-offset:0;
+          box-shadow:3px 3px 0 rgba(0,0,0,.35); }
+        body[data-theme="win95"] .card .head { margin:-1rem -1.2rem .2rem;
+          padding:.3rem .6rem; background:linear-gradient(90deg,#000080,#1084d0); }
+        body[data-theme="win95"] .card .head h2 { color:#fff; font-variant:normal;
+          font-size:1rem; }
+        body[data-theme="win95"] .card .head .kind { color:#bcd0ee; }
+        body[data-theme="win95"] .card .head .mono { color:#fff;
+          border-color:rgba(255,255,255,.75); background:rgba(255,255,255,.14); }
+        body[data-theme="win95"] .card .head .b-fav { color:#ffe89a; background:none;
+          border:0; box-shadow:none; }
+        body[data-theme="win95"] .card button,
+        body[data-theme="win95"] .card .btn,
+        body[data-theme="win95"] .chip,
+        body[data-theme="win95"] .jot-open {
+          border-radius:0; background:#c0c0c0;
+          border:2px solid; border-color:#fff #404040 #404040 #fff;
+          box-shadow:1px 1px 0 #000; }
+        body[data-theme="win95"] .card button:hover,
+        body[data-theme="win95"] .card .btn:hover,
+        body[data-theme="win95"] .chip:hover { background:#cbcbc4; }
+        body[data-theme="win95"] .card button:active,
+        body[data-theme="win95"] .chip:active {
+          border-color:#404040 #fff #fff #404040; box-shadow:none; }
+        body[data-theme="win95"] .chip.active {
+          border-color:#404040 #fff #fff #404040; background:#d4d0c8; box-shadow:none; }
+        body[data-theme="win95"] .pill { border-radius:0; background:#000080; color:#fff;
+          border:2px solid; border-color:#fff #404040 #404040 #fff; }
+        body[data-theme="win95"] input[type=text],
+        body[data-theme="win95"] input[type=search] {
+          border-radius:0; background:#fff; font-style:normal;
+          border:2px solid; border-color:#404040 #fff #fff #404040; }
+        body[data-theme="win95"] #modal,
+        body[data-theme="win95"] .sess-modal,
+        body[data-theme="win95"] .theme-modal,
+        body[data-theme="win95"] .act-modal { border-radius:0; background:#c0c0c0;
+          border:2px solid; border-color:#fff #404040 #404040 #fff;
+          outline:1px solid #000; outline-offset:0; }
+        /* band heads sit on the teal desktop — pale ink reads best there */
+        body[data-theme="win95"] .band-head { color:#eef8f8; }
+        body[data-theme="win95"] .band-hint { color:#bfe0e0; }
+        body[data-theme="win95"] .band-head::after { border-color:rgba(238,248,248,.5); }`,
+      mount() {
+        const c = document.createElement("canvas");
+        c.width = c.height = 96;
+        const x = c.getContext("2d");
+        x.fillStyle = "#008080"; x.fillRect(0, 0, 96, 96);
+        for (let i = 0; i < 180; i++) {
+          x.fillStyle = Math.random() < .5 ? "rgba(0,90,90,.4)" : "rgba(46,160,160,.4)";
+          x.fillRect((Math.random() * 96) | 0, (Math.random() * 96) | 0, 2, 2);
+        }
+        const prev = document.body.style.backgroundImage;
+        document.body.style.backgroundImage = `url(${c.toDataURL()})`;
+        return () => { document.body.style.backgroundImage = prev; };
+      },
+    },
+    // chrome world: Winamp. Brushed near-black steel, gold rails on the card
+    // heads, beveled micro-buttons, LCD-green inputs — and the spectrum
+    // analyzer breathing along the bottom edge (raw canvas, pseudo-audio).
+    winamp: {
+      css: `
+        body[data-theme="winamp"] { background:#14141e;
+          --card-bg:#232330; --card-hot:#2b2b3c; --input-bg:#0a0a12; }
+        .amp-fx { position:fixed; left:0; right:0; bottom:0; height:140px;
+          z-index:-1; pointer-events:none; }
+        .amp-fx canvas { display:block; width:100%; height:100%; }
+        body[data-theme="winamp"] .card { border-radius:0; background:#232330;
+          border:2px solid; border-color:#3d3d52 #0c0c14 #0c0c14 #3d3d52; outline:0; }
+        body[data-theme="winamp"] .card .head { margin:-1rem -1.2rem .2rem;
+          padding:.32rem .6rem;
+          background:repeating-linear-gradient(0deg,#2e2e40 0 1px,#1c1c28 1px 3px); }
+        body[data-theme="winamp"] .card .head h2 { color:#d8a830; font-variant:normal;
+          font-size:.85rem; letter-spacing:.18em; text-transform:uppercase; }
+        body[data-theme="winamp"] .card .head .kind { color:#8a8aa4; }
+        body[data-theme="winamp"] .card button,
+        body[data-theme="winamp"] .card .btn,
+        body[data-theme="winamp"] .chip,
+        body[data-theme="winamp"] .jot-open {
+          border-radius:0; background:#2a2a3a;
+          border:1px solid; border-color:#44445c #101018 #101018 #44445c; }
+        body[data-theme="winamp"] .card button:hover,
+        body[data-theme="winamp"] .card .btn:hover,
+        body[data-theme="winamp"] .chip:hover { background:#333346; }
+        body[data-theme="winamp"] .chip.active,
+        body[data-theme="winamp"] .pill { background:#d8a830; color:#14141e;
+          border:1px solid; border-color:#f0cf70 #8a6a10 #8a6a10 #f0cf70; border-radius:0; }
+        body[data-theme="winamp"] input[type=text],
+        body[data-theme="winamp"] input[type=search] {
+          border-radius:0; background:#0a0a12; color:#3fd858; font-style:normal;
+          border:1px solid; border-color:#101018 #44445c #44445c #101018; }
+        body[data-theme="winamp"] input[type=search]::placeholder { color:#2a8a3c; }
+        body[data-theme="winamp"] #modal,
+        body[data-theme="winamp"] .sess-modal,
+        body[data-theme="winamp"] .theme-modal,
+        body[data-theme="winamp"] .act-modal { border-radius:0; background:#232330;
+          border:2px solid; border-color:#3d3d52 #0c0c14 #0c0c14 #3d3d52; }`,
+      mount() {
+        const box = document.createElement("div");
+        box.className = "amp-fx";
+        const cv = document.createElement("canvas");
+        box.appendChild(cv);
+        document.body.appendChild(box);
+        const ctx = cv.getContext("2d");
+        const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
+        let bars = [], peaks = [], t = 6, raf = 0, last = 0, alive = true;
+        const size = () => { cv.width = box.clientWidth || innerWidth;
+          cv.height = box.clientHeight || 140;
+          const n = Math.max(24, Math.min(64, (cv.width / 26) | 0));
+          bars = new Array(n).fill(.05); peaks = new Array(n).fill(.1); };
+        const level = (i, n) => { const x = i / n;
+          const v = .5 + .5 * Math.sin(t * 2.1 + x * 9) * Math.sin(t * 1.3 + x * 4.2)
+            + .35 * Math.sin(t * 3.7 + x * 17) + .18 * Math.sin(t * .9 + x * 29);
+          return Math.min(1, Math.max(.03, v * .6 * (1 - x * .3))); };
+        const colorOf = f => f < .5 ? "#3fd858" : f < .8 ? "#d8a830" : "#e05038";
+        const paint = (mv) => { const w = cv.width, h = cv.height, n = bars.length, bw = w / n;
+          ctx.clearRect(0, 0, w, h);
+          for (let i = 0; i < n; i++) { if (mv) {
+              const tv = level(i, n); bars[i] += (tv - bars[i]) * .3;
+              if (bars[i] > peaks[i]) peaks[i] = bars[i]; else peaks[i] -= .006; }
+            const bh = bars[i] * (h - 8), segs = Math.max(1, (bh / 7) | 0);
+            ctx.globalAlpha = .75;
+            for (let s = 0; s < segs; s++) { ctx.fillStyle = colorOf(s / ((h - 8) / 7));
+              ctx.fillRect(i * bw + 1.5, h - (s + 1) * 7 + 1, bw - 3, 5); }
+            ctx.globalAlpha = 1; ctx.fillStyle = colorOf(peaks[i]);
+            ctx.fillRect(i * bw + 1.5, h - peaks[i] * (h - 8) - 3, bw - 3, 2.5); } };
+        const tick = (ts) => { if (!alive) return;
+          raf = requestAnimationFrame(tick);
+          if (ts - last < 33) return;
+          last = ts; t += .03; paint(true); };
+        const onResize = () => { size(); paint(false); };
+        size();
+        if (reduced) { for (let k = 0; k < 40; k++) { t += .03; paint(true); } }
+        else raf = requestAnimationFrame(tick);
+        addEventListener("resize", onResize);
+        return () => { alive = false; cancelAnimationFrame(raf);
+          removeEventListener("resize", onResize); box.remove(); };
+      },
+    },
   };
   const skinStyle = document.createElement("style");
   skinStyle.textContent = Object.values(SKIN).map(s => s.css || "").join("\n");

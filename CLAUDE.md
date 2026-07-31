@@ -79,7 +79,11 @@ variables, the picker preview, and each theme's 16-colour terminal palette
 extra scoped CSS and/or a mounted overlay, in the `SKIN` map in hub.js —
 including generative **p5.js "worlds"** (the flow-field; `grove`, the *old
 growth* forest with amber light shafts + dust motes) that lazy-load p5 on
-selection and tear down on theme change. The picker auto-groups any
+selection and tear down on theme change, and **chrome worlds** (`winxp`,
+`win95`, `winamp` — retro-OS widget styling: card heads become titlebars,
+beveled/glossy buttons, restyled inputs; their backdrops are raw-canvas
+mounts, no p5: the XP hill + clouds, a one-off dither tile, the spectrum
+analyzer strip). The Windows pair anchors its terminals on Campbell. The picker auto-groups any
 `skin`-carrying theme under "special · worlds". To add a world: a `THEME` entry
 with `skin:"name"` plus a matching `SKIN[name]` (`{ css, mount? }`) — `apply()`
 mounts/tears it down and the picker lists it automatically. Five accent pigments
