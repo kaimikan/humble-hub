@@ -50,6 +50,10 @@
   .samp-card .b-open { color: var(--sanguine); }
   .samp-card .b-claude { color: var(--lapis); }
   .samp-card .b-files { color: var(--verdigris); }
+  .samp-in { display: block; margin-top: .5rem; width: 100%; box-sizing: border-box;
+    font: inherit; font-size: .78rem; padding: .28rem .55rem; color: var(--ink);
+    background: transparent; border: 1px solid var(--ink-faint); border-radius: 2px; }
+  .samp-in::placeholder { color: var(--ink-faint); font-style: italic; }
 
   .samp-row { display: flex; align-items: center; gap: .6rem; margin-top: auto; }
   .dots { display: flex; gap: .3rem; }
@@ -512,37 +516,19 @@ function makeBliss(pal, container) {
   };
 }
 
-// WIN95 — teal desktop, and THE move: the Solitaire win animation. Cards
-// bounce across the desktop stamping trails (no clear — that IS the effect),
-// then the table resets for a new deal.
+// WIN95 — a quiet stage for the chrome: flat teal desktop with the faint
+// 256-colour dither grain of the era. Static by design — the bevels are the show.
 function makeWin95(pal, container) {
   const [bgR, bgG, bgB] = _hx(pal.bg);
   return (p) => {
-    let cards = [], resetAt = 0;
-    const SUITS = [["♠", [26, 26, 26]], ["♥", [178, 40, 32]], ["♦", [178, 40, 32]], ["♣", [26, 26, 26]]];
-    const mkCard = () => ({ x: p.random(p.width * .1, p.width * .9), y: -30,
-      vx: p.random([-1, 1]) * p.random(1.2, 2.6), vy: p.random(0, 1.5),
-      s: (p.random(4)) | 0, w: 34, h: 44 });
-    const deal = () => { p.background(bgR, bgG, bgB); cards = [mkCard()];
-      resetAt = p.frameCount + 30 * 18; };
-    const stamp = (c) => { p.noStroke(); p.fill(255); p.rect(c.x, c.y, c.w, c.h, 3);
-      p.stroke(150); p.noFill(); p.rect(c.x, c.y, c.w, c.h, 3); p.noStroke();
-      const [ch, col] = SUITS[c.s]; p.fill(col[0], col[1], col[2]);
-      p.textSize(15); p.textAlign(p.CENTER, p.CENTER);
-      p.text(ch, c.x + c.w / 2, c.y + c.h / 2); };
+    const paint = () => { p.background(bgR, bgG, bgB); p.noStroke();
+      for (let i = 0; i < p.width * p.height / 55; i++) {   // sparse dither grain
+        const v = p.random() < .5 ? -10 : 10;
+        p.fill(bgR + v, bgG + v, bgB + v, 60);
+        p.rect((p.random(p.width) | 0), (p.random(p.height) | 0), 2, 2); } };
     p.setup = () => { const [w, h] = dims(container); p.createCanvas(w, h).parent(container);
-      p.pixelDensity(1); p.frameRate(30); deal();
-      if (REDUCED) { const c = cards[0];               // pre-simulate one arc
-        for (let i = 0; i < 90; i++) { stamp(c); c.x += c.vx; c.y += c.vy; c.vy += .35;
-          if (c.y + c.h > p.height) { c.y = p.height - c.h; c.vy *= -.82; } }
-        p.noLoop(); } };
-    p.draw = () => {                                   // NO background — trails
-      if (p.frameCount > resetAt) deal();
-      for (const c of cards) { stamp(c); c.x += c.vx; c.y += c.vy; c.vy += .35;
-        if (c.y + c.h > p.height) { c.y = p.height - c.h; c.vy *= -.82; } }
-      cards = cards.filter(c => c.x > -c.w - 4 && c.x < p.width + 4);
-      if (!cards.length) cards.push(mkCard()); };
-    p.windowResized = () => { const [w, h] = dims(container); p.resizeCanvas(w, h); deal(); };
+      p.pixelDensity(1); paint(); p.noLoop(); };
+    p.windowResized = () => { const [w, h] = dims(container); p.resizeCanvas(w, h); paint(); };
   };
 }
 
@@ -633,21 +619,85 @@ const DRAFTS = [
     bg: "#f2ead8", paper: "#f9f4e6", ink: "#2c3138", inkSoft: "#5c6470", inkFaint: "#9aa0a8",
     lapis: "#2a4a72", sanguine: "#c73e2a", verdigris: "#4a7a5c", ochre: "#b8862e", plum: "#7a4a80",
     sketch: makeUkiyo },
-  { key: "bliss", name: "bliss", mode: "light", blurb: "the XP hill · it's always 2003 somewhere",
+  { key: "bliss", name: "bliss", mode: "light", blurb: "luna chrome · gradient titlebars, start-green go",
     font: "Tahoma, Verdana, 'Segoe UI', sans-serif",
     bg: "#7fb2ec", paper: "#ece9d8", ink: "#1d2b45", inkSoft: "#48587a", inkFaint: "#8593ad",
     lapis: "#0a58ca", sanguine: "#d63f2a", verdigris: "#3a9e3c", ochre: "#e8a33d", plum: "#7d5bbe",
-    sketch: makeBliss },
-  { key: "win95", name: "windows 95", mode: "light", blurb: "teal desktop · the solitaire win bounce",
+    sketch: makeBliss,
+    chrome: `
+      .t-bliss .samp-card { border-radius: 8px 8px 3px 3px; padding: 0 0 .6rem;
+        background: #ece9d8; border: 1px solid #0842a0; overflow: hidden;
+        box-shadow: 2px 3px 9px rgba(10, 30, 80, .4); }
+      .t-bliss .samp-card .ttl { margin: 0 0 .5rem; padding: .32rem .65rem;
+        background: linear-gradient(180deg, #5da2f2 0%, #1a63d8 12%, #2a80ec 45%, #0e50b8 100%);
+        color: #fff; text-shadow: 1px 1px 1px rgba(0, 20, 60, .65); font-size: .88rem; }
+      .t-bliss .samp-card .ttl::after { content: "✕"; float: right; width: 1.15rem;
+        text-align: center; font-size: .72rem; border-radius: 3px; border: 1px solid #fff;
+        background: linear-gradient(180deg, #f2a48c, #d84424 55%, #b02c10);
+        text-shadow: none; }
+      .t-bliss .samp-card .ex, .t-bliss .samp-card .btns,
+      .t-bliss .samp-card .samp-in { margin-left: .65rem; margin-right: .65rem; }
+      .t-bliss .samp-card .ex { color: #48587a; }
+      .t-bliss .samp-card button { border-radius: 3px; border: 1px solid #003c74;
+        color: #1d2b45; font-variant: normal;
+        background: linear-gradient(180deg, #fff, #ece9d8 45%, #d8d0bf);
+        box-shadow: inset 0 -2px 3px rgba(160, 140, 100, .35), inset 0 1px 0 #fff; }
+      .t-bliss .samp-card .b-open { color: #fff; border-color: #2a6e2c;
+        background: linear-gradient(180deg, #8adf78, #3a9e3c 55%, #2a7e2c);
+        box-shadow: inset 0 -2px 3px rgba(0, 60, 0, .4), inset 0 1px 0 #b8f0a8; }
+      .t-bliss .samp-in { width: auto; display: block; border-radius: 0;
+        border: 1px solid #7f9db9; background: #fff; font-style: normal; }
+      .t-bliss .term { border-radius: 3px; border: 1px solid #0842a0; }` },
+  { key: "win95", name: "windows 95", mode: "light", blurb: "gray bevels · navy titlebars · a quiet teal",
     font: "Tahoma, 'MS Sans Serif', Verdana, sans-serif",
     bg: "#008080", paper: "#c0c0c0", ink: "#1a1a1a", inkSoft: "#3d3d3d", inkFaint: "#6f6f6f",
     lapis: "#000080", sanguine: "#b23a2a", verdigris: "#2f8a3c", ochre: "#c09018", plum: "#6a4fa0",
-    sketch: makeWin95 },
-  { key: "winamp", name: "winamp", mode: "dark", blurb: "spectrum analyzer · whips the llama's ass",
+    sketch: makeWin95,
+    chrome: `
+      .t-win95 .samp-card { border-radius: 0; padding: 3px 3px .55rem;
+        background: #c0c0c0; border: 2px solid; border-color: #fff #404040 #404040 #fff;
+        box-shadow: 1px 1px 0 #000; }
+      .t-win95 .samp-card .ttl { margin: 0 0 .5rem; padding: .22rem .5rem;
+        background: linear-gradient(90deg, #000080, #1084d0); color: #fff;
+        font-size: .8rem; letter-spacing: .01em; }
+      .t-win95 .samp-card .ttl::after { content: "✕"; float: right; width: 1rem;
+        text-align: center; font-size: .62rem; color: #000; background: #c0c0c0;
+        border: 1px solid; border-color: #fff #404040 #404040 #fff; }
+      .t-win95 .samp-card .ex, .t-win95 .samp-card .btns,
+      .t-win95 .samp-card .samp-in { margin-left: .5rem; margin-right: .5rem; }
+      .t-win95 .samp-card .ex { font-style: normal; font-size: .78rem; color: #1a1a1a; }
+      .t-win95 .samp-card button { border-radius: 0; background: #c0c0c0; color: #111;
+        border: 2px solid; border-color: #fff #404040 #404040 #fff;
+        box-shadow: 1px 1px 0 #000; font-variant: normal; }
+      .t-win95 .samp-card button:active { border-color: #404040 #fff #fff #404040; }
+      .t-win95 .samp-in { width: auto; display: block; border-radius: 0; background: #fff;
+        border: 2px solid; border-color: #404040 #fff #fff #404040; font-style: normal; }
+      .t-win95 .term { border-radius: 0; border: 2px solid;
+        border-color: #404040 #fff #fff #404040; }` },
+  { key: "winamp", name: "winamp", mode: "dark", blurb: "brushed dark, gold rails · the eq lives below",
     font: "'JetBrains Mono', 'Hack', monospace",
     bg: "#14141e", paper: "#232330", ink: "#d8d8e8", inkSoft: "#9a9ab4", inkFaint: "#5e5e78",
     lapis: "#5f7fd8", sanguine: "#e05038", verdigris: "#3fd858", ochre: "#d8a830", plum: "#9a70d0",
-    glow: "#3fd858", sketch: makeWinamp },
+    glow: "#3fd858", sketch: makeWinamp,
+    chrome: `
+      .t-winamp .samp-card { border-radius: 0; padding: 2px 2px .55rem;
+        background: #232330; border: 2px solid; border-color: #3d3d52 #0c0c14 #0c0c14 #3d3d52; }
+      .t-winamp .samp-card .ttl { margin: 0 0 .5rem; padding: .24rem .5rem;
+        text-align: center; font-size: .66rem; font-weight: 700; letter-spacing: .28em;
+        text-transform: uppercase; color: #d8a830;
+        background: repeating-linear-gradient(0deg, #2e2e40 0 1px, #1c1c28 1px 3px); }
+      .t-winamp .samp-card .ex, .t-winamp .samp-card .btns,
+      .t-winamp .samp-card .samp-in { margin-left: .5rem; margin-right: .5rem; }
+      .t-winamp .samp-card .ex { font-size: .76rem; }
+      .t-winamp .samp-card button { border-radius: 0; background: #2a2a3a;
+        border: 1px solid; border-color: #44445c #101018 #101018 #44445c;
+        font-size: .68rem; letter-spacing: .08em; }
+      .t-winamp .samp-in { width: auto; display: block; border-radius: 0;
+        background: #0a0a12; border: 1px solid; border-color: #101018 #44445c #44445c #101018;
+        color: #3fd858; font-style: normal; }
+      .t-winamp .samp-in::placeholder { color: #2a8a3c; }
+      .t-winamp .term { border-radius: 0; background: #050508;
+        border: 1px solid; border-color: #101018 #44445c #44445c #101018; }` },
 ];
 
 // ---- render ----------------------------------------------------------------
@@ -673,6 +723,7 @@ function sampler(d, big) {
       <div class="ttl">sample-project</div>
       <div class="ex">"a short blurb of what the project is — placeholder copy to preview the type."</div>
       <div class="btns"><button class="b-open">▷ open</button><button class="b-claude">claude ▾</button><button class="b-files">files</button></div>
+      <input class="samp-in" placeholder="search…" tabindex="-1">
     </div>
     <div class="samp-row">
       <div class="dots">${dots}</div>
@@ -682,10 +733,23 @@ function sampler(d, big) {
   </div>`;
 }
 
+// a draft may carry `chrome`: extra CSS (scoped under .t-<key>) that restyles
+// the sampler — for worlds whose identity IS the widget chrome, not a canvas
+// (the aqua precedent). Injected once; both the tile and the expanded view
+// get the .t-<key> class.
+function mountChrome(d) {
+  if (!d.chrome || document.getElementById("chrome-" + d.key)) return;
+  const s = document.createElement("style");
+  s.id = "chrome-" + d.key;
+  s.textContent = d.chrome;
+  document.head.appendChild(s);
+}
+
 const instances = [];
 function mountTile(d) {
   const tile = document.createElement("div");
   tile.className = "tile";
+  if (d.chrome) { mountChrome(d); tile.classList.add(`t-${d.key}`); }
   if (d.shipped) tile.dataset.shipped = "1";
   setVars(tile, d);
   tile.innerHTML = sampler(d, false);
@@ -700,6 +764,8 @@ function mountTile(d) {
 let xInst = null;
 function expand(d) {
   const x = document.getElementById("x"), big = document.getElementById("x-big");
+  big.className = "big" + (d.chrome ? ` t-${d.key}` : "");
+  if (d.chrome) mountChrome(d);
   setVars(big, d); big.innerHTML = sampler(d, true);
   x.classList.add("on");
   requestAnimationFrame(() => { xInst = new p5(d.sketch(d, big), big); });
