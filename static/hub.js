@@ -2326,6 +2326,7 @@ setInterval(() => {
         body[data-theme="aqua"] .card button,
         body[data-theme="aqua"] .card .btn,
         body[data-theme="aqua"] .chip,
+        body[data-theme="aqua"] #mode-select,
         body[data-theme="aqua"] .pill {
           position:relative; border-radius:999px; overflow:visible;
           box-shadow:inset 0 1px 0 rgba(255,255,255,.9), 0 1px 2px rgba(0,0,0,.14); }
@@ -2340,7 +2341,8 @@ setInterval(() => {
         /* graphite (default) gel face */
         body[data-theme="aqua"] .card button,
         body[data-theme="aqua"] .card .btn,
-        body[data-theme="aqua"] .chip {
+        body[data-theme="aqua"] .chip,
+        body[data-theme="aqua"] #mode-select {
           border:1px solid #b6c0cd; color:#2a3543; text-shadow:0 1px 0 rgba(255,255,255,.7);
           background:linear-gradient(to bottom, #ffffff 0, #f1f4f8 48%, #e7ecf2 52%, #dfe6ee 100%); }
         body[data-theme="aqua"] .card button:hover,
@@ -2393,6 +2395,7 @@ setInterval(() => {
         body[data-theme="geocities"] .card button,
         body[data-theme="geocities"] .card .btn,
         body[data-theme="geocities"] .chip,
+        body[data-theme="geocities"] #mode-select,
         body[data-theme="geocities"] .pill {
           border:3px outset #ff2d95; border-radius:0; color:#ffe600;
           background:#3a0d5c; text-shadow:1px 1px 0 #000; font-weight:bold; }
