@@ -1297,8 +1297,16 @@ function setChatMode(mode) {
   chatMode = mode;
   localStorage.setItem("chatMode", mode);
 }
-const modeSelect = document.getElementById("mode-select");
-if (modeSelect) modeSelect.value = chatMode;
+// the mode picker is a styled .menu dropdown (a native <select>'s open list
+// can't be themed); the label mirrors the stored mode, the current entry bolds
+function syncModeMenu() {
+  const l = document.getElementById("mode-label");
+  if (l) l.textContent = chatMode.replace("-", " ");
+  document.querySelectorAll(".menu-items [data-mode]")
+    .forEach(b => b.style.fontWeight = b.dataset.mode === chatMode ? "700" : "");
+}
+function setMode(mode) { setChatMode(mode); syncModeMenu(); }
+syncModeMenu();
 
 const CHAT_ICON = '<svg class="i" viewBox="0 0 24 24" aria-hidden="true">'
   + '<path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9'

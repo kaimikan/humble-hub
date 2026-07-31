@@ -198,6 +198,18 @@ def scan() -> list:
 
 app.mount("/static", StaticFiles(directory=HUB_DIR / "static"))
 
+
+@app.middleware("http")
+async def static_no_cache(request, call_next):
+    """`Cache-Control: no-cache` on static assets = always revalidate (ETag
+    makes that a cheap 304). Belt-and-braces on top of sv()'s ?v= busting —
+    heuristic caching has served stale hub.js/themes.js before, which shows
+    up as 'the JS-injected styling is missing' while the page looks fresh."""
+    response = await call_next(request)
+    if request.url.path.startswith("/static"):
+        response.headers["Cache-Control"] = "no-cache"
+    return response
+
 # Uploaded images live under data/ (git-ignored — never committed) and are
 # served read-only at /attachments/<id>.jpg. See the upload endpoint below.
 ATTACH_DIR = HUB_DIR / "data" / "attachments"
@@ -1376,16 +1388,9 @@ def index():
     font-variant:small-caps; letter-spacing:.06em; padding:.3rem .75rem;
     cursor:pointer; }}
   .jot-open:hover {{ background:var(--ink); color:var(--parchment); }}
-  /* match the jot buttons: strip the native select chrome, add a themed caret */
-  .sel-wrap {{ position:relative; display:inline-flex; align-items:center; }}
-  .sel-wrap::after {{ content:"▾"; position:absolute; right:.55rem; pointer-events:none;
-    color:var(--ink-soft); font-size:.7rem; }}
-  #mode-select {{ -webkit-appearance:none; -moz-appearance:none; appearance:none;
-    background:transparent; border:1px solid var(--ink-soft); border-radius:2px;
-    color:var(--ink); font:inherit; font-size:.84rem; font-variant:small-caps;
-    letter-spacing:.06em; padding:.3rem 1.5rem .3rem .75rem; cursor:pointer; }}
-  #mode-select:hover {{ background:var(--ink); color:var(--parchment); }}
-  #mode-select option {{ background:var(--paper); color:var(--ink); }}
+  /* the mode picker is a .menu dropdown like root claude — a native <select>'s
+     open list can't be themed (the OS draws it), which read as "unstyled".
+     The button keeps the #mode-select id so the theme skins hook onto it. */
   #overlay {{ position:fixed; inset:0; background:rgba(67,51,28,.4); z-index:60;
     display:flex; align-items:flex-start; justify-content:center;
     padding-top:11vh; }}
@@ -1441,12 +1446,17 @@ def index():
   .controls {{ margin-top:1.1rem; display:flex; gap:.7rem; justify-content:center;
                align-items:center; flex-wrap:wrap; }}
   /* one height for every control in the row — buttons, the mode select, the
-     search field and the chips all sit on the same line, no odd one out */
+     search field and the chips all sit on the same line, no odd one out.
+     min-height (not height): a fixed box overflows under browser zoom or a
+     bumped minimum font size, which visibly knocks the icons off-centre */
   .controls button, .controls .btn, .controls select, .controls input {{
-    height:1.95rem; box-sizing:border-box; }}
+    min-height:1.95rem; box-sizing:border-box; line-height:1.3; }}
+  /* optical correction: geometric centring reads high next to small-caps
+     text (no descenders) — seat the control-row icons a hair lower */
+  .controls button svg.i {{ transform:translateY(.05em); }}
   #search {{ background:var(--input-bg); border:1px solid var(--ink-soft);
     border-radius:2px; color:var(--ink); font:inherit; font-size:.9rem;
-    padding:.3rem .7rem; width:240px; }}
+    line-height:1.3; padding:.3rem .7rem; width:240px; }}
   #search::placeholder {{ color:var(--ink-faint); font-style:italic; }}
   /* category chips are NEUTRAL — icon + text tell them apart; the pigments are
      reserved for the action buttons (lapis=claude, sanguine=go, verdigris=files)
@@ -1614,13 +1624,16 @@ def index():
           <button onclick="act('~','terminal')">in konsole</button>
         </div>
       </div>
-      <span class="sel-wrap"><select id="mode-select"
-             title="permission mode for newly opened chats"
-             onchange="setChatMode(this.value)">
-        <option value="default">mode: default</option>
-        <option value="accept-edits">mode: accept edits</option>
-        <option value="plan">mode: plan</option>
-      </select></span>
+      <div class="menu">
+        <button class="jot-open" id="mode-select"
+                title="permission mode for newly opened chats">mode:
+          <span id="mode-label">default</span> ▾</button>
+        <div class="menu-items">
+          <button data-mode="default" onclick="setMode('default')">default</button>
+          <button data-mode="accept-edits" onclick="setMode('accept-edits')">accept edits</button>
+          <button data-mode="plan" onclick="setMode('plan')">plan</button>
+        </div>
+      </div>
       <button class="jot-open" onclick="openJot('todos')">{icon("todo")} to-do <span id="todos-count"></span></button>
       <button class="jot-open" onclick="openJot('ideas')">{icon("ideas")} ideas <span id="ideas-count"></span></button>
       <button class="jot-open" id="inbox-open" onclick="openInbox()">{icon("inbox")} inbox <span id="inbox-count"></span></button>
