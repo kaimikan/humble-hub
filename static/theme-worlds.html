@@ -472,6 +472,46 @@ function makeUkiyo(pal, container) {
   };
 }
 
+// BLISS (Windows XP) — the wallpaper as a living sketch: gradient sky, rolling
+// green hill, cumulus drifting by. Joke-world lineage (geocities, aqua) — if it
+// graduates, the SKIN adds the Luna chrome (blue titlebars, green Start button).
+function makeBliss(pal, container) {
+  return (p) => {
+    let clouds = [], sprite;
+    const mkCloud = (init) => { const puffs = [], n = 3 + ((p.random(3)) | 0);
+      for (let i = 0; i < n; i++) puffs.push({ dx: p.random(-1.1, 1.1), dy: p.random(-.35, .3),
+        r: p.random(.5, 1) });
+      return { x: init ? p.random(-40, p.width) : -60, y: p.random(p.height * .06, p.height * .42),
+        s: p.random(22, 44), v: p.random(.12, .3), puffs }; };
+    const sky = () => { const ctx = p.drawingContext;
+      const g = ctx.createLinearGradient(0, 0, 0, p.height * .8);
+      g.addColorStop(0, "#3d7edb"); g.addColorStop(.6, "#7fb2ec"); g.addColorStop(1, "#cfe3f8");
+      ctx.fillStyle = g; ctx.fillRect(0, 0, p.width, p.height); };
+    const hill = () => { const ctx = p.drawingContext, hy = p.height * .74;
+      const g = ctx.createLinearGradient(0, hy - 40, 0, p.height);
+      g.addColorStop(0, "#8ed04e"); g.addColorStop(.45, "#57ab30"); g.addColorStop(1, "#2f7a1e");
+      ctx.fillStyle = g; ctx.beginPath(); ctx.moveTo(0, p.height);
+      ctx.lineTo(0, hy + 18);
+      ctx.bezierCurveTo(p.width * .3, hy - 34, p.width * .62, hy - 10, p.width, hy + 26);
+      ctx.lineTo(p.width, p.height); ctx.closePath(); ctx.fill();
+      const s = ctx.createRadialGradient(p.width * .34, hy - 16, 0, p.width * .34, hy - 16, p.width * .5);
+      s.addColorStop(0, "rgba(255,255,230,.2)"); s.addColorStop(1, "rgba(255,255,230,0)");
+      ctx.fillStyle = s; ctx.fillRect(0, hy - 60, p.width, p.height - hy + 60); };
+    const scene = (mv) => { sky();
+      for (const c of clouds) { if (mv) { c.x += c.v; if (c.x - c.s * 2.4 > p.width) Object.assign(c, mkCloud(false)); }
+        for (const pf of c.puffs) { const s = c.s * pf.r * 2.6;
+          p.tint(255, 255, 255, 235); p.image(sprite, c.x + pf.dx * c.s - s / 2, c.y + pf.dy * c.s - s / 2, s, s); } }
+      hill(); };
+    p.setup = () => { const [w, h] = dims(container); p.createCanvas(w, h).parent(container);
+      p.pixelDensity(1); p.frameRate(30); sprite = softSprite(p, "#ffffff", .9);
+      const n = Math.max(3, Math.min(6, (p.width / 110) | 0));
+      for (let i = 0; i < n; i++) clouds.push(mkCloud(true));
+      if (REDUCED) { scene(false); p.noLoop(); } };
+    p.draw = () => scene(true);
+    p.windowResized = () => { const [w, h] = dims(container); p.resizeCanvas(w, h); };
+  };
+}
+
 // ---- DRAFTS registry (append to grow the lab) ------------------------------
 const grove = THEME.grove;  // the shipped baseline, straight from the registry
 const DRAFTS = [
@@ -522,6 +562,11 @@ const DRAFTS = [
     bg: "#f2ead8", paper: "#f9f4e6", ink: "#2c3138", inkSoft: "#5c6470", inkFaint: "#9aa0a8",
     lapis: "#2a4a72", sanguine: "#c73e2a", verdigris: "#4a7a5c", ochre: "#b8862e", plum: "#7a4a80",
     sketch: makeUkiyo },
+  { key: "bliss", name: "bliss", mode: "light", blurb: "the XP hill · it's always 2003 somewhere",
+    font: "Tahoma, Verdana, 'Segoe UI', sans-serif",
+    bg: "#7fb2ec", paper: "#ece9d8", ink: "#1d2b45", inkSoft: "#48587a", inkFaint: "#8593ad",
+    lapis: "#0a58ca", sanguine: "#d63f2a", verdigris: "#3a9e3c", ochre: "#e8a33d", plum: "#7d5bbe",
+    sketch: makeBliss },
 ];
 
 // ---- render ----------------------------------------------------------------
