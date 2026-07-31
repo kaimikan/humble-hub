@@ -512,6 +512,77 @@ function makeBliss(pal, container) {
   };
 }
 
+// WIN95 — teal desktop, and THE move: the Solitaire win animation. Cards
+// bounce across the desktop stamping trails (no clear — that IS the effect),
+// then the table resets for a new deal.
+function makeWin95(pal, container) {
+  const [bgR, bgG, bgB] = _hx(pal.bg);
+  return (p) => {
+    let cards = [], resetAt = 0;
+    const SUITS = [["♠", [26, 26, 26]], ["♥", [178, 40, 32]], ["♦", [178, 40, 32]], ["♣", [26, 26, 26]]];
+    const mkCard = () => ({ x: p.random(p.width * .1, p.width * .9), y: -30,
+      vx: p.random([-1, 1]) * p.random(1.2, 2.6), vy: p.random(0, 1.5),
+      s: (p.random(4)) | 0, w: 34, h: 44 });
+    const deal = () => { p.background(bgR, bgG, bgB); cards = [mkCard()];
+      resetAt = p.frameCount + 30 * 18; };
+    const stamp = (c) => { p.noStroke(); p.fill(255); p.rect(c.x, c.y, c.w, c.h, 3);
+      p.stroke(150); p.noFill(); p.rect(c.x, c.y, c.w, c.h, 3); p.noStroke();
+      const [ch, col] = SUITS[c.s]; p.fill(col[0], col[1], col[2]);
+      p.textSize(15); p.textAlign(p.CENTER, p.CENTER);
+      p.text(ch, c.x + c.w / 2, c.y + c.h / 2); };
+    p.setup = () => { const [w, h] = dims(container); p.createCanvas(w, h).parent(container);
+      p.pixelDensity(1); p.frameRate(30); deal();
+      if (REDUCED) { const c = cards[0];               // pre-simulate one arc
+        for (let i = 0; i < 90; i++) { stamp(c); c.x += c.vx; c.y += c.vy; c.vy += .35;
+          if (c.y + c.h > p.height) { c.y = p.height - c.h; c.vy *= -.82; } }
+        p.noLoop(); } };
+    p.draw = () => {                                   // NO background — trails
+      if (p.frameCount > resetAt) deal();
+      for (const c of cards) { stamp(c); c.x += c.vx; c.y += c.vy; c.vy += .35;
+        if (c.y + c.h > p.height) { c.y = p.height - c.h; c.vy *= -.82; } }
+      cards = cards.filter(c => c.x > -c.w - 4 && c.x < p.width + 4);
+      if (!cards.length) cards.push(mkCard()); };
+    p.windowResized = () => { const [w, h] = dims(container); p.resizeCanvas(w, h); deal(); };
+  };
+}
+
+// WINAMP — the classic skin's soul: a spectrum analyzer, green→amber→red bars
+// with peak caps that hang then fall. It really whips the llama's ass.
+function makeWinamp(pal, container) {
+  const [bgR, bgG, bgB] = _hx(pal.bg);
+  return (p) => {
+    let bars = [], peaks = [], t = 0;
+    const N = () => Math.max(18, Math.min(34, (p.width / 16) | 0));
+    const level = (i, n) => {                          // pseudo-audio: layered sines
+      const x = i / n;
+      const v = .5 + .5 * Math.sin(t * 2.1 + x * 9) * Math.sin(t * 1.3 + x * 4.2)
+        + .35 * Math.sin(t * 3.7 + x * 17) + .22 * p.noise(x * 6, t * .6);
+      return p.constrain(v * .62 * (1 - x * .3), .03, 1); };
+    const barColor = (f) => f < .5 ? [63, 216, 88] : f < .8 ? [216, 168, 48] : [224, 80, 56];
+    const scene = (mv) => { p.background(bgR, bgG, bgB); const n = bars.length;
+      const bw = p.width / n, base = p.height, maxH = p.height * .45;
+      p.noStroke();
+      for (let i = 0; i < n; i++) { if (mv) {
+          const target = level(i, n); bars[i] += (target - bars[i]) * .3;
+          if (bars[i] > peaks[i]) peaks[i] = bars[i]; else peaks[i] -= .006; }
+        const h = bars[i] * maxH, segs = Math.max(1, (h / 7) | 0);
+        for (let s = 0; s < segs; s++) { const f = s / (maxH / 7), c = barColor(f);
+          p.fill(c[0], c[1], c[2], 230); p.rect(i * bw + 1.5, base - (s + 1) * 7 + 1, bw - 3, 5); }
+        const c = barColor(peaks[i]);                  // hanging peak cap
+        p.fill(c[0], c[1], c[2]); p.rect(i * bw + 1.5, base - peaks[i] * maxH - 3, bw - 3, 2.5); } };
+    p.setup = () => { const [w, h] = dims(container); p.createCanvas(w, h).parent(container);
+      p.pixelDensity(1); p.frameRate(30);
+      bars = new Array(N()).fill(.05); peaks = new Array(N()).fill(.1);
+      if (REDUCED) { t = 4; for (let k = 0; k < 30; k++) { t += .03;
+          for (let i = 0; i < bars.length; i++) { const v = level(i, bars.length);
+            bars[i] += (v - bars[i]) * .3; peaks[i] = Math.max(peaks[i], bars[i]); } }
+        scene(false); p.noLoop(); return; } };
+    p.draw = () => { t += .03; scene(true); };
+    p.windowResized = () => { const [w, h] = dims(container); p.resizeCanvas(w, h);
+      bars = new Array(N()).fill(.05); peaks = new Array(N()).fill(.1); };
+  };
+}
+
 // ---- DRAFTS registry (append to grow the lab) ------------------------------
 const grove = THEME.grove;  // the shipped baseline, straight from the registry
 const DRAFTS = [
@@ -567,6 +638,16 @@ const DRAFTS = [
     bg: "#7fb2ec", paper: "#ece9d8", ink: "#1d2b45", inkSoft: "#48587a", inkFaint: "#8593ad",
     lapis: "#0a58ca", sanguine: "#d63f2a", verdigris: "#3a9e3c", ochre: "#e8a33d", plum: "#7d5bbe",
     sketch: makeBliss },
+  { key: "win95", name: "windows 95", mode: "light", blurb: "teal desktop · the solitaire win bounce",
+    font: "Tahoma, 'MS Sans Serif', Verdana, sans-serif",
+    bg: "#008080", paper: "#c0c0c0", ink: "#1a1a1a", inkSoft: "#3d3d3d", inkFaint: "#6f6f6f",
+    lapis: "#000080", sanguine: "#b23a2a", verdigris: "#2f8a3c", ochre: "#c09018", plum: "#6a4fa0",
+    sketch: makeWin95 },
+  { key: "winamp", name: "winamp", mode: "dark", blurb: "spectrum analyzer · whips the llama's ass",
+    font: "'JetBrains Mono', 'Hack', monospace",
+    bg: "#14141e", paper: "#232330", ink: "#d8d8e8", inkSoft: "#9a9ab4", inkFaint: "#5e5e78",
+    lapis: "#5f7fd8", sanguine: "#e05038", verdigris: "#3fd858", ochre: "#d8a830", plum: "#9a70d0",
+    glow: "#3fd858", sketch: makeWinamp },
 ];
 
 // ---- render ----------------------------------------------------------------
