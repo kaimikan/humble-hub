@@ -1121,7 +1121,10 @@ function saveNotesNow() {
     .lb-x { position:fixed; top:1rem; right:1.1rem; width:2.3rem; height:2.3rem;
       border-radius:50%; border:0; background:rgba(0,0,0,.55); color:#fff;
       font-size:1.05rem; line-height:1; cursor:pointer; }
-    #inbox-open.has-items { color:var(--ink); font-weight:600; }
+    /* :not(:hover) keeps this ID rule from outweighing every theme's
+       .jot-open:hover text colour (ink-on-ink hover was the symptom) */
+    #inbox-open.has-items:not(:hover) { color:var(--ink); }
+    #inbox-open.has-items { font-weight:600; }
     #inbox-open .has-items, #inbox-count { font-variant-numeric:tabular-nums; }
     .inbox-add { display:inline-flex; align-items:center; gap:.4rem; cursor:pointer;
       margin-top:.6rem; align-self:flex-start; border:1px solid var(--ink-soft);
@@ -2456,7 +2459,8 @@ setInterval(() => {
           box-shadow:inset 0 -2px 3px rgba(160,140,100,.35), inset 0 1px 0 #fff; }
         body[data-theme="winxp"] .card button:hover,
         body[data-theme="winxp"] .card .btn:hover,
-        body[data-theme="winxp"] .chip:hover {
+        body[data-theme="winxp"] .chip:hover,
+        body[data-theme="winxp"] .jot-open:hover {
           color:#0a1a35;
           background:linear-gradient(180deg,#ffffff,#f6f2e4 45%,#e6dfcc 100%); }
         body[data-theme="winxp"] .card .b-go { color:#fff; border-color:#2a6e2c;
@@ -2564,7 +2568,8 @@ setInterval(() => {
           box-shadow:1px 1px 0 #000; }
         body[data-theme="win95"] .card button:hover,
         body[data-theme="win95"] .card .btn:hover,
-        body[data-theme="win95"] .chip:hover { background:#cbcbc4; }
+        body[data-theme="win95"] .chip:hover,
+        body[data-theme="win95"] .jot-open:hover { background:#cbcbc4; color:#111; }
         body[data-theme="win95"] .card button:active,
         body[data-theme="win95"] .chip:active {
           border-color:#404040 #fff #fff #404040; box-shadow:none; }
@@ -2626,7 +2631,8 @@ setInterval(() => {
           border:1px solid; border-color:#44445c #101018 #101018 #44445c; }
         body[data-theme="winamp"] .card button:hover,
         body[data-theme="winamp"] .card .btn:hover,
-        body[data-theme="winamp"] .chip:hover { background:#333346; }
+        body[data-theme="winamp"] .chip:hover,
+        body[data-theme="winamp"] .jot-open:hover { background:#333346; color:#d8d8e8; }
         body[data-theme="winamp"] .chip.active,
         body[data-theme="winamp"] .pill { background:#d8a830; color:#14141e;
           border:1px solid; border-color:#f0cf70 #8a6a10 #8a6a10 #f0cf70; border-radius:0; }
