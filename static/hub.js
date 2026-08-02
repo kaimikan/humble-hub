@@ -2424,6 +2424,15 @@ setInterval(() => {
     // banner, marquee, visitor counter) + a glitter cursor trail.
     geocities: {
       css: `
+        /* vendored Comic Sans stand-in (Comic Neue, OFL) — the stack must never
+           fall through to generic cursive: fontconfig maps that to Noto Nastaliq
+           Urdu, whose huge vertical metrics inflated the inputs and knocked
+           button text off-centre (Firefox honours the mapping; the phone's
+           cursive is Dancing Script — also wrong) */
+        @font-face { font-family:"Comic Neue"; font-style:normal; font-weight:400;
+          src:url("/static/vendor/comic-neue-latin-400.woff2") format("woff2"); }
+        @font-face { font-family:"Comic Neue"; font-style:normal; font-weight:700;
+          src:url("/static/vendor/comic-neue-latin-700.woff2") format("woff2"); }
         /* tiled starfield desktop */
         body[data-theme="geocities"] {
           background:

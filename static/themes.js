@@ -68,7 +68,7 @@ const THEME = {
   // joke "world": peak-2000s GeoCities — starfield desktop, Comic Sans, neon
   // bevels, rainbow WordArt, blinking UNDER CONSTRUCTION, a scrolling marquee,
   // a visitor counter and a glitter cursor trail. Deliberately maximalist.
-  geocities:{ name:"geocities", mode:"dark", skin:"geocities", font:"'Comic Sans MS','Comic Sans','Chalkboard SE',cursive",
+  geocities:{ name:"geocities", mode:"dark", skin:"geocities", font:"'Comic Sans MS','Comic Neue',sans-serif",
     bg:"#05010f", paper:"#160a33", ink:"#e8ffe8", inkSoft:"#9fd0ff", inkFaint:"#7a6ab0",
     lapis:"#00e0ff", sanguine:"#ff2d95", verdigris:"#39ff14", ochre:"#ffe600", plum:"#b14bff",
     term:{ bg:"#05010f", fg:"#39ff14", ansi:["#1a1030","#ff2d95","#39ff14","#ffe600","#00e0ff","#b14bff","#00e0ff","#e8ffe8","#4a3a7a","#ff6cb5","#7dff5c","#fff04d","#6cefff","#cb86ff","#6cefff","#ffffff"] } },
