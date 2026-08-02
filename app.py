@@ -1368,7 +1368,10 @@ def index():
     --ochre:#8a6d1f; --plum:#5a3d6e;
     --bg-hi:#f7edd3; --bg-mid:#f2e6c6; --bg-lo:#e2d2a8;
     --card-bg:rgba(255,250,235,.35); --card-hot:rgba(255,250,235,.7);
-    --input-bg:rgba(255,250,235,.5); }}
+    --input-bg:rgba(255,250,235,.5);
+    /* modal backdrop dim + the confirm cover — themed (hub.js emits per-theme
+       values; these are the codex defaults) */
+    --scrim:rgba(67,51,28,.4); --veil:rgba(239,226,192,.96); }}
   body {{ color:var(--ink); font:16px/1.55 var(--font-family);
     margin:0; height:100vh; overflow:hidden;
     background:
@@ -1391,7 +1394,7 @@ def index():
   /* the mode picker is a .menu dropdown like root claude — a native <select>'s
      open list can't be themed (the OS draws it), which read as "unstyled".
      The button keeps the #mode-select id so the theme skins hook onto it. */
-  #overlay {{ position:fixed; inset:0; background:rgba(67,51,28,.4); z-index:60;
+  #overlay {{ position:fixed; inset:0; background:var(--scrim); z-index:60;
     display:flex; align-items:flex-start; justify-content:center;
     padding-top:11vh; }}
   #overlay[hidden] {{ display:none; }}
@@ -1403,7 +1406,7 @@ def index():
   .m-head {{ display:flex; align-items:center; }}
   .m-head h3 {{ margin:0; flex:1; font-size:1rem; font-weight:600;
     font-variant:small-caps; letter-spacing:.08em; color:var(--ink); }}
-  #confirm {{ position:absolute; inset:0; background:rgba(239,226,192,.96);
+  #confirm {{ position:absolute; inset:0; background:var(--veil);
     display:flex; flex-direction:column; align-items:center;
     justify-content:center; gap:.6rem; padding:1rem; border-radius:2px; }}
   #confirm[hidden] {{ display:none; }}

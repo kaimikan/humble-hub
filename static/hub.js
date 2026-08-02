@@ -1724,7 +1724,7 @@ setInterval(() => {
 (() => {
   const style = document.createElement("style");
   style.textContent = `
-    .sess-overlay { position:fixed; inset:0; background:rgba(67,51,28,.4); z-index:70;
+    .sess-overlay { position:fixed; inset:0; background:var(--scrim); z-index:70;
       display:flex; align-items:flex-start; justify-content:center; padding-top:9vh; }
     .sess-overlay[hidden] { display:none; }
     .sess-modal { width:min(640px,94vw); max-height:78vh; background:var(--parchment);
@@ -2066,6 +2066,50 @@ setInterval(() => {
 })();
 
 
+// --- clearable inputs: a ✕ wipes the field (idea from the search filters) ----
+// Wraps each wired input in a positioned span; the ✕ shows only while there is
+// text — via :placeholder-shown, so programmatic clears (add-note, modal open)
+// hide it with no JS state. Clicking dispatches `input` so filters re-run.
+(() => {
+  const style = document.createElement("style");
+  style.textContent = `
+    .clear-wrap { position:relative; display:flex; align-items:center; min-width:0; }
+    /* !important: each wired input's own id/form rule outranks this one, and
+       every one must cede the right edge to the ✕ */
+    .clear-wrap > input { width:100%; padding-right:1.7rem !important; box-sizing:border-box; }
+    .jot-controls .clear-wrap, .jot-add .clear-wrap { flex:1; }
+    .clear-x { position:absolute; right:.1rem; top:50%; transform:translateY(-50%);
+      border:0; background:transparent; color:var(--ink-faint); cursor:pointer;
+      font:inherit; font-size:.9rem; line-height:1; padding:.3rem .45rem; }
+    /* own hover colours — the global button:hover dark fill leaks in otherwise */
+    .clear-x:hover { color:var(--ink); background:transparent; }
+    .clear-wrap > input:placeholder-shown + .clear-x { display:none; }
+    /* one ✕, ours — hide the native webkit one on type=search (Android Chrome) */
+    input[type="search"]::-webkit-search-cancel-button { -webkit-appearance:none; display:none; }`;
+  document.head.appendChild(style);
+  const wire = (input) => {
+    if (!input) return;
+    const wrap = document.createElement("span");
+    wrap.className = "clear-wrap";
+    input.replaceWith(wrap);
+    wrap.appendChild(input);
+    const x = document.createElement("button");
+    x.type = "button";  // never submit the jot-add form
+    x.className = "clear-x";
+    x.title = "clear";
+    x.setAttribute("aria-label", "clear");
+    x.textContent = "✕";
+    x.onclick = () => {
+      input.value = "";
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+      input.focus();
+    };
+    wrap.appendChild(x);
+  };
+  ["search", "jot-search", "sess-search", "todos-input", "ideas-input"]
+    .forEach(id => wire(document.getElementById(id)));
+})();
+
 // --- themes (T19): switchable skins over the CSS variable palette -----------
 // codex = the default parchment look; overrides live on body[data-theme].
 (() => {
@@ -2082,7 +2126,9 @@ setInterval(() => {
       --ochre:${t.ochre}; --plum:${t.plum};
       --bg-hi:${_shade(t.bg, dark ? 7 : 5)}; --bg-mid:${t.bg}; --bg-lo:${_shade(t.bg, dark ? -6 : -7)};
       --card-bg:${_rgba(t.paper, dark ? .42 : .4)}; --card-hot:${_rgba(t.paper, dark ? .8 : .72)};
-      --input-bg:${_rgba(t.paper, .5)}; color-scheme:${t.mode}; }`;
+      --input-bg:${_rgba(t.paper, .5)};
+      --scrim:${dark ? _rgba(_shade(t.bg, -60), .55) : _rgba(t.ink, .4)};
+      --veil:${_rgba(t.bg, .96)}; color-scheme:${t.mode}; }`;
   }).join("\n");
   document.head.appendChild(style);
 
@@ -2746,7 +2792,7 @@ setInterval(() => {
        when the drawer is full-window the terminal owns the screen — hide it */
     body.drawer-open #theme-btn { right:calc(var(--drawer-w) + 1.1rem); }
     body.drawer-full #theme-btn { display:none; }
-    .theme-overlay { position:fixed; inset:0; background:rgba(40,30,15,.45);
+    .theme-overlay { position:fixed; inset:0; background:var(--scrim);
       z-index:80; display:flex; align-items:flex-start; justify-content:center;
       padding-top:14vh; }
     .theme-overlay[hidden] { display:none; }
@@ -2957,7 +3003,7 @@ setInterval(() => {
   const esc = s => String(s).replace(/[&<>]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
   const style = document.createElement("style");
   style.textContent = `
-    .act-overlay { position:fixed; inset:0; background:rgba(40,30,15,.4); z-index:72;
+    .act-overlay { position:fixed; inset:0; background:var(--scrim); z-index:72;
       display:flex; align-items:flex-start; justify-content:center; padding:9vh .6rem 0; }
     .act-overlay[hidden] { display:none; }
     .act-modal { width:min(640px,94vw); max-height:80vh; overflow:auto; box-sizing:border-box;
