@@ -21,13 +21,13 @@ Battery profile is left at defaults (still suspends — intentional). The screen
 may still turn off on idle; that's fine — it doesn't suspend the machine.
 
 > Verify with a real test: close the lid while on AC and confirm from the phone
-> that `https://kai-laptop.tail7603c2.ts.net` still responds.
+> that `https://<machine-name>.<tailnet>.ts.net` still responds.
 
 ### 2. Tailscale access (already up)
 
 - `tailscaled` is **enabled + active** (survives reboot).
 - `tailscale serve` exposes the hub tailnet-only:
-  `https://kai-laptop.tail7603c2.ts.net → http://127.0.0.1:7700`. This config
+  `https://<machine-name>.<tailnet>.ts.net → http://127.0.0.1:7700`. This config
   persists across reboots.
 - The "MagicDNS / systemd-resolved" health warning on the laptop is harmless
   here: the **phone** resolves the tailnet name via its own Tailscale client,
@@ -90,5 +90,5 @@ Left as a deliberate future decision, not changed here.
 1. Laptop plugged into AC. ✔ (lid-close/suspend already disabled on AC)
 2. `tailscale status` shows the phone; hub reachable at the URL above.
 3. Hub running: `systemctl --user is-active hub.service` → `active`.
-4. Close the lid. From the phone, open `https://kai-laptop.tail7603c2.ts.net`.
+4. Close the lid. From the phone, open `https://<machine-name>.<tailnet>.ts.net`.
 5. (If you rebooted first) log in to Plasma once before leaving.
