@@ -1637,18 +1637,18 @@ def index():
           <button data-mode="plan" onclick="setMode('plan')">plan</button>
         </div>
       </div>
-      <button class="jot-open" onclick="openJot('todos')">{icon("todo")} to-do <span id="todos-count"></span></button>
-      <button class="jot-open" onclick="openJot('ideas')">{icon("ideas")} ideas <span id="ideas-count"></span></button>
-      <button class="jot-open" id="inbox-open" onclick="openInbox()">{icon("inbox")} inbox <span id="inbox-count"></span></button>
+      <button class="jot-open" onclick="openJot('todos')" title="tasks, filterable by project">{icon("todo")} to-do <span id="todos-count"></span></button>
+      <button class="jot-open" onclick="openJot('ideas')" title="jotted ideas, filterable by project">{icon("ideas")} ideas <span id="ideas-count"></span></button>
+      <button class="jot-open" id="inbox-open" onclick="openInbox()" title="dropped images, waiting to become to-dos or ideas">{icon("inbox")} inbox <span id="inbox-count"></span></button>
       <input id="search" type="search" placeholder="search…" autocomplete="off" oninput="refilter()">
       <span id="filters">
-        <button class="chip active" data-type="" onclick="pick(this)">all</button>
-        <button class="chip" data-type="site" onclick="pick(this)">{icon("site")} site</button>
-        <button class="chip" data-type="service" onclick="pick(this)">{icon("service")} service</button>
-        <button class="chip" data-type="app" onclick="pick(this)">{icon("app")} app</button>
-        <button class="chip" data-type="code" onclick="pick(this)">{icon("code")} code</button>
-        <button class="chip" data-type="notes" onclick="pick(this)">{icon("notes")} notes</button>
-        <button class="chip" data-type="empty" onclick="pick(this)">{icon("empty")} empty</button>
+        <button class="chip active" data-type="" onclick="pick(this)" title="every project">all</button>
+        <button class="chip" data-type="site" onclick="pick(this)" title="static sites — projects with an index.html">{icon("site")} site</button>
+        <button class="chip" data-type="service" onclick="pick(this)" title="projects that run a local service (hub.json serve + port)">{icon("service")} service</button>
+        <button class="chip" data-type="app" onclick="pick(this)" title="desktop apps — projects with a .desktop launcher">{icon("app")} app</button>
+        <button class="chip" data-type="code" onclick="pick(this)" title="code projects — pyproject, src/ and kin">{icon("code")} code</button>
+        <button class="chip" data-type="notes" onclick="pick(this)" title="markdown collections — notes, guides, research">{icon("notes")} notes</button>
+        <button class="chip" data-type="empty" onclick="pick(this)" title="empty shells — nothing in them yet">{icon("empty")} empty</button>
       </span>
     </div>
   </header>
