@@ -17,8 +17,8 @@ LidAction=0           # 0 = do nothing → lid close does nothing on AC
 ```
 
 Applied with `kwriteconfig6` + `systemctl --user restart plasma-powerdevil`.
-Battery profile is left at defaults (still suspends — intentional). The screen
-may still turn off on idle; that's fine — it doesn't suspend the machine.
+Battery profile is left at defaults (still suspends, intentionally). The screen
+may still turn off on idle; that's fine, it doesn't suspend the machine.
 
 > Verify with a real test: close the lid while on AC and confirm from the phone
 > that `https://<machine-name>.<tailnet>.ts.net` still responds.
@@ -38,8 +38,8 @@ may still turn off on idle; that's fine — it doesn't suspend the machine.
 Home-server mode should only be on when you plan a phone session that day, so
 it's a toggle, not a permanent setting. Two ways, same engine:
 
-- **System-tray icon** (`tools/home-server-tray`, PyQt6): a coloured dot —
-  **green = ON (hosting)**, **grey = OFF (normal power)**. Left-click toggles;
+- **System-tray icon** (`tools/home-server-tray`, PyQt6): a coloured dot where
+  **green = ON (hosting)** and **grey = OFF (normal power)**. Left-click toggles;
   right-click for an explicit on/off/quit menu. Autostarts at login.
 - **CLI** (`tools/home-server`): `home-server [on|off|toggle|status]`.
 
@@ -49,12 +49,12 @@ restores KDE's default power behaviour (suspend on lid close); battery profile
 is never touched.
 
 > **Gotcha:** if you start the tray *manually* mid-session, launch it **detached
-> from `hub.service`** — otherwise restarting the hub kills it:
+> from `hub.service`**; otherwise restarting the hub kills it:
 > `systemd-run --user --scope /home/kaimikan/.local/bin/home-server-tray &`
 > (or simply re-login to let autostart handle it). Don't `Popen`/`&` it from a
 > hub-spawned shell, which lives inside the `hub.service` cgroup.
 
-## Optional hardening — headless / login-screen case (needs sudo)
+## Optional hardening: headless / login-screen case (needs sudo)
 
 PowerDevil only governs lid behaviour while you're logged into Plasma. If the
 laptop ever sits at the SDDM login screen (e.g. after a reboot) with the lid
@@ -71,10 +71,10 @@ sudo systemctl restart systemd-logind   # ends your graphical session — do it 
 
 (Restarting logind logs you out, so run it when convenient, not mid-session.)
 
-## Known limitation — reboot while away
+## Known limitation: reboot while away
 
 `hub.service` is bound to `graphical-session.target` **by design** (it launches
-konsole/dolphin/etc. which need the session environment — see the project
+konsole/dolphin/etc. which need the session environment; see the project
 `CLAUDE.md`). So after a *reboot*, the hub does **not** come back until someone
 logs in graphically. For today's "lid closed while already logged in" use case
 this is fine. True boot-survival would mean either:
