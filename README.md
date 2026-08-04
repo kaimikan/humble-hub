@@ -1,10 +1,14 @@
 # hub
 
+<img src="static/icon.svg" width="96" align="right" alt="humble hub icon">
+
 A local start page for everything in `~/Projects`: the place where projects
 are seen, launched, and worked on. Born from the observation that ideas get
 *built* easily but then don't enter daily life; the fix is a hub that lives
 where the day already starts (the browser's new-tab page), with every project
 one click from being used.
+
+![the shelf, with a Claude drawer open](screenshot.png)
 
 It is a single FastAPI module on `http://localhost:7700`, run as a systemd
 user service. No build step, no database, no framework on the front end:
