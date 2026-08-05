@@ -1755,12 +1755,19 @@ function renderPills() {
     // keep the active session's pill in place (stable order) with a highlight,
     // instead of removing it and shuffling the rest (idea #11)
     if (s.key === active && drawerEl().classList.contains("open")) pill.classList.add("active");
-    const short = s.label.length > 26 ? s.label.slice(0, 25) + "…" : s.label;
+    // Project name FIRST, always in full: with several pills up, "which project
+    // is this?" is the question you actually ask, and a resumed chat's title
+    // (which the conversation list supplies) buried that. The title still earns
+    // its place after it — trimmed, since it only has to tell two chats in the
+    // same project apart — and in full in the tooltip.
+    const proj = disp(s.name);
+    const rest = s.label === proj ? "" : s.label;
+    const trimmed = rest.length > 18 ? rest.slice(0, 17) + "…" : rest;
     pill.innerHTML = `<span class="dot"></span>${CHAT_ICON} `;
-    pill.appendChild(document.createTextNode(short)); // label may be arbitrary text
+    pill.appendChild(document.createTextNode(proj + (trimmed ? ` · ${trimmed}` : "")));
     pill.title = ({ working: "working…", ready: "ready for you",
                    attention: "needs your input", ended: "session ended" }[s.status] || "")
-                 + (short !== s.label ? ` — ${s.label}` : "");
+                 + (rest ? ` — ${rest}` : "");
     pill.onclick = () => s.status === "ended"
       ? (s.host.remove(), sessions.delete(s.key), renderPills())
       : activate(s.key);

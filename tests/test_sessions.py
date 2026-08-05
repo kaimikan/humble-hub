@@ -193,8 +193,28 @@ def run(page):
     page.click(".sess-row.wip .s-wip")
     page.wait_for_timeout(600)
 
+    # --- pills lead with the project, not the chat title ---
+    page.evaluate("""() => {
+        const mk = (key, name, label) => {
+            const host = document.createElement("div");
+            document.getElementById("dterm").appendChild(host);
+            sessions.set(key, { key, name, label, token: key, sid: "",
+                                host, ws: { readyState: 1 }, status: "ready" });
+        };
+        sessions.clear();
+        mk("a", "print-picker", "print-picker");                      // fresh chat
+        mk("b", "print-picker", "Add a bed-levelling checklist");     // resumed
+        renderPills();
+    }""")
+    texts = page.eval_on_selector_all("#pills .pill", "els => els.map(e => e.textContent.trim())")
+    check("a fresh chat's pill is just the project", texts[0] == "print-picker", str(texts))
+    check("a resumed chat leads with the project, then its title",
+          texts[1].startswith("print-picker · Add a bed"), str(texts))
+    check("the full title stays in the tooltip",
+          "Add a bed-levelling checklist" in
+          page.eval_on_selector_all("#pills .pill", "els => els[1].title"))
+
     # clicking a row resumes that session (stub openDrawer to capture the call)
-    page.evaluate("window.openDrawer = (p, o) => { window.__resume = { p, o }; }")
     page.click(".sess-row:has-text('Resume Humble Hub setup')")
     resume = page.evaluate("window.__resume")
     overlay_hidden = page.eval_on_selector(".sess-overlay", "el => el.hidden")
