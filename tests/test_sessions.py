@@ -39,12 +39,23 @@ def run(page):
             if m.type == "error"
             and not any(ep in str(getattr(m, "location", "")) for ep in ("api/ptys", "api/services")) else None)
 
+    saved = []          # every notes doc the page tried to persist
+    # a GET serves back the last PUT, so re-reads behave like the real store
+    # (a static empty fixture would hide marks the page had just saved)
+    store = {"todos": [], "ideas": []}
+
     def route(r):
         u = r.request.url
         if u.endswith("/api/sessions"):
             r.fulfill(status=200, content_type="application/json", body=json.dumps(SESSIONS))
         elif u.endswith("/api/notes"):
-            body = json.dumps({"todos": [], "ideas": []}) if r.request.method == "GET" else '{"ok":true}'
+            if r.request.method == "GET":
+                body = json.dumps(store)
+            else:
+                saved.append(r.request.post_data)
+                store.clear()
+                store.update(json.loads(r.request.post_data))
+                body = '{"ok":true}'
             r.fulfill(status=200, content_type="application/json", body=body)
         else:
             r.continue_()
@@ -74,6 +85,113 @@ def run(page):
     rows = page.eval_on_selector_all(".sess-row .s-title", "els => els.map(e => e.textContent)")
     check("search filters by title/preview", rows == ["Add favicon logo styling"], str(rows))
     page.fill("#sess-search", "")
+
+    # --- the unfinished mark (opt-in, one flag, keyed to the session id) ---
+    # Stub first: if a flag click leaks through to its row, this records it.
+    # The trailing `null` matters — page.evaluate INVOKES an expression that
+    # evaluates to a function, so a bare assignment would call the stub itself.
+    page.evaluate("window.openDrawer = (p, o) => { window.__resume = { p, o }; }; "
+                  "window.__resume = null; null")
+    check("nothing is marked by default",
+          page.eval_on_selector_all(".sess-row.wip", "els => els.length") == 0
+          and page.eval_on_selector_all(".sess-band", "els => els.length") == 0)
+
+    page.click(".sess-row:has-text('Add favicon logo styling') .s-wip")
+    check("marking does not resume the chat", page.evaluate("window.__resume") is None)
+    check("the marked row floats to the top",
+          page.eval_on_selector_all(".sess-row .s-title", "els => els.map(e => e.textContent)")[0]
+          == "Add favicon logo styling")
+    bands = page.eval_on_selector_all(".sess-band", "els => els.map(e => e.textContent)")
+    check("marked and unmarked are banded apart", bands == ["still going", "the rest"], str(bands))
+    page.wait_for_timeout(600)          # saveNotes debounces the PUT by 400ms
+    check("the mark is stored against the session id, in the notes doc",
+          saved and json.loads(saved[-1]).get("wip") == ["cccc-3333"],
+          saved[-1] if saved else "(no save)")
+
+    # a mark you can't see how to undo is a trap — the toggle stays visible
+    check("a marked row keeps its toggle on screen",
+          page.eval_on_selector(".sess-row.wip .s-wip",
+                                "el => getComputedStyle(el).opacity") == "1")
+
+    page.click(".sess-row.wip .s-wip")
+    page.wait_for_timeout(600)
+    check("clicking again clears the mark",
+          page.eval_on_selector_all(".sess-row.wip", "els => els.length") == 0
+          and json.loads(saved[-1]).get("wip") == [], saved[-1])
+    check("clearing removes the bands too",
+          page.eval_on_selector_all(".sess-band", "els => els.length") == 0)
+    check("order returns to newest-first once nothing is marked",
+          page.eval_on_selector_all(".sess-row .s-title", "els => els.map(e => e.textContent)")
+          == ["Resume Humble Hub setup", "Discuss project structure", "Add favicon logo styling"])
+
+    # --- the same flag, from the drawer head ---
+    # a live chat is faked: no pty, no claude — only the bookkeeping the
+    # header button reads (which session is shown, and its id)
+    page.evaluate("closeSessions(); null")     # the modal would sit over the drawer
+    page.evaluate("""() => {
+        const host = document.createElement("div");
+        document.getElementById("dterm").appendChild(host);
+        sessions.set("fake", { key: "fake", name: "~", token: "tok", sid: "aaaa-1111",
+                               label: "A", host, ws: { readyState: 1 }, status: "ready" });
+        active = "fake";
+        // slide the drawer in: its head is off-screen while closed
+        document.getElementById("drawer").classList.add("open");
+        document.body.classList.add("drawer-open");
+        syncDrawerWip();
+    }""")
+    page.wait_for_timeout(300)          # the drawer transitions in
+    wip_btn = "#drawer .d-head #d-wip"
+    check("the drawer head carries the mark toggle",
+          page.eval_on_selector(wip_btn, "el => !el.disabled"))
+
+    # a chat whose real id we don't know must NOT invent one: a mark filed
+    # against an id claude never saw is a mark against nothing, and it shows up
+    # as "I marked it but the list never highlights it"
+    page.evaluate("sessions.get('fake').sid = ''; syncDrawerWip(); null")
+    check("an unknown-id chat disables the toggle instead of inventing an id",
+          page.eval_on_selector(wip_btn, "el => el.disabled"))
+    check("…and says why", "can't tell which conversation" in
+          page.eval_on_selector(wip_btn, "el => el.title"))
+    check("…and the cursor shows it is inert",
+          page.eval_on_selector(wip_btn, "el => getComputedStyle(el).cursor")
+          == "not-allowed")
+    page.evaluate("sessions.get('fake').sid = 'aaaa-1111'; syncDrawerWip(); null")
+    check("…showing unset for an unmarked chat",
+          page.eval_on_selector(wip_btn, "el => !el.classList.contains('on')"))
+
+    page.click(wip_btn)
+    page.wait_for_timeout(600)
+    check("the head button marks the open chat",
+          page.eval_on_selector(wip_btn, "el => el.classList.contains('on')")
+          and json.loads(saved[-1]).get("wip") == ["aaaa-1111"], saved[-1])
+
+    page.click("#sess-open")
+    page.wait_for_selector(".sess-overlay:not([hidden])")
+    check("a chat marked from the drawer shows up marked in the list",
+          page.eval_on_selector_all(".sess-row.wip .s-title",
+                                    "els => els.map(e => e.textContent)")
+          == ["Resume Humble Hub setup"])
+
+    page.click(".sess-row.wip .s-wip")
+    page.wait_for_timeout(600)
+    check("clearing from the list clears the head button too (one flag)",
+          page.eval_on_selector(wip_btn, "el => !el.classList.contains('on')"))
+
+    # the head shows the ACTIVE chat only. Marking a different conversation in
+    # the list must leave it alone — otherwise the button would lie about which
+    # chat is flagged (this is what "it didn't update, then it did" looks like
+    # when two chats are open and the marked one isn't the one on screen)
+    page.click(".sess-row:has-text('Discuss project structure') .s-wip")
+    page.wait_for_timeout(600)
+    check("marking another chat leaves the open chat's button alone",
+          page.eval_on_selector(wip_btn, "el => !el.classList.contains('on')")
+          and json.loads(saved[-1]).get("wip") == ["bbbb-2222"], saved[-1])
+    page.evaluate("sessions.get('fake').sid = 'bbbb-2222'; syncDrawerWip(); null")
+    check("…and switching the drawer to that chat lights it up",
+          page.eval_on_selector(wip_btn, "el => el.classList.contains('on')"))
+    page.evaluate("sessions.get('fake').sid = 'aaaa-1111'; null")
+    page.click(".sess-row.wip .s-wip")
+    page.wait_for_timeout(600)
 
     # clicking a row resumes that session (stub openDrawer to capture the call)
     page.evaluate("window.openDrawer = (p, o) => { window.__resume = { p, o }; }")

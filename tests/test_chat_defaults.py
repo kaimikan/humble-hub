@@ -57,6 +57,16 @@ def test_argv():
     check("an unknown model falls back to settings, not a bad flag",
           "--model" not in argv, " ".join(argv))
 
+    # a fresh chat is told its own session id, so the drawer can name the
+    # conversation it is showing without waiting for a transcript to appear
+    argv = app.build_argv(sid="1234-abcd")
+    check("a fresh chat is given its session id up front",
+          argv[-2:] == ["--session-id", "1234-abcd"], " ".join(argv))
+    argv = app.build_argv(session="old-id", sid="1234-abcd")
+    check("resuming never also passes --session-id (that id exists already)",
+          "--session-id" not in argv and argv[-2:] == ["--resume", "old-id"],
+          " ".join(argv))
+
     check("every offered model has a preset",
           set(app.MODEL_ARGS) == {"default", "fable", "opus", "sonnet", "haiku"},
           str(sorted(app.MODEL_ARGS)))

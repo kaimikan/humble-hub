@@ -154,13 +154,26 @@ async function loadNotes() {
 }
 
 let saveTimer = null;
-function saveNotes() {
-  clearTimeout(saveTimer);
-  saveTimer = setTimeout(() => fetch("/api/notes", {
+function putNotes() {
+  saveTimer = null;
+  return fetch("/api/notes", {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(notes),
-  }), 400);
+  });
+}
+function saveNotes() {
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(putNotes, 400);
+}
+// Send a pending save NOW. Anything that re-reads the doc must call this first:
+// loadNotes() replaces `notes` wholesale, so a re-read landing inside the
+// debounce window would drop the just-made edit AND leave the queued PUT to
+// write the re-read (edit-free) doc back over it.
+async function flushNotes() {
+  if (!saveTimer) return;
+  clearTimeout(saveTimer);
+  await putNotes();
 }
 
 // --- shelf bands: ★ pinned / in motion / the rest, with an archive fold.
@@ -1379,6 +1392,26 @@ function setStatus(s, status) {
 // opt is a legacy boolean (resume picker) OR an options object:
 //   { resume: bool, session: "<id>" (resume a specific session),
 //     attach: "<token>" (reattach a live detached pty), label: "<text>" }
+// v2: the v1 store was poisoned. Reattaches used to cache an INVENTED id, and
+// reading one back made the drawer confident about a conversation that never
+// existed — the mark then went nowhere, visibly. Renaming the key retires every
+// v1 entry at once; a chat whose id is genuinely unknown now greys the toggle.
+const SID_KEY = "ptySid2";
+try { localStorage.removeItem("ptySid"); } catch (e) { /* private mode */ }
+
+function sidFor(token) {
+  try { return JSON.parse(localStorage.getItem(SID_KEY) || "{}")[token] || ""; }
+  catch (e) { return ""; }
+}
+function rememberSid(token, sid) {
+  let m = {};
+  try { m = JSON.parse(localStorage.getItem(SID_KEY) || "{}"); } catch (e) { m = {}; }
+  m[token] = sid;
+  const keys = Object.keys(m);
+  if (keys.length > 60) delete m[keys[0]];      // oldest out; this is a cache
+  localStorage.setItem(SID_KEY, JSON.stringify(m));
+}
+
 function openDrawer(project, opt = false) {
   const o = (typeof opt === "boolean") ? { resume: opt } : (opt || {});
   // resumed/reattached sessions are keyed by their token so several from one
@@ -1460,13 +1493,29 @@ function createSession(key, project, o) {
   // attach to the very same session
   const token = o.attach || o.session || Math.random().toString(36).slice(2, 10);
   params.set("attach", token);
+  // Name a fresh chat's session id ourselves (--session-id) instead of letting
+  // claude pick one it only reveals in a transcript later: the drawer needs to
+  // know WHICH conversation it is showing to mark it unfinished. A resumed chat
+  // already has one; a reattach re-reads the id we stored against its token.
+  // Only ever a REAL id: the resumed one, the one we told claude to use, or the
+  // one we stored against this pty. Never invent a fallback — an id claude
+  // never saw files the mark under a conversation that does not exist, which
+  // looks like the mark silently not working (it did; against nothing).
+  // `resume` without an id opens claude's own picker — CLAUDE chooses the
+  // conversation, so we cannot name it up front. That path is not fresh: minting
+  // an id there is how the same chat ended up with two identities, one of them
+  // fictional (opened from the list = marked, opened via the picker = not).
+  const fresh = !o.session && !o.attach && !o.resume;
+  const sid = o.session || (fresh ? crypto.randomUUID() : sidFor(token));
+  if (fresh) params.set("sid", sid);
+  if (sid) rememberSid(token, sid);
   // wss when served over https (e.g. via Tailscale Serve)
   const wsProto = location.protocol === "https:" ? "wss" : "ws";
   const ws = new WebSocket(
     `${wsProto}://${location.host}/ws/terminal/${encodeURIComponent(project)}?${params}`);
   ws.binaryType = "arraybuffer";
 
-  const s = { key, name: project, token, label: o.label || disp(project),
+  const s = { key, name: project, token, sid, label: o.label || disp(project),
     ws, term, fit, host, status: "working", lastOut: Date.now(), sawOutput: false };
   sessions.set(key, s);
 
@@ -1570,6 +1619,7 @@ function activate(key) {
   const s = sessions.get(key);
   sessions.forEach(o => o.host.classList.toggle("shown", o.key === key));
   document.getElementById("d-title").textContent = s.label;
+  if (window.syncDrawerWip) syncDrawerWip();   // the mark follows the shown chat
   // ⤢ expands the drawer to the full window width in place. The href still
   // points at the same live session (same attach token), so middle-click /
   // ctrl-click can mirror the chat in another tab when wanted.
@@ -1767,7 +1817,22 @@ setInterval(() => {
     .sess-row .s-proj { color:var(--parchment); background:var(--ink-soft);
       border-radius:999px; font-size:.7rem; font-variant:small-caps; letter-spacing:.05em;
       padding:.05rem .55rem; }
-    .sess-empty { color:var(--ink-faint); font-style:italic; text-align:center; padding:1.4rem; }`;
+    .sess-empty { color:var(--ink-faint); font-style:italic; text-align:center; padding:1.4rem; }
+    /* the unfinished mark: opt-in, one flag, set by you and nothing else.
+       Ochre = the same pigment the ★ uses for "your pick", since this is the
+       other thing you say about a chat rather than something derived from it */
+    .sess-row.wip { border-left:3px solid var(--ochre); padding-left:.5rem; }
+    .s-wip { position:absolute; top:.5rem; right:.35rem; border:0; background:none;
+      color:var(--ink-faint); cursor:pointer; padding:.1rem .3rem; font:inherit;
+      font-size:.72rem; font-variant:small-caps; letter-spacing:.06em; opacity:0; }
+    .sess-row { position:relative; }
+    /* the toggle stays hidden until you reach for it — a marked row keeps it
+       visible, so the mark is never a state you can't see how to undo */
+    .sess-row:hover .s-wip, .sess-row.wip .s-wip { opacity:1; }
+    .s-wip:hover { color:var(--ink); background:none; }
+    .sess-row.wip .s-wip { color:var(--ochre); }
+    .sess-band { color:var(--ink-faint); font-size:.7rem; font-variant:small-caps;
+      letter-spacing:.1em; padding:.5rem .35rem .2rem; }`;
   document.head.appendChild(style);
 
   const trigger = document.createElement("button");
@@ -1800,6 +1865,10 @@ setInterval(() => {
     overlay.hidden = false;
     searchEl.value = "";
     listEl.innerHTML = `<div class="sess-empty">loading…</div>`;
+    // re-read the notes doc first: the marks live in it, and another writer
+    // (a Claude session editing via the API) may have moved on since page load.
+    // Flush our own pending edit before reading, or the read overwrites it.
+    try { await flushNotes(); await loadNotes(); } catch (e) { /* keep what we have */ }
     try { allSessions = await (await fetch("/api/sessions")).json(); }
     catch (e) { allSessions = []; }
     renderSessions("");
@@ -1815,18 +1884,46 @@ setInterval(() => {
     return `${Math.round(s / 86400)}d ago`;
   }
 
+  // work spanning several days is the case this exists for: the flag is keyed
+  // to the Claude session id (durable — the pty token and the pills are not),
+  // and lives in notes.json beside `favorites`.
+  const wipSet = () => new Set(notes.wip || []);
+  // shared with the drawer header — the mark is one flag, set from either place
+  window.toggleWip = function (id) {
+    notes.wip = notes.wip || [];
+    const i = notes.wip.indexOf(id);
+    if (i >= 0) notes.wip.splice(i, 1); else notes.wip.push(id);
+    saveNotes();
+    if (!overlay.hidden) renderSessions(searchEl.value);
+    if (window.syncDrawerWip) syncDrawerWip();
+  };
+  const toggleWip = window.toggleWip;
+
   function renderSessions(q) {
     q = q.toLowerCase();
-    const rows = allSessions.filter(s =>
+    const wip = wipSet();
+    let rows = allSessions.filter(s =>
       !q || `${s.title} ${s.project} ${s.preview}`.toLowerCase().includes(q));
+    // marked chats float to the top: recency order buries a week-old thread you
+    // are still on, which is the whole problem the mark exists to solve
+    const marked = rows.filter(s => wip.has(s.id));
+    const rest = rows.filter(s => !wip.has(s.id));
     listEl.innerHTML = "";
     if (!rows.length) {
       listEl.innerHTML = `<div class="sess-empty">no sessions${q ? " match" : " yet"}.</div>`;
       return;
     }
-    rows.forEach(s => {
+    const band = text => {
+      const h = document.createElement("div");
+      h.className = "sess-band";
+      h.textContent = text;
+      listEl.appendChild(h);
+    };
+    if (marked.length) band("still going");
+    [...marked, ...rest].forEach((s, i) => {
+      if (marked.length && i === marked.length) band("the rest");
       const row = document.createElement("div");
-      row.className = "sess-row";
+      row.className = "sess-row" + (wip.has(s.id) ? " wip" : "");
       const proj = document.createElement("span");
       proj.className = "s-proj";
       proj.textContent = s.project;
@@ -1839,7 +1936,14 @@ setInterval(() => {
       meta.className = "s-meta";
       meta.textContent = `${rel(s.mtime)} · ${s.count} msgs`;
       main.append(title, meta);
-      row.append(proj, main);
+      const flag = document.createElement("button");
+      flag.className = "s-wip";
+      flag.textContent = wip.has(s.id) ? "● unfinished" : "○ mark unfinished";
+      flag.title = wip.has(s.id)
+        ? "done with this one? click to clear the mark"
+        : "mark as still in progress — it stays at the top until you clear it";
+      flag.onclick = e => { e.stopPropagation(); toggleWip(s.id); };  // not a resume
+      row.append(proj, main, flag);
       row.title = "resume this session";
       row.onclick = () => { closeSessions(); openDrawer(s.project, { session: s.id, label: s.title }); };
       listEl.appendChild(row);
@@ -3321,4 +3425,60 @@ setInterval(() => {
     /* a drop target you cannot see is a drop target you will not use */
     #drawer.drop-hot { outline:2px dashed var(--verdigris); outline-offset:-6px; }`;
   document.head.appendChild(style);
+})();
+
+// --- mark the open chat as unfinished, from the drawer head -----------------
+// The moment you know a session won't wrap up today, the chat is already open —
+// so the flag belongs beside ⤢ / minimise / close, not only in the conversation
+// list. Same single flag (notes.wip, keyed by session id); the list stays the
+// place you FIND marked chats days later, this is the place you SET one.
+(() => {
+  const head = document.querySelector("#drawer .d-head");
+  if (!head) return;
+
+  const style = document.createElement("style");
+  style.textContent = `
+    /* ochre when set — the same "you said so" pigment as the ★ and the
+       conversation-list flag, so one colour keeps one meaning */
+    #d-wip.on { color:var(--ochre); }
+    /* not-allowed, not default: the button is visibly present but inert here,
+       and a plain arrow reads as "nothing happened" when you click it */
+    #d-wip[disabled] { opacity:.35; cursor:not-allowed; }
+    #d-wip[disabled]:hover { background:none; color:inherit; }`;
+  document.head.appendChild(style);
+
+  const btn = document.createElement("button");
+  btn.id = "d-wip";
+  // a hollow / filled circle rather than a glyph with its own opinion
+  btn.innerHTML = '<svg class="i" viewBox="0 0 24 24" aria-hidden="true">'
+    + '<circle cx="12" cy="12" r="7"/></svg>';
+  head.insertBefore(btn, head.querySelector("a, button"));   // before ⤢
+
+  window.syncDrawerWip = function () {
+    const s = sessions.get(active);
+    const sid = s && s.sid;
+    const on = sid && (notes.wip || []).includes(sid);
+    btn.classList.toggle("on", !!on);
+    btn.querySelector("svg").style.fill = on ? "currentColor" : "none";
+    btn.disabled = !sid;
+    // one message for every unknown-id case: already running before the hub
+    // named ids, reattached elsewhere, or opened through claude's own resume
+    // picker (where claude, not the hub, chose the conversation)
+    btn.title = !sid
+      ? "the hub can't tell which conversation this is — mark it from the "
+        + "conversation list (chats opened from there, or started fresh, work here)"
+      : on ? "marked unfinished — click to clear"
+           : "mark unfinished: keeps this chat at the top of the conversation list";
+  };
+
+  btn.onclick = () => {
+    const s = sessions.get(active);
+    if (!s || !s.sid) return;
+    toggleWip(s.sid);
+    hubToast((notes.wip || []).includes(s.sid)
+      ? "marked unfinished — it stays on top of the conversation list"
+      : "mark cleared");
+  };
+
+  syncDrawerWip();
 })();

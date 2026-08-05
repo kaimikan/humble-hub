@@ -669,15 +669,23 @@ MODEL_ARGS = {
 
 
 def build_argv(resume: bool = False, mode: str = "default", session: str = "",
-               model: str = "default") -> list:
+               model: str = "default", sid: str = "") -> list:
     """The claude command line for a new chat. HUB_CLAUDE_CMD overrides the
-    base command (tests run a plain shell instead of claude)."""
+    base command (tests run a plain shell instead of claude).
+
+    `sid` names a FRESH chat's session id up front (`--session-id`). Claude
+    would otherwise choose one and only reveal it once it writes a transcript,
+    which leaves the drawer unable to say which conversation it is showing —
+    and a UI that guesses from the newest transcript marks the wrong chat.
+    """
     import shlex
     base = shlex.split(os.environ.get("HUB_CLAUDE_CMD", "claude"))
     if session:
         resume_args = ["--resume", session]
     elif resume:
         resume_args = ["--resume"]
+    elif sid:                       # never with --resume: that id already exists
+        resume_args = ["--session-id", sid]
     else:
         resume_args = []
     return [*base, *MODE_ARGS.get(mode, []), *MODEL_ARGS.get(model, []),
@@ -685,7 +693,7 @@ def build_argv(resume: bool = False, mode: str = "default", session: str = "",
 
 
 def spawn_claude(path: Path, resume: bool = False, mode: str = "default",
-                 session: str = "", model: str = "default"):
+                 session: str = "", model: str = "default", sid: str = ""):
     """Start `claude` on a pty in the project dir. Returns (pid, master fd).
 
     `session` resumes that specific session id (`claude --resume <id>`);
@@ -693,7 +701,7 @@ def spawn_claude(path: Path, resume: bool = False, mode: str = "default",
     """
     env = dict(os.environ, TERM="xterm-256color", COLORTERM="truecolor")
     env["PATH"] = f"{Path.home()}/.local/bin:{env.get('PATH', '/usr/bin')}"
-    argv = build_argv(resume, mode, session, model)
+    argv = build_argv(resume, mode, session, model, sid)
     pid, fd = pty.fork()
     if pid == 0:  # child
         os.chdir(path)
@@ -740,7 +748,7 @@ def _sock_alive(sock: Path) -> bool:
 
 
 def ensure_ptyd(name: str, path: Path, token: str, resume: bool, mode: str,
-                session: str, model: str = "default") -> Path:
+                session: str, model: str = "default", sid: str = "") -> Path:
     """Return the session's socket, spawning the daemon if it isn't running."""
     import time
     sock = _sock_path(name, token)
@@ -759,7 +767,7 @@ def ensure_ptyd(name: str, path: Path, token: str, resume: bool, mode: str,
          f"--setenv=PATH={env_path}", "--setenv=TERM=xterm-256color",
          "--setenv=COLORTERM=truecolor",
          sys.executable, str(HUB_DIR / "tools" / "hub_ptyd.py"), str(sock), "--",
-         *build_argv(resume, mode, session, model)],
+         *build_argv(resume, mode, session, model, sid)],
         check=True, capture_output=True, text=True)
     for _ in range(100):  # wait for the daemon's socket (max ~5 s)
         if sock.exists() and _sock_alive(sock):
@@ -786,13 +794,13 @@ def api_ptys():
 @app.websocket("/ws/terminal/{name}")
 async def terminal_ws(ws: WebSocket, name: str, resume: bool = False,
                       mode: str = "default", session: str = "",
-                      attach: str = "", model: str = "default"):
+                      attach: str = "", model: str = "default", sid: str = ""):
     path = project_path(name)
     await ws.accept()
     if PERSIST and attach:
-        await _persist_ws(ws, name, path, attach, resume, mode, session, model)
+        await _persist_ws(ws, name, path, attach, resume, mode, session, model, sid)
         return
-    pid, fd = spawn_claude(path, resume, mode, session, model)
+    pid, fd = spawn_claude(path, resume, mode, session, model, sid)
     loop = asyncio.get_running_loop()
     pty_data = asyncio.Queue()
     loop.add_reader(fd, lambda: _drain(fd, pty_data, loop))
@@ -830,7 +838,7 @@ async def terminal_ws(ws: WebSocket, name: str, resume: bool = False,
 
 async def _persist_ws(ws: WebSocket, name: str, path: Path, attach: str,
                       resume: bool, mode: str, session: str,
-                      model: str = "default") -> None:
+                      model: str = "default", sid: str = "") -> None:
     """Bridge a WebSocket to a hub_ptyd session (attach/detach semantics).
 
     Disconnect = detach: the session survives. A {"type":"kill"} frame ends
@@ -838,7 +846,7 @@ async def _persist_ws(ws: WebSocket, name: str, path: Path, attach: str,
     drawer and full-page view mirror the same chat.
     """
     try:
-        sock = ensure_ptyd(name, path, attach, resume, mode, session, model)
+        sock = ensure_ptyd(name, path, attach, resume, mode, session, model, sid)
     except (RuntimeError, subprocess.CalledProcessError):
         await ws.close(code=1011)
         return
