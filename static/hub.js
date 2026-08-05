@@ -3172,3 +3172,50 @@ setInterval(() => {
   new MutationObserver(sync).observe(document.body,
     { attributes: true, attributeFilter: ["class"] });
 })();
+
+// --- tap-driven .menu dropdowns on hover-less devices ------------------------
+// The dropdowns reveal on :hover, which a phone cannot do: a tap instead fires
+// the trigger's OWN onclick (openDrawer) and the ▾ menu stays unreachable. The
+// mode picker only seemed to work because its trigger has no click action, so
+// the tap did nothing but raise sticky hover. Here a tap opens the menu the
+// caret promises; the direct action lives on as that menu's first item.
+// Transient like the row ⋯ menu — any outside tap or Esc dismisses it — so it
+// deliberately stays out of the back-button's topClosers list.
+(() => {
+  if (matchMedia("(hover: hover)").matches) return;   // desktop keeps hover
+
+  const style = document.createElement("style");
+  // outrank app.py's `.menu:hover .menu-items` (same specificity otherwise):
+  // sticky hover must not leave a menu hanging open after the tap.
+  style.textContent = `
+    body .menu:hover > .menu-items { display:none; }
+    body .menu.open > .menu-items { display:flex; }`;
+  document.head.appendChild(style);
+
+  const closeMenus = except =>
+    document.querySelectorAll(".menu.open")
+      .forEach(m => { if (m !== except) m.classList.remove("open"); });
+
+  document.addEventListener("click", e => {
+    const trigger = e.target.closest(".menu > button");
+    if (!trigger) { closeMenus(null); return; }       // tap outside → dismiss
+    const menu = trigger.parentElement;
+    closeMenus(menu);
+    if (!menu.classList.contains("open")) {
+      menu.classList.add("open");
+      menu.querySelector(".menu-items").classList.toggle("up",   // same flip the
+        menu.getBoundingClientRect().bottom + 175 > window.innerHeight);
+    } else {
+      menu.classList.remove("open");                 // second tap folds it away
+    }
+    e.preventDefault();
+    e.stopPropagation();       // …so the trigger's own onclick never fires here
+  }, true);                    // capture: beat the inline onclick to the event
+
+  // an item's own onclick runs (bubble phase), then the menu folds away
+  document.addEventListener("click", e => {
+    if (e.target.closest(".menu-items")) closeMenus(null);
+  });
+  document.addEventListener("keydown",
+    e => { if (e.key === "Escape") closeMenus(null); });
+})();
