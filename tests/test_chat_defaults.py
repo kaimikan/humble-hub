@@ -133,6 +133,37 @@ def test_ui():
             url = pg.evaluate("window.__url") or ""
             check("the new chat's socket carries the model", "model=sonnet" in url, url)
             check("…and the permission mode alongside it", "mode=plan" in url, url)
+            check("…and a session id for the fresh chat", "sid=" in url, url)
+            check("the drawer knows which conversation it is showing",
+                  bool(pg.evaluate("(sessions.get(active) || {}).sid")))
+
+            # claude's own resume picker chooses the conversation, so the hub
+            # must NOT name one: inventing an id here gave the same chat two
+            # identities (marked when opened from the list, unmarked via resume)
+            # a different project: openDrawer reuses a live session for the same
+            # key, and the stub socket above still counts as live
+            pg.evaluate("window.__url = null; openDrawer('~', { resume: true })")
+            pg.wait_for_timeout(400)
+            url = pg.evaluate("window.__url") or ""
+            check("the resume picker is not handed an invented session id",
+                  "sid=" not in url and "resume=1" in url, url)
+            check("…and the drawer admits it doesn't know which chat that is",
+                  not pg.evaluate("(sessions.get(active) || {}).sid"))
+
+            # "fresh chat" in the menu means a NEW one: two root chats coexist
+            # (the hub in one, a project being scaffolded in the other), while a
+            # plain card click still focuses the chat you already have
+            pg.evaluate("sessions.clear(); openDrawer('~', { fresh: true }); "
+                        "openDrawer('~', { fresh: true }); null")
+            pg.wait_for_timeout(300)
+            check("two fresh chats in one project can coexist",
+                  pg.evaluate("sessions.size") == 2,
+                  str(pg.evaluate("sessions.size")))
+            pg.evaluate("sessions.clear(); openDrawer('~'); openDrawer('~'); null")
+            pg.wait_for_timeout(300)
+            check("…while a plain card click still focuses, not duplicates",
+                  pg.evaluate("sessions.size") == 1,
+                  str(pg.evaluate("sessions.size")))
 
             check("no JS errors", not errs, "; ".join(errs[:2]))
             b.close()

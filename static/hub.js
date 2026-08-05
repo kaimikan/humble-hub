@@ -1392,6 +1392,9 @@ function setStatus(s, status) {
 // opt is a legacy boolean (resume picker) OR an options object:
 //   { resume: bool, session: "<id>" (resume a specific session),
 //     attach: "<token>" (reattach a live detached pty), label: "<text>" }
+// token → session id, so a chat reattached after a page reload (or from the
+// reattach pills) still knows which conversation it is. Kept small: entries
+// only matter while their pty lives, and a stale one is simply overwritten.
 // v2: the v1 store was poisoned. Reattaches used to cache an INVENTED id, and
 // reading one back made the drawer confident about a conversation that never
 // existed — the mark then went nowhere, visibly. Renaming the key retires every
@@ -1414,10 +1417,16 @@ function rememberSid(token, sid) {
 
 function openDrawer(project, opt = false) {
   const o = (typeof opt === "boolean") ? { resume: opt } : (opt || {});
-  // resumed/reattached sessions are keyed by their token so several from one
-  // project can coexist; fresh chats keep keying by project (focus, don't dupe)
+  // Resumed/reattached sessions are keyed by their token so several from one
+  // project can coexist; clicking a card's claude button keys by project, so a
+  // second click focuses the chat you already have rather than duplicating it.
+  // The menu's "fresh chat" says what it means, though — it keys uniquely, so
+  // you can hold two conversations in one project (two root chats: the hub in
+  // one, a new project being scaffolded in the other).
   const key = o.session ? `${project}#${o.session}`
-            : o.attach ? `${project}#${o.attach}` : project;
+            : o.attach ? `${project}#${o.attach}`
+            : o.fresh ? `${project}#${crypto.randomUUID().slice(0, 8)}`
+            : project;
   let s = sessions.get(key);
   if (!s || s.ws.readyState > 1) s = createSession(key, project, o);
   activate(key);

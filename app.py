@@ -1278,7 +1278,7 @@ def card(p: dict, favs: set = frozenset(), peers: list = ()) -> str:
         f"""<div class="menu">
           <button class="b-claude" onclick="openDrawer('{name}')">{CHAT_SVG} claude ▾</button>
           <div class="menu-items">
-            <button onclick="openDrawer('{name}')">fresh chat</button>
+            <button onclick="openDrawer('{name}', {{ fresh: true }})">fresh chat</button>
             <button onclick="openDrawer('{name}', true)">resume chat</button>
             <button onclick="act('{name}','terminal')">in konsole</button>
             <button class="m-arch" data-arch="{name}"
@@ -1662,7 +1662,7 @@ def index():
       <div class="menu">
         <button class="jot-open" onclick="openDrawer('~')">{CHAT_SVG} root claude ▾</button>
         <div class="menu-items">
-          <button onclick="openDrawer('~')">fresh chat</button>
+          <button onclick="openDrawer('~', {{ fresh: true }})">fresh chat</button>
           <button onclick="openDrawer('~', true)">resume chat</button>
           <button onclick="act('~','terminal')">in konsole</button>
         </div>
