@@ -1464,7 +1464,12 @@ def index():
   /* category chips are NEUTRAL — icon + text tell them apart; the pigments are
      reserved for the action buttons (lapis=claude, sanguine=go, verdigris=files)
      so a colour means one thing. Chips only carry an active/inactive state. */
-  #filters {{ display:inline-flex; align-items:center; gap:.45rem; }}
+  /* the chips wrap rather than run off the edge: on a phone the row is wider
+     than the viewport, and as one nowrap flex item it clipped (the parent
+     .controls could not break it). No media query — on a wide screen there is
+     room for one line, so it simply never wraps. */
+  #filters {{ display:inline-flex; align-items:center; gap:.45rem;
+    flex-wrap:wrap; justify-content:center; max-width:100%; }}
   .chip {{ background:transparent; border:1px solid var(--ink-soft);
     border-radius:999px; color:var(--ink-soft); font:inherit;
     font-size:.78rem; font-variant:small-caps; letter-spacing:.05em;
