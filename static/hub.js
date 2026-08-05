@@ -3219,3 +3219,92 @@ setInterval(() => {
   document.addEventListener("keydown",
     e => { if (e.key === "Escape") closeMenus(null); });
 })();
+
+// --- images into a chat ------------------------------------------------------
+// An image cannot travel down a pty: the terminal carries bytes, so pasting one
+// into the drawer had nothing to become (only a *path* on the clipboard ever
+// worked). Same trick the jot sender uses: upload the image, then paste the
+// saved file's path into the chat and let claude read it off disk. Nothing is
+// submitted — you still type the question around the path and press enter.
+// Reaches the phone too, where there was no route at all: the ⨍ header button
+// opens the gallery/camera picker.
+(() => {
+  const ATTACH_DIR = "~/Projects/humble-hub/data/attachments";
+  const CLIP = '<svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d='
+    + '"M20 11.5l-8.2 8.2a5 5 0 0 1-7.07-7.07l8.49-8.49a3.2 3.2 0 0 1 4.53 4.53'
+    + 'l-8.49 8.49a1.4 1.4 0 0 1-1.98-1.98l7.6-7.6"/></svg>';
+
+  // → true when we took the images (so the caller can swallow the event)
+  async function attachToChat(files) {
+    const imgs = [...files].filter(f => f.type.startsWith("image/"));
+    if (!imgs.length) return false;
+    const s = sessions.get(active);
+    if (!s || s.ws.readyState > 1) {
+      hubToast("no live chat to attach to — open one first");
+      return true;
+    }
+    hubToast(imgs.length > 1 ? `uploading ${imgs.length} images…` : "uploading image…");
+    const ids = await uploadFiles(imgs);          // normalises HEIC, strips EXIF
+    if (!ids.length) return true;                 // uploadFiles already alerted
+    // paths only: the wording around them is yours to type
+    injectIntoSession(s, ids.map(id => `${ATTACH_DIR}/${id}`).join(" ") + " ");
+    hubToast(ids.length > 1 ? "image paths pasted — add your question, then enter"
+                            : "image path pasted — add your question, then enter");
+    return true;
+  }
+
+  // a hidden picker, reused: on the phone this is the gallery/camera sheet
+  const picker = document.createElement("input");
+  picker.type = "file"; picker.accept = "image/*"; picker.multiple = true;
+  picker.id = "chat-attach";        // distinct from the jots' own file inputs
+  picker.hidden = true;
+  picker.onchange = async () => {
+    await attachToChat(picker.files);
+    picker.value = "";                  // let the same image be picked again
+  };
+  document.body.appendChild(picker);
+
+  const head = document.querySelector("#drawer .d-head");
+  if (head) {
+    const btn = document.createElement("button");
+    btn.innerHTML = CLIP;
+    btn.title = "attach an image to this chat";
+    btn.onclick = () => picker.click();
+    head.insertBefore(btn, head.querySelector("button"));   // before minimise
+  }
+
+  const drawer = document.getElementById("drawer");
+  if (drawer) {
+    drawer.addEventListener("dragover", e => {
+      if (![...e.dataTransfer.types].includes("Files")) return;
+      e.preventDefault();
+      drawer.classList.add("drop-hot");
+    });
+    drawer.addEventListener("dragleave", e => {
+      if (e.target === drawer) drawer.classList.remove("drop-hot");
+    });
+    drawer.addEventListener("drop", async e => {
+      if (!e.dataTransfer.files.length) return;
+      e.preventDefault();
+      drawer.classList.remove("drop-hot");
+      await attachToChat(e.dataTransfer.files);
+    });
+  }
+
+  // paste: only images are ours — a text paste stays xterm's business
+  document.addEventListener("paste", async e => {
+    if (!e.clipboardData || !e.clipboardData.files.length) return;
+    const overlay = document.getElementById("overlay");
+    const inDrawer = e.target.closest && e.target.closest("#drawer");
+    const loose = document.body.classList.contains("drawer-open")
+      && (!overlay || overlay.hidden);          // a jot modal keeps its own paste
+    if (!inDrawer && !loose) return;
+    if (await attachToChat(e.clipboardData.files)) e.preventDefault();
+  }, true);
+
+  const style = document.createElement("style");
+  style.textContent = `
+    /* a drop target you cannot see is a drop target you will not use */
+    #drawer.drop-hot { outline:2px dashed var(--verdigris); outline-offset:-6px; }`;
+  document.head.appendChild(style);
+})();

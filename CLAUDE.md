@@ -73,6 +73,16 @@ existing jot; a ✕ on a thumbnail detaches it; thumbnails open an in-page
 standalone image drops (handy from the phone over `tailscale serve`) to
 triage into to-dos/ideas later. Detached image files are left on disk (harmless).
 
+Images can also go **straight into a chat**: the drawer head's 📎 (the phone's
+only route, it opens the gallery/camera picker), a paste, or a drop on the
+drawer. A pty carries bytes, so the image itself cannot cross it: each one is
+uploaded via `/api/upload` and its *path* under `data/attachments/` is
+bracket-pasted into the chat, never submitted, the same trick `jotChatText`
+uses. These files are unowned by design (nothing in `notes.json` references
+them) and a past transcript may still name one, so do not prune them blindly.
+Test: `tests/test_chat_attach.py` (own uvicorn on :7796, cleans up its uploads
+and pty units).
+
 Themes live in `static/themes.js`: the `THEME` registry drives the hub's CSS
 variables, the picker preview, and each theme's 16-colour terminal palette
 (terminals stay dark even under light hub themes). A theme may carry a `skin`
