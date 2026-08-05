@@ -655,7 +655,21 @@ MODE_ARGS = {
 }
 
 
-def build_argv(resume: bool = False, mode: str = "default", session: str = "") -> list:
+# model presets for spawned chats. "default" passes no --model at all, so the
+# chat inherits ~/.claude/settings.json (opus[1m] here) — the aliases below
+# always mean the LATEST model of that name, which is why they aren't pinned
+# to dated ids that would rot.
+MODEL_ARGS = {
+    "default": [],
+    "fable": ["--model", "fable"],
+    "opus": ["--model", "opus"],
+    "sonnet": ["--model", "sonnet"],
+    "haiku": ["--model", "haiku"],
+}
+
+
+def build_argv(resume: bool = False, mode: str = "default", session: str = "",
+               model: str = "default") -> list:
     """The claude command line for a new chat. HUB_CLAUDE_CMD overrides the
     base command (tests run a plain shell instead of claude)."""
     import shlex
@@ -666,11 +680,12 @@ def build_argv(resume: bool = False, mode: str = "default", session: str = "") -
         resume_args = ["--resume"]
     else:
         resume_args = []
-    return [*base, *MODE_ARGS.get(mode, []), *resume_args]
+    return [*base, *MODE_ARGS.get(mode, []), *MODEL_ARGS.get(model, []),
+            *resume_args]
 
 
 def spawn_claude(path: Path, resume: bool = False, mode: str = "default",
-                 session: str = ""):
+                 session: str = "", model: str = "default"):
     """Start `claude` on a pty in the project dir. Returns (pid, master fd).
 
     `session` resumes that specific session id (`claude --resume <id>`);
@@ -678,7 +693,7 @@ def spawn_claude(path: Path, resume: bool = False, mode: str = "default",
     """
     env = dict(os.environ, TERM="xterm-256color", COLORTERM="truecolor")
     env["PATH"] = f"{Path.home()}/.local/bin:{env.get('PATH', '/usr/bin')}"
-    argv = build_argv(resume, mode, session)
+    argv = build_argv(resume, mode, session, model)
     pid, fd = pty.fork()
     if pid == 0:  # child
         os.chdir(path)
@@ -725,7 +740,7 @@ def _sock_alive(sock: Path) -> bool:
 
 
 def ensure_ptyd(name: str, path: Path, token: str, resume: bool, mode: str,
-                session: str) -> Path:
+                session: str, model: str = "default") -> Path:
     """Return the session's socket, spawning the daemon if it isn't running."""
     import time
     sock = _sock_path(name, token)
@@ -744,7 +759,7 @@ def ensure_ptyd(name: str, path: Path, token: str, resume: bool, mode: str,
          f"--setenv=PATH={env_path}", "--setenv=TERM=xterm-256color",
          "--setenv=COLORTERM=truecolor",
          sys.executable, str(HUB_DIR / "tools" / "hub_ptyd.py"), str(sock), "--",
-         *build_argv(resume, mode, session)],
+         *build_argv(resume, mode, session, model)],
         check=True, capture_output=True, text=True)
     for _ in range(100):  # wait for the daemon's socket (max ~5 s)
         if sock.exists() and _sock_alive(sock):
@@ -771,13 +786,13 @@ def api_ptys():
 @app.websocket("/ws/terminal/{name}")
 async def terminal_ws(ws: WebSocket, name: str, resume: bool = False,
                       mode: str = "default", session: str = "",
-                      attach: str = ""):
+                      attach: str = "", model: str = "default"):
     path = project_path(name)
     await ws.accept()
     if PERSIST and attach:
-        await _persist_ws(ws, name, path, attach, resume, mode, session)
+        await _persist_ws(ws, name, path, attach, resume, mode, session, model)
         return
-    pid, fd = spawn_claude(path, resume, mode, session)
+    pid, fd = spawn_claude(path, resume, mode, session, model)
     loop = asyncio.get_running_loop()
     pty_data = asyncio.Queue()
     loop.add_reader(fd, lambda: _drain(fd, pty_data, loop))
@@ -814,7 +829,8 @@ async def terminal_ws(ws: WebSocket, name: str, resume: bool = False,
 
 
 async def _persist_ws(ws: WebSocket, name: str, path: Path, attach: str,
-                      resume: bool, mode: str, session: str) -> None:
+                      resume: bool, mode: str, session: str,
+                      model: str = "default") -> None:
     """Bridge a WebSocket to a hub_ptyd session (attach/detach semantics).
 
     Disconnect = detach: the session survives. A {"type":"kill"} frame ends
@@ -822,7 +838,7 @@ async def _persist_ws(ws: WebSocket, name: str, path: Path, attach: str,
     drawer and full-page view mirror the same chat.
     """
     try:
-        sock = ensure_ptyd(name, path, attach, resume, mode, session)
+        sock = ensure_ptyd(name, path, attach, resume, mode, session, model)
     except (RuntimeError, subprocess.CalledProcessError):
         await ws.close(code=1011)
         return
@@ -875,7 +891,7 @@ def _drain(fd: int, queue: asyncio.Queue, loop) -> None:
 
 @app.get("/terminal/{name}", response_class=HTMLResponse)
 def terminal_page(name: str, resume: bool = False, attach: str = "",
-                  mode: str = "default"):
+                  mode: str = "default", model: str = "default"):
     project_path(name)  # 404 unknown names
     safe = html.escape(name)
     import uuid
@@ -886,6 +902,8 @@ def terminal_page(name: str, resume: bool = False, attach: str = "",
         params.append("resume=1")
     if mode != "default":
         params.append(f"mode={mode}")
+    if model != "default":
+        params.append(f"model={model}")
     ws_query = ("?" + "&".join(params)) if params else ""
     return f"""<!doctype html>
 <html lang="en"><head>
@@ -1616,6 +1634,12 @@ def index():
     border:1px solid var(--ink-soft); box-shadow:2px 3px 8px rgba(67,51,28,.25); }}
   .menu:hover .menu-items {{ display:flex; }}
   .menu-items.up {{ top:auto; bottom:100%; }}
+  /* section label inside a two-part menu (permission mode · model) — inert
+     text, not a row: no hover, no pointer, and it never takes a tap */
+  .menu-head {{ padding:.35rem .7rem .1rem; font-size:.7rem; font-variant:small-caps;
+    letter-spacing:.09em; color:var(--ink-faint); pointer-events:none;
+    border-top:1px solid var(--ink-faint); }}
+  .menu-head:first-child {{ border-top:0; }}
   .menu-items a, .menu-items button {{ border:0; border-radius:0; text-align:left;
     padding:.42rem .8rem; color:var(--lapis); background:transparent; }}
   .menu-items a:hover, .menu-items button:hover {{ background:var(--lapis);
@@ -1637,12 +1661,20 @@ def index():
       </div>
       <div class="menu">
         <button class="jot-open" id="mode-select"
-                title="permission mode for newly opened chats">mode:
-          <span id="mode-label">default</span> ▾</button>
+                title="permission mode and model for newly opened chats">
+          <span id="mode-label">default</span> ·
+          <span id="model-label">default</span> ▾</button>
         <div class="menu-items">
+          <span class="menu-head">permission mode</span>
           <button data-mode="default" onclick="setMode('default')">default</button>
           <button data-mode="accept-edits" onclick="setMode('accept-edits')">accept edits</button>
           <button data-mode="plan" onclick="setMode('plan')">plan</button>
+          <span class="menu-head">model</span>
+          <button data-model="default" onclick="setModel('default')">default (settings)</button>
+          <button data-model="fable" onclick="setModel('fable')">fable</button>
+          <button data-model="opus" onclick="setModel('opus')">opus</button>
+          <button data-model="sonnet" onclick="setModel('sonnet')">sonnet</button>
+          <button data-model="haiku" onclick="setModel('haiku')">haiku</button>
         </div>
       </div>
       <button class="jot-open" onclick="openJot('todos')" title="tasks, filterable by project">{icon("todo")} to-do <span id="todos-count"></span></button>

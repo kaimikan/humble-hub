@@ -8,7 +8,12 @@ and an embedded terminal: `/terminal/<name>` serves an xterm.js page (vendored
 in `static/vendor/`) that connects to `/ws/terminal/<name>`, a WebSocket↔pty
 bridge spawning `claude` in the project dir (JSON frames in: input/resize;
 binary frames out; SIGHUP on disconnect; `?session=<id>` →
-`claude --resume <id>`). `GET /api/sessions` lists past sessions across
+`claude --resume <id>`). One header dropdown sets how the NEXT chat starts —
+permission mode and model, `?mode=`/`?model=` → `MODE_ARGS`/`MODEL_ARGS` in
+`build_argv()`. Models are CLI *aliases* (`opus`, not a dated id) so they never
+rot, and `default` sends no `--model` at all, leaving `~/.claude/settings.json`
+authoritative (that is the only entry preserving an `opus[1m]`-style variant —
+a bare alias resolves to the standard model). `GET /api/sessions` lists past sessions across
 projects by reading the transcripts under `~/.claude/projects/<encoded-cwd>/`
 (cwd with `/`→`-`), which powers the v3 conversation manager. `POST /api/dictate`
 is local voice dictation: a recorded audio blob (from the phone toolbar's

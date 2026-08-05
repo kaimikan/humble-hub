@@ -1297,15 +1297,29 @@ function setChatMode(mode) {
   chatMode = mode;
   localStorage.setItem("chatMode", mode);
 }
-// the mode picker is a styled .menu dropdown (a native <select>'s open list
-// can't be themed); the label mirrors the stored mode, the current entry bolds
+// model for new chats — "default" sends no --model, so the chat inherits
+// ~/.claude/settings.json rather than the hub second-guessing it
+let chatModel = localStorage.getItem("chatModel") || "default";
+function setChatModel(model) {
+  chatModel = model;
+  localStorage.setItem("chatModel", model);
+}
+// one "new chat" picker holds both settings — they answer the same question
+// (how does the next chat start) and the control row has no space for two.
+// It's a styled .menu dropdown because a native <select>'s open list can't be
+// themed; the label mirrors the stored pair, the current entries bold.
 function syncModeMenu() {
   const l = document.getElementById("mode-label");
   if (l) l.textContent = chatMode.replace("-", " ");
+  const m = document.getElementById("model-label");
+  if (m) m.textContent = chatModel;
   document.querySelectorAll(".menu-items [data-mode]")
     .forEach(b => b.style.fontWeight = b.dataset.mode === chatMode ? "700" : "");
+  document.querySelectorAll(".menu-items [data-model]")
+    .forEach(b => b.style.fontWeight = b.dataset.model === chatModel ? "700" : "");
 }
 function setMode(mode) { setChatMode(mode); syncModeMenu(); }
+function setModel(model) { setChatModel(model); syncModeMenu(); }
 syncModeMenu();
 
 const CHAT_ICON = '<svg class="i" viewBox="0 0 24 24" aria-hidden="true">'
@@ -1438,7 +1452,7 @@ function createSession(key, project, o) {
   // the renderer on cold loads (the Ctrl+Shift+R blank-drawer bug). xterm
   // buffers writes before open, so early ws output is safe.
 
-  const params = new URLSearchParams({ mode: chatMode });
+  const params = new URLSearchParams({ mode: chatMode, model: chatModel });
   if (o.resume) params.set("resume", "1");
   if (o.session) params.set("session", o.session);
   // every chat runs in a persistent pty (hub_ptyd) keyed by this token —
