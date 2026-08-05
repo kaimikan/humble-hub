@@ -23,10 +23,10 @@ from pathlib import Path
 HUB = Path(__file__).resolve().parent.parent
 PORT = 7796
 PTY_DIR = Path(f"/tmp/hub-pty-test-{os.getpid()}")
-# HUB_PERSIST=1 on purpose: the in-process path execvpe's "claude" by name, so
-# HUB_CLAUDE_CMD swaps only the ARGUMENTS there and a real claude starts. The
-# stand-in must also PRINT (injectIntoSession waits for a chat's first output)
-# and then STAY ALIVE, or the socket closes and the attach is rightly refused.
+# HUB_PERSIST=1 exercises the path a real drawer chat takes. The stand-in must
+# keep PRINTING (injectIntoSession holds the paste until a chat's first output,
+# and a single echo can land before the client attaches) and STAY ALIVE, or the
+# socket closes and the attach is rightly refused.
 # it keeps printing on purpose: injectIntoSession holds the paste until a chat's
 # FIRST output, and a single echo can land before the client has attached.
 ENV = dict(os.environ, HUB_PTY_DIR=str(PTY_DIR), HUB_PERSIST="1",

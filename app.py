@@ -682,7 +682,10 @@ def spawn_claude(path: Path, resume: bool = False, mode: str = "default",
     pid, fd = pty.fork()
     if pid == 0:  # child
         os.chdir(path)
-        os.execvpe("claude", argv, env)
+        # argv[0], not a hardcoded "claude": HUB_CLAUDE_CMD is meant to swap the
+        # whole command, and naming the program here meant it swapped only the
+        # ARGUMENTS — so a test asking for a shell silently got the real claude
+        os.execvpe(argv[0], argv, env)
     flags = fcntl.fcntl(fd, fcntl.F_GETFL)
     fcntl.fcntl(fd, fcntl.F_SETFL, flags | os.O_NONBLOCK)
     return pid, fd
