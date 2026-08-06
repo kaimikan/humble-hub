@@ -3477,6 +3477,25 @@ setInterval(() => {
   };
   document.body.appendChild(picker);
 
+  // a second input that goes straight to the CAMERA: `capture` skips the
+  // gallery sheet entirely, so photograph-a-thing-and-ask keeps its momentum.
+  // Separate from the paperclip on purpose — one button per meaning, and the
+  // paperclip stays the way to pick something that already exists.
+  const camera = document.createElement("input");
+  camera.type = "file"; camera.accept = "image/*";
+  camera.capture = "environment";       // rear camera; the phone offers a flip
+  camera.id = "chat-camera";
+  camera.hidden = true;
+  camera.onchange = async () => {
+    await attachToChat(camera.files);
+    camera.value = "";
+  };
+  document.body.appendChild(camera);
+
+  const CAM = '<svg class="i" viewBox="0 0 24 24" aria-hidden="true">'
+    + '<path d="M21 19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2h3l1.5-2.2h5L16 7h3'
+    + 'a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="3.6"/></svg>';
+
   const head = document.querySelector("#drawer .d-head");
   if (head) {
     const btn = document.createElement("button");
@@ -3484,6 +3503,18 @@ setInterval(() => {
     btn.title = "attach an image to this chat";
     btn.onclick = () => picker.click();
     head.insertBefore(btn, head.querySelector("button"));   // before minimise
+
+    const cam = document.createElement("button");
+    cam.id = "d-camera";
+    cam.innerHTML = CAM;
+    cam.title = "take a photo and attach it";
+    cam.onclick = () => camera.click();
+    head.insertBefore(cam, btn);        // camera first, then the paperclip
+    // touch devices only: a laptop rarely has a camera worth pointing at
+    // things, and the row is tight
+    const style = document.createElement("style");
+    style.textContent = "@media (hover: hover) { #d-camera { display: none; } }";
+    document.head.appendChild(style);
   }
 
   const drawer = document.getElementById("drawer");

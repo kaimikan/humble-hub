@@ -41,6 +41,8 @@ with sync_playwright() as p:
           pg.eval_on_selector(".kbar", "el => getComputedStyle(el).display") == "none")
     check("desktop: files buttons visible",
           pg.eval_on_selector(".b-files", "el => getComputedStyle(el).display") != "none")
+    check("desktop: no take-a-photo button (laptops don't point cameras at things)",
+          pg.eval_on_selector("#d-camera", "el => getComputedStyle(el).display") == "none")
 
     # ⤢ toggles the drawer to full window width in place (no navigation)
     pg.evaluate("""() => {
@@ -147,6 +149,13 @@ with sync_playwright() as p:
     check("it sends Ctrl+End to the active chat",
           pg.evaluate("window.__sent") == ["\x1b[1;5F"],
           str(pg.evaluate("window.__sent")))
+
+    # take-a-photo attach: its own camera-capture input, phone only
+    check("mobile: the drawer head offers a take-a-photo button",
+          pg.eval_on_selector("#d-camera", "el => getComputedStyle(el).display") != "none")
+    check("…backed by a camera-capture input feeding the attach flow",
+          pg.evaluate("document.getElementById('chat-camera').capture") == "environment"
+          and pg.evaluate("document.getElementById('chat-camera').accept") == "image/*")
     ctx.close()
     browser.close()
 

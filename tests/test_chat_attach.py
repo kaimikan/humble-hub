@@ -77,8 +77,10 @@ def main():
             pg.goto(f"http://127.0.0.1:{PORT}", wait_until="networkidle")
 
             # the paperclip exists and sits in the drawer head
-            clip = pg.locator("#drawer .d-head button[title*='attach']")
+            clip = pg.locator("#drawer .d-head button[title='attach an image to this chat']")
             check("paperclip added to the drawer head", clip.count() == 1)
+            check("…with the take-a-photo button beside it",
+                  pg.locator("#drawer .d-head #d-camera").count() == 1)
 
             # with no live chat, attaching warns instead of throwing
             pg.evaluate("document.querySelector('#drawer .d-head "
