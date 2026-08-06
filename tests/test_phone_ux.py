@@ -107,13 +107,24 @@ with sync_playwright() as p:
     before = pg.evaluate("document.activeElement.id || document.activeElement.tagName")
     pg.tap(".kbar button:first-child")
     after = pg.evaluate("document.activeElement.id || document.activeElement.tagName")
-    check("toolbar tap does not steal/redirect focus", before == after,
+    check("toolbar tap does not steal/redirect NON-terminal focus", before == after,
           f"before={before} after={after}")
     not_textarea = pg.evaluate("document.activeElement.tagName !== 'TEXTAREA'")
     check("toolbar tap does not focus a textarea (no soft keyboard)", not_textarea)
 
-    # jump-to-bottom: one header button stands in for the Ctrl+End this
-    # keyboard doesn't have; it acts at pointerdown and sends over the socket
+    # the reverse invariant for the terminal itself: Android keeps an editable
+    # focused after dismissing its keyboard, and a tap that PRESERVED that
+    # focus re-summoned it (the real-phone bug, twice). A toolbar tap while
+    # xterm's textarea holds focus must therefore BLUR it, not keep it.
+    pg.evaluate("document.getElementById('fake-xterm-input').focus(); null")
+    pg.dispatch_event(".kbar button:first-child", "pointerdown")
+    check("toolbar tap RELEASES a focused terminal textarea (keyboard down)",
+          pg.evaluate("document.activeElement.tagName") != "TEXTAREA",
+          pg.evaluate("document.activeElement.tagName"))
+
+    # the key must go out AT pointerdown — the tap ends there, before the
+    # browser's focus/keyboard pipeline gets a turn (real-phone fix; the
+    # emulator can't show a soft keyboard, so assert the mechanism instead)
     pg.evaluate("""() => {
       window.__sent = [];
       sessions.set('kb', { key: 'kb', name: '~', label: '~', token: 'kb',
@@ -122,8 +133,16 @@ with sync_playwright() as p:
         status: 'ready' });
       active = 'kb';
     }""")
+    pg.dispatch_event(".kbar button:first-child", "pointerdown")
+    check("the key is sent at pointerdown, not click",
+          pg.evaluate("window.__sent") == ["\x1b[A"],
+          str(pg.evaluate("window.__sent")))
+
+    # jump-to-bottom: one header button stands in for the Ctrl+End this
+    # keyboard doesn't have; same pointerdown-only mechanism
     check("the drawer head has a jump-to-bottom button",
           pg.evaluate("!!document.getElementById('d-bottom')"))
+    pg.evaluate("window.__sent = []; null")
     pg.dispatch_event("#d-bottom", "pointerdown")
     check("it sends Ctrl+End to the active chat",
           pg.evaluate("window.__sent") == ["\x1b[1;5F"],

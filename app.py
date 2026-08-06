@@ -1120,8 +1120,18 @@ def terminal_page(name: str, resume: bool = False, attach: str = "",
       if (ic) {{ btn.innerHTML = ic; }} else {{ btn.textContent = label; }}
       if (cls) btn.className = cls;
       btn.title = label;
-      btn.addEventListener("pointerdown", e => e.preventDefault());
-      btn.addEventListener("click", () => sendKey(seq));
+      btn.tabIndex = -1;
+      // send AT pointerdown, and blur xterm's textarea on touch: Android keeps
+      // it focused after dismissing the keyboard, so a tap that merely
+      // preserved focus re-summoned it (see the drawer kbar in hub.js)
+      btn.addEventListener("pointerdown", e => {{
+        e.preventDefault(); e.stopPropagation();
+        const ae = document.activeElement;
+        if (matchMedia("(pointer: coarse)").matches
+            && ae && ae.tagName === "TEXTAREA") ae.blur();
+        sendKey(seq);
+      }});
+      btn.addEventListener("click", e => e.preventDefault());
       kbar.appendChild(btn);
     }}
 

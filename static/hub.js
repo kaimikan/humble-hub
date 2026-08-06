@@ -2127,6 +2127,13 @@ setInterval(() => {
       s.ws.send(JSON.stringify({ type: "input", data: seq }));
     }
   }
+  // touch only: a desktop user mid-typing must not lose their place
+  window.dropTerminalFocus = function () {
+    if (matchMedia("(pointer: coarse)").matches
+        && document.activeElement && document.activeElement.tagName === "TEXTAREA") {
+      document.activeElement.blur();
+    }
+  };
 
   // label, sequence, extra class, icon (arrows/enter as line-art SVG; the word
   // keys — space/esc/tab/⌃C — stay as text labels, which read clearer than an
@@ -2144,8 +2151,19 @@ setInterval(() => {
     if (ic) { b.innerHTML = ic; } else { b.textContent = label; }
     if (cls) b.className = cls;
     b.title = label === "space" ? "Space (toggle option)" : label;
-    b.addEventListener("pointerdown", e => e.preventDefault()); // don't steal focus
-    b.addEventListener("click", () => sendActiveKey(seq));
+    b.tabIndex = -1;
+    // Send AT pointerdown, and BLUR xterm's hidden textarea. Preserving focus
+    // (the previous approach, twice) was the bug, not the fix: Android keeps
+    // an editable focused after dismissing its keyboard, so any tap that left
+    // focus in the textarea re-summoned it. These keys exist precisely for
+    // keyboard-less navigation — the pty gets the sequence over the socket,
+    // no focus needed, so on touch devices the textarea should LOSE focus.
+    b.addEventListener("pointerdown", e => {
+      e.preventDefault(); e.stopPropagation();
+      dropTerminalFocus();
+      sendActiveKey(seq);
+    });
+    b.addEventListener("click", e => e.preventDefault());  // already handled
     bar.appendChild(b);
   }
 
