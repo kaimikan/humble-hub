@@ -148,6 +148,12 @@ document.querySelectorAll(".menu").forEach(m => {
 let notes = { todos: [], ideas: [] };
 
 async function loadNotes() {
+  // flush any pending save FIRST — this function replaces `notes` wholesale,
+  // so a re-read landing inside the debounce window would drop the just-made
+  // edit and then the queued timer would write the stale doc back over it.
+  // Inside loadNotes on purpose: a flush left to each call site was missed at
+  // two of three within one commit of being introduced (found in review).
+  await flushNotes();
   notes = await (await fetch("/api/notes")).json();
   renderNotes();
   reorderCards();   // bands depend on favorites + archived from the notes doc
@@ -160,8 +166,16 @@ function putNotes() {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(notes),
+    keepalive: true,   // lets the pagehide flush below survive the tab closing
   });
 }
+// closing/backgrounding the tab inside the debounce window silently lost the
+// pending edit; pagehide is the last reliable moment to send it (keepalive
+// lets the request outlive the page). pagehide, not beforeunload: the latter
+// doesn't fire on mobile and breaks bfcache.
+window.addEventListener("pagehide", () => {
+  if (saveTimer) { clearTimeout(saveTimer); putNotes(); }
+});
 function saveNotes() {
   clearTimeout(saveTimer);
   saveTimer = setTimeout(putNotes, 400);
@@ -1848,7 +1862,11 @@ setInterval(() => {
     .s-wip:hover { color:var(--ink); background:none; }
     .sess-row.wip .s-wip { color:var(--ochre); }
     .sess-band { color:var(--ink-faint); font-size:.7rem; font-variant:small-caps;
-      letter-spacing:.1em; padding:.5rem .35rem .2rem; }`;
+      letter-spacing:.1em; padding:.5rem .35rem .2rem; }
+    /* an orphaned mark: kept visible so it can be cleared, but visibly inert */
+    .sess-row.orphan { cursor:default; opacity:.7; }
+    .sess-row.orphan:hover { background:none; }
+    .sess-row.orphan .s-title { font-style:italic; color:var(--ink-faint); }`;
   document.head.appendChild(style);
 
   const trigger = document.createElement("button");
@@ -1882,9 +1900,9 @@ setInterval(() => {
     searchEl.value = "";
     listEl.innerHTML = `<div class="sess-empty">loading…</div>`;
     // re-read the notes doc first: the marks live in it, and another writer
-    // (a Claude session editing via the API) may have moved on since page load.
-    // Flush our own pending edit before reading, or the read overwrites it.
-    try { await flushNotes(); await loadNotes(); } catch (e) { /* keep what we have */ }
+    // (a Claude session editing via the API) may have moved on since page load
+    // (loadNotes itself flushes any pending save before reading)
+    try { await loadNotes(); } catch (e) { /* keep what we have */ }
     try { allSessions = await (await fetch("/api/sessions")).json(); }
     catch (e) { allSessions = []; }
     renderSessions("");
@@ -1904,14 +1922,29 @@ setInterval(() => {
   // to the Claude session id (durable — the pty token and the pills are not),
   // and lives in notes.json beside `favorites`.
   const wipSet = () => new Set(notes.wip || []);
-  // shared with the drawer header — the mark is one flag, set from either place
+  // Shared with the drawer header — the mark is one flag, set from either place.
+  // Saved through its own endpoint, NOT the whole-document PUT: marks are
+  // toggled casually and concurrently (drawer, list, phone, second tab), and a
+  // whole-doc save from any stale writer would silently erase them. The server
+  // merges one mark at a time under a lock; the response is the merged truth.
   window.toggleWip = function (id) {
     notes.wip = notes.wip || [];
     const i = notes.wip.indexOf(id);
-    if (i >= 0) notes.wip.splice(i, 1); else notes.wip.push(id);
-    saveNotes();
-    if (!overlay.hidden) renderSessions(searchEl.value);
-    if (window.syncDrawerWip) syncDrawerWip();
+    const on = i < 0;
+    if (on) notes.wip.push(id); else notes.wip.splice(i, 1);   // optimistic
+    fetch(`/api/notes/wip/${encodeURIComponent(id)}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ on }),
+      keepalive: true,
+    }).then(r => r.json())
+      .then(d => { if (d && d.wip) { notes.wip = d.wip; refresh(); } })
+      .catch(() => hubToast("couldn't save the mark — is the hub reachable?"));
+    refresh();
+    function refresh() {
+      if (!overlay.hidden) renderSessions(searchEl.value);
+      if (window.syncDrawerWip) syncDrawerWip();
+    }
   };
   const toggleWip = window.toggleWip;
 
@@ -1924,8 +1957,13 @@ setInterval(() => {
     // are still on, which is the whole problem the mark exists to solve
     const marked = rows.filter(s => wip.has(s.id));
     const rest = rows.filter(s => !wip.has(s.id));
+    // a mark whose conversation the list can't show (chat never got its first
+    // message, or the transcript aged out) must not just vanish — invisible
+    // orphans accumulate forever and the mark looks like it "didn't work"
+    const listed = new Set(allSessions.map(s => s.id));
+    const orphans = q ? [] : [...wip].filter(id => !listed.has(id));
     listEl.innerHTML = "";
-    if (!rows.length) {
+    if (!rows.length && !orphans.length) {
       listEl.innerHTML = `<div class="sess-empty">no sessions${q ? " match" : " yet"}.</div>`;
       return;
     }
@@ -1964,6 +2002,29 @@ setInterval(() => {
       row.onclick = () => { closeSessions(); openDrawer(s.project, { session: s.id, label: s.title }); };
       listEl.appendChild(row);
     });
+    if (orphans.length) {
+      band("marked, but not listable");
+      orphans.forEach(id => {
+        const row = document.createElement("div");
+        row.className = "sess-row wip orphan";
+        const main = document.createElement("div");
+        main.className = "s-main";
+        const title = document.createElement("span");
+        title.className = "s-title";
+        title.textContent = `(no conversation found: ${id.slice(0, 8)}…)`;
+        const meta = document.createElement("span");
+        meta.className = "s-meta";
+        meta.textContent = "the chat never got a first message, or its transcript aged out";
+        main.append(title, meta);
+        const flag = document.createElement("button");
+        flag.className = "s-wip";
+        flag.textContent = "● clear mark";
+        flag.title = "remove this mark — nothing resumable is behind it";
+        flag.onclick = e => { e.stopPropagation(); toggleWip(id); };
+        row.append(main, flag);
+        listEl.appendChild(row);
+      });
+    }
   }
 
   searchEl.addEventListener("input", () => renderSessions(searchEl.value));

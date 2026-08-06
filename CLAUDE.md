@@ -46,6 +46,20 @@ cards whose samples are cloned from the live grid, swapping via
 `band-hint` explaining what earns a project its band. Regression suite:
 `tests/test_shelf.py` (hermetic, same intercept pattern as the jot tests).
 
+A chat can be **marked unfinished** (`notes.wip`, keyed by Claude session id):
+the ● toggle in the drawer head or on a conversation-list row; marked chats
+band to the top of the list ("still going"), and marks whose id has no
+transcript render as clearable "not listable" rows instead of vanishing. Marks
+save through their own locked endpoint (`POST /api/notes/wip/{id}`), never the
+whole-doc PUT — a stale writer must not erase them — and `loadNotes()` always
+flushes a pending debounced save first (two of three call sites missed it when
+the flush lived at the call sites). Fresh chats are told their id up front
+(`--session-id`, `MODEL_ARGS`-style plumbing in `build_argv`); chats whose id
+the hub can't know (claude's own resume picker, pre-deploy ptys) grey the
+drawer toggle. **Known limitation:** `/clear` or `/resume` typed inside the
+TUI switches conversations within the same pty — the hub can't see that, so
+the drawer toggle then points at the pre-switch session id.
+
 Jots can be **sent into a claude chat** (row ⋯ → "→ claude ▸"): a picker
 offers a fresh chat for the note's project (untagged → the root `~` session)
 or any live drawer session. The note text (+ attachment paths under

@@ -48,18 +48,32 @@ def run(page):
         u = r.request.url
         if u.endswith("/api/sessions"):
             r.fulfill(status=200, content_type="application/json", body=json.dumps(SESSIONS))
+        elif "/api/notes/wip/" in u:
+            # the merge-safe mark endpoint — mimic the server's one-id merge
+            sid = u.rsplit("/", 1)[1]
+            on = json.loads(r.request.post_data).get("on")
+            wip = [i for i in store.get("wip", []) if i != sid] + ([sid] if on else [])
+            store["wip"] = wip
+            r.fulfill(status=200, content_type="application/json",
+                      body=json.dumps({"ok": True, "wip": wip}))
         elif u.endswith("/api/notes"):
             if r.request.method == "GET":
                 body = json.dumps(store)
             else:
                 saved.append(r.request.post_data)
+                # the whole-doc PUT must NOT be how marks travel — preserve the
+                # store's wip like the real server does for other writers' PUTs
+                wip = store.get("wip", [])
                 store.clear()
                 store.update(json.loads(r.request.post_data))
+                store["wip"] = wip
                 body = '{"ok":true}'
             r.fulfill(status=200, content_type="application/json", body=body)
         else:
             r.continue_()
-    page.route("**/api/*", route)
+    # ** (not *) after /api: the wip endpoint has a deeper path, and an
+    # unmatched route would fall through to the LIVE hub's notes.json
+    page.route("**/api/**", route)
 
     page.goto(URL, wait_until="networkidle")
     check("page loads without JS errors", not errors, "; ".join(errors))
@@ -103,10 +117,9 @@ def run(page):
           == "Add favicon logo styling")
     bands = page.eval_on_selector_all(".sess-band", "els => els.map(e => e.textContent)")
     check("marked and unmarked are banded apart", bands == ["still going", "the rest"], str(bands))
-    page.wait_for_timeout(600)          # saveNotes debounces the PUT by 400ms
-    check("the mark is stored against the session id, in the notes doc",
-          saved and json.loads(saved[-1]).get("wip") == ["cccc-3333"],
-          saved[-1] if saved else "(no save)")
+    page.wait_for_timeout(300)          # the wip POST is immediate, not debounced
+    check("the mark reaches the store through its own endpoint",
+          store.get("wip") == ["cccc-3333"], str(store.get("wip")))
 
     # a mark you can't see how to undo is a trap — the toggle stays visible
     check("a marked row keeps its toggle on screen",
@@ -114,10 +127,10 @@ def run(page):
                                 "el => getComputedStyle(el).opacity") == "1")
 
     page.click(".sess-row.wip .s-wip")
-    page.wait_for_timeout(600)
+    page.wait_for_timeout(300)
     check("clicking again clears the mark",
           page.eval_on_selector_all(".sess-row.wip", "els => els.length") == 0
-          and json.loads(saved[-1]).get("wip") == [], saved[-1])
+          and store.get("wip") == [], str(store.get("wip")))
     check("clearing removes the bands too",
           page.eval_on_selector_all(".sess-band", "els => els.length") == 0)
     check("order returns to newest-first once nothing is marked",
@@ -160,10 +173,10 @@ def run(page):
           page.eval_on_selector(wip_btn, "el => !el.classList.contains('on')"))
 
     page.click(wip_btn)
-    page.wait_for_timeout(600)
+    page.wait_for_timeout(300)
     check("the head button marks the open chat",
           page.eval_on_selector(wip_btn, "el => el.classList.contains('on')")
-          and json.loads(saved[-1]).get("wip") == ["aaaa-1111"], saved[-1])
+          and store.get("wip") == ["aaaa-1111"], str(store.get("wip")))
 
     page.click("#sess-open")
     page.wait_for_selector(".sess-overlay:not([hidden])")
@@ -182,16 +195,47 @@ def run(page):
     # chat is flagged (this is what "it didn't update, then it did" looks like
     # when two chats are open and the marked one isn't the one on screen)
     page.click(".sess-row:has-text('Discuss project structure') .s-wip")
-    page.wait_for_timeout(600)
+    page.wait_for_timeout(300)
     check("marking another chat leaves the open chat's button alone",
           page.eval_on_selector(wip_btn, "el => !el.classList.contains('on')")
-          and json.loads(saved[-1]).get("wip") == ["bbbb-2222"], saved[-1])
+          and store.get("wip") == ["bbbb-2222"], str(store.get("wip")))
     page.evaluate("sessions.get('fake').sid = 'bbbb-2222'; syncDrawerWip(); null")
     check("…and switching the drawer to that chat lights it up",
           page.eval_on_selector(wip_btn, "el => el.classList.contains('on')"))
     page.evaluate("sessions.get('fake').sid = 'aaaa-1111'; null")
     page.click(".sess-row.wip .s-wip")
     page.wait_for_timeout(600)
+
+    page.evaluate("closeSessions(); null")   # left open by the head-button block
+
+    # --- review regression: a re-read must not eat a pending edit ---
+    # an edit is queued (debounced 400ms), then the jot modal re-reads the doc;
+    # the flush now lives inside loadNotes, so no call site can skip it again
+    page.evaluate("notes.todos.push({text: 'flush probe', done: false}); "
+                  "saveNotes(); openJot('todos'); null")
+    page.wait_for_timeout(800)
+    check("a pending edit survives the jot modal's re-read",
+          any("flush probe" in (s or "") for s in saved),
+          f"{len(saved)} PUTs, none carried the edit")
+    check("…and is still in the page's doc afterwards",
+          page.evaluate("notes.todos.some(t => t.text === 'flush probe')"))
+    page.evaluate("closeJot(); null")
+
+    # --- review regression: an orphaned mark is visible and clearable ---
+    page.evaluate("toggleWip('9999-dead'); null")     # id no transcript will ever list
+    page.wait_for_timeout(300)
+    page.click("#sess-open")
+    page.wait_for_selector(".sess-overlay:not([hidden])")
+    check("a mark with no listable conversation gets its own row",
+          page.eval_on_selector_all(".sess-row.orphan", "els => els.length") == 1
+          and "not listable" in " ".join(page.eval_on_selector_all(
+              ".sess-band", "els => els.map(e => e.textContent)")))
+    page.click(".sess-row.orphan .s-wip")
+    page.wait_for_timeout(300)
+    check("clearing the orphan removes it and the mark",
+          page.eval_on_selector_all(".sess-row.orphan", "els => els.length") == 0
+          and "9999-dead" not in store.get("wip", []), str(store.get("wip")))
+    # the overlay stays open: the resume-row block at the end relies on it
 
     # --- pills lead with the project, not the chat title ---
     page.evaluate("""() => {

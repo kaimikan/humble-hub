@@ -437,7 +437,13 @@ def get_notes():
 
 @app.put("/api/notes")
 def put_notes(doc: dict):
-    _write_notes(doc)
+    """Replace the notes doc — EXCEPT `wip`, which only its own endpoint may
+    write. Marks are toggled from several surfaces at once, so a whole-doc PUT
+    from any tab that read before a mark landed would silently erase it; the
+    on-disk list is authoritative and this PUT cannot touch it."""
+    with _NOTES_LOCK:
+        doc["wip"] = _read_notes().get("wip", [])
+        _write_notes(doc)
     return {"ok": True}
 
 
@@ -461,6 +467,25 @@ def append_note(kind: str, item: dict):
         doc.setdefault(kind, []).append(entry)
         _write_notes(doc)
     return {"ok": True, "added": entry}
+
+
+@app.post("/api/notes/wip/{session_id}")
+def set_wip(session_id: str, body: dict):
+    """Set or clear one unfinished-mark WITHOUT sending the whole doc. Marks
+    are toggled casually (drawer head, list rows) and often concurrently with
+    other writers, so they must never ride the whole-document PUT: a second
+    tab that read before the mark and saved after it would erase it. Same
+    locked read-modify-write as append_note. `body`: {"on": bool}."""
+    with _NOTES_LOCK:
+        doc = _read_notes()
+        wip = doc.setdefault("wip", [])
+        if body.get("on"):
+            if session_id not in wip:
+                wip.append(session_id)
+        else:
+            doc["wip"] = [i for i in wip if i != session_id]
+        _write_notes(doc)
+    return {"ok": True, "wip": doc["wip"]}
 
 
 # --- image uploads (attach to a jot, or drop into the inbox) ---
