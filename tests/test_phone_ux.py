@@ -111,6 +111,23 @@ with sync_playwright() as p:
           f"before={before} after={after}")
     not_textarea = pg.evaluate("document.activeElement.tagName !== 'TEXTAREA'")
     check("toolbar tap does not focus a textarea (no soft keyboard)", not_textarea)
+
+    # jump-to-bottom: one header button stands in for the Ctrl+End this
+    # keyboard doesn't have; it acts at pointerdown and sends over the socket
+    pg.evaluate("""() => {
+      window.__sent = [];
+      sessions.set('kb', { key: 'kb', name: '~', label: '~', token: 'kb',
+        host: document.createElement('div'),
+        ws: { readyState: 1, send: d => window.__sent.push(JSON.parse(d).data) },
+        status: 'ready' });
+      active = 'kb';
+    }""")
+    check("the drawer head has a jump-to-bottom button",
+          pg.evaluate("!!document.getElementById('d-bottom')"))
+    pg.dispatch_event("#d-bottom", "pointerdown")
+    check("it sends Ctrl+End to the active chat",
+          pg.evaluate("window.__sent") == ["\x1b[1;5F"],
+          str(pg.evaluate("window.__sent")))
     ctx.close()
     browser.close()
 

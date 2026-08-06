@@ -3559,3 +3559,39 @@ setInterval(() => {
 
   syncDrawerWip();
 })();
+
+// --- jump to the bottom of the chat, from the drawer head -------------------
+// Claude Code's own hint is "Ctrl+End", which not every keyboard has (this
+// one doesn't) — and on the phone there's no End at all, so catching up on a
+// long session meant scrolling by hand. One button sends the sequence a real
+// Ctrl+End would (CSI 1;5F); claude does the jumping.
+(() => {
+  const head = document.querySelector("#drawer .d-head");
+  if (!head) return;
+  const style = document.createElement("style");
+  // no hover styles where hover doesn't exist: on touch, the last-tapped
+  // header button otherwise keeps its hover paint ("sticky hover") and looks
+  // stuck on — same disease the ▾ menus had
+  style.textContent = `
+    @media (hover: none) {
+      .d-head a:hover, .d-head button:hover { color: inherit; background: none; }
+    }`;
+  document.head.appendChild(style);
+  const btn = document.createElement("button");
+  btn.id = "d-bottom";
+  btn.tabIndex = -1;
+  // a line-art "down to the floor" arrow, same stroke style as the other icons
+  btn.innerHTML = '<svg class="i" viewBox="0 0 24 24" aria-hidden="true">'
+    + '<path d="M12 4v12"/><path d="M6 10l6 6 6-6"/><path d="M5 20h14"/></svg>';
+  btn.title = "jump to the bottom (sends Ctrl+End)";
+  // pointerdown, same as the phone key toolbar: acting on click would let the
+  // tap pipeline run on and pop the soft keyboard
+  btn.addEventListener("pointerdown", e => {
+    e.preventDefault(); e.stopPropagation();
+    if (window.dropTerminalFocus) dropTerminalFocus();   // touch: keyboard down
+    const s = sessions.get(active);
+    if (s && s.ws.readyState === 1) s.ws.send(JSON.stringify({ type: "input", data: "\x1b[1;5F" }));
+  });
+  btn.addEventListener("click", e => e.preventDefault());
+  head.insertBefore(btn, document.getElementById("d-wip"));
+})();
