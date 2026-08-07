@@ -1538,7 +1538,10 @@ function createSession(key, project, o) {
     `${wsProto}://${location.host}/ws/terminal/${encodeURIComponent(project)}?${params}`);
   ws.binaryType = "arraybuffer";
 
-  const s = { key, name: project, token, sid, label: o.label || disp(project),
+  // label priority: a name YOU gave the chat (sticks to the pty token) beats
+  // the conversation title a resume passes in, which beats the project name
+  const s = { key, name: project, token, sid,
+    label: labelFor(token) || o.label || disp(project),
     ws, term, fit, host, status: "working", lastOut: Date.now(), sawOutput: false };
   sessions.set(key, s);
 
@@ -3690,3 +3693,52 @@ setInterval(() => {
   head.insertBefore(btn, document.getElementById("d-wip"));
 })();
 
+// --- rename a chat from the drawer head -------------------------------------
+// The pill label defaults to the project (plus a resumed chat's title), which
+// stopped being enough the moment two fresh chats could share one project —
+// both read the bare project name. Click the drawer title to name the chat
+// yourself; the name sticks to the pty token (like the sid cache), so it
+// survives reloads and reattaches for as long as the session does.
+const LABEL_KEY = "ptyLabel";
+function labelFor(token) {
+  try { return JSON.parse(localStorage.getItem(LABEL_KEY) || "{}")[token] || ""; }
+  catch (e) { return ""; }
+}
+function rememberLabel(token, label) {
+  let m = {};
+  try { m = JSON.parse(localStorage.getItem(LABEL_KEY) || "{}"); } catch (e) { m = {}; }
+  if (label) m[token] = label; else delete m[token];
+  const keys = Object.keys(m);
+  if (keys.length > 60) delete m[keys[0]];
+  localStorage.setItem(LABEL_KEY, JSON.stringify(m));
+}
+
+(() => {
+  const title = document.getElementById("d-title");
+  if (!title) return;
+  title.title = "click to rename this chat (empty resets)";
+  title.style.cursor = "text";
+  title.onclick = () => {
+    const s = sessions.get(active);
+    if (!s || title.querySelector("input")) return;
+    const inp = document.createElement("input");
+    inp.value = s.label;
+    inp.style.cssText = "font:inherit; width:100%; background:var(--input-bg,transparent);"
+      + "border:1px solid var(--ink-soft); border-radius:2px; color:inherit; padding:0 .3rem;";
+    title.textContent = "";
+    title.appendChild(inp);
+    inp.focus(); inp.select();
+    const commit = () => {
+      const v = inp.value.trim();
+      s.label = v || disp(s.name);            // empty = back to the default
+      rememberLabel(s.token, v);
+      title.textContent = s.label;
+      renderPills();
+    };
+    inp.onkeydown = e => {
+      if (e.key === "Enter") inp.blur();       // blur commits
+      if (e.key === "Escape") { inp.onblur = null; title.textContent = s.label; }
+    };
+    inp.onblur = commit;
+  };
+})();

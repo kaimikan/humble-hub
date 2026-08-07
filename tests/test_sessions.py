@@ -259,6 +259,37 @@ def run(page):
           "Add a bed-levelling checklist" in
           page.eval_on_selector_all("#pills .pill", "els => els[1].title"))
 
+    # --- rename a chat from the drawer head ---
+    # 'b' is active-able: activate() needs its host/token; rename must update
+    # the title, the pill, and the per-token store that survives reloads
+    page.evaluate("closeSessions(); null")   # the modal sits over the drawer
+    page.evaluate("active = 'b'; document.getElementById('d-title').textContent = "
+                  "sessions.get('b').label; null")
+    page.click("#d-title")
+    page.fill("#d-title input", "bed levelling deep-dive")
+    page.press("#d-title input", "Enter")
+    page.wait_for_timeout(200)
+    check("renaming updates the drawer title",
+          page.eval_on_selector("#d-title", "el => el.textContent")
+          == "bed levelling deep-dive")
+    check("…and the pill (project still leads)",
+          any("print-picker · bed levelling" in t for t in page.eval_on_selector_all(
+              "#pills .pill", "els => els.map(e => e.textContent)")),
+          str(page.eval_on_selector_all("#pills .pill", "els => els.map(e => e.textContent)")))
+    check("…and sticks to the pty token for reloads",
+          page.evaluate("JSON.parse(localStorage.getItem('ptyLabel'))['b']")
+          == "bed levelling deep-dive")
+    # empty name = back to the default
+    page.click("#d-title")
+    page.fill("#d-title input", "")
+    page.press("#d-title input", "Enter")
+    page.wait_for_timeout(200)
+    check("an empty rename resets to the project default",
+          page.eval_on_selector("#d-title", "el => el.textContent") == "print-picker"
+          and page.evaluate("!JSON.parse(localStorage.getItem('ptyLabel'))['b']"))
+    page.click("#sess-open")                 # the resume-row block needs it back
+    page.wait_for_selector(".sess-overlay:not([hidden])")
+
     # clicking a row resumes that session (stub openDrawer to capture the call)
     page.click(".sess-row:has-text('Resume Humble Hub setup')")
     resume = page.evaluate("window.__resume")
