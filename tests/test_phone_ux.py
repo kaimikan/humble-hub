@@ -150,6 +150,35 @@ with sync_playwright() as p:
           pg.evaluate("window.__sent") == ["\x1b[1;5F"],
           str(pg.evaluate("window.__sent")))
 
+    # pill fold — MANUAL, not automatic: an auto-fold turned every chat
+    # switch into two taps, so the ⌄ control folds, the badge unfolds, and the
+    # choice persists. The unfolded stack must never eat clicks beside a short
+    # pill either (the container is only as wide as its widest pill).
+    pg.evaluate("""() => {
+      const mk = k => sessions.set(k, { key: k, name: k, label: k, token: k,
+        host: document.createElement('div'), ws: { readyState: 1 }, status: 'ready' });
+      mk('p1'); mk('p2');   // 'kb' from above makes three
+      detachedPtys.length = 0;   // the LIVE hub's real ptys must not count here
+      renderPills();
+    }""")
+    check("chats stay unfolded by default (no auto-fold)",
+          pg.eval_on_selector_all("#pills .pill", "els => els.length") == 3)
+    check("the pills box is a ghost — only the pills themselves take clicks",
+          pg.eval_on_selector("#pills", "el => getComputedStyle(el).pointerEvents") == "none"
+          and pg.eval_on_selector("#pills .pill", "el => getComputedStyle(el).pointerEvents") == "auto")
+    check("a fold control rides under the stack",
+          pg.evaluate("!!document.getElementById('pill-fold')"))
+    pg.dispatch_event("#pill-fold", "click")
+    check("folding collapses the stack to one badge",
+          pg.eval_on_selector_all("#pills .pill", "els => els.length") == 1
+          and "3 chats" in pg.eval_on_selector("#pill-badge", "el => el.textContent"))
+    check("…and the choice persists across reloads",
+          pg.evaluate("localStorage.getItem('pillsFolded')") == "1")
+    pg.dispatch_event("#pill-badge", "click")
+    check("the badge unfolds it again, and that persists too",
+          pg.eval_on_selector_all("#pills .pill", "els => els.length") == 3
+          and pg.evaluate("localStorage.getItem('pillsFolded')") == "")
+
     # take-a-photo attach: its own camera-capture input, phone only
     check("mobile: the drawer head offers a take-a-photo button",
           pg.eval_on_selector("#d-camera", "el => getComputedStyle(el).display") != "none")

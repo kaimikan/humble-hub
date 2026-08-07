@@ -246,6 +246,7 @@ def run(page):
                                 host, ws: { readyState: 1 }, status: "ready" });
         };
         sessions.clear();
+        detachedPtys.length = 0;   // the LIVE hub's real ptys must not count here
         mk("a", "print-picker", "print-picker");                      // fresh chat
         mk("b", "print-picker", "Add a bed-levelling checklist");     // resumed
         renderPills();

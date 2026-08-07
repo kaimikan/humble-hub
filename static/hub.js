@@ -1760,9 +1760,40 @@ async function loadDetached() {
 }
 loadDetached();
 
+// The pill stack can FOLD into one badge — a tall stack sits on top of the
+// shelf and buries card buttons under it (on the phone, "open a chat for this
+// project" became untappable with enough chats up). Folding is YOURS, not
+// automatic: an auto-fold turned every switch into two taps, so instead a ⌄
+// control folds the stack, the badge unfolds it, and the choice persists.
+// The badge keeps the most urgent status visible (attention > ready > working)
+// so a folded stack still tells you when something needs you.
+let pillsFolded = localStorage.getItem("pillsFolded") === "1";
+function setPillsFolded(v) {
+  pillsFolded = v;
+  localStorage.setItem("pillsFolded", v ? "1" : "");
+  renderPills();
+}
+
 function renderPills() {
   const box = document.getElementById("pills");
   box.innerHTML = "";
+  const live = [...sessions.values()];
+  const attached0 = new Set(live.map(s => s.token));
+  const detached = detachedPtys.filter(p => !attached0.has(p.token));
+  const total = live.length + detached.length;
+  if (pillsFolded && total > 0) {
+    const badge = document.createElement("button");
+    const urgency = live.some(s => s.status === "attention") ? "attention"
+                  : live.some(s => s.status === "ready") ? "ready" : "working";
+    badge.className = `pill s-${urgency}`;
+    badge.id = "pill-badge";
+    badge.innerHTML = `<span class="dot"></span>${CHAT_ICON} `;
+    badge.appendChild(document.createTextNode(`${total} chat${total > 1 ? "s" : ""}`));
+    badge.title = "unfold the chats";
+    badge.onclick = () => setPillsFolded(false);
+    box.appendChild(badge);
+    return;
+  }
   sessions.forEach(s => {
     const pill = document.createElement("button");
     pill.className = `pill s-${s.status}`;
@@ -1788,9 +1819,7 @@ function renderPills() {
     box.appendChild(pill);
   });
   // live-but-detached ptys (e.g. after a page reload) — click to reattach
-  const attached = new Set([...sessions.values()].map(s => s.token));
-  detachedPtys.forEach(p => {
-    if (attached.has(p.token)) return;
+  detached.forEach(p => {
     const pill = document.createElement("button");
     pill.className = "pill s-detached";
     pill.innerHTML = `<span class="dot"></span>${ICON_REATTACH} `;
@@ -1799,6 +1828,16 @@ function renderPills() {
     pill.onclick = () => openDrawer(p.project, { attach: p.token });
     box.appendChild(pill);
   });
+  // the fold control rides under the stack once it's worth folding — NOT a
+  // .pill, so nothing that counts or styles pills sweeps it up
+  if (total >= 2) {
+    const fold = document.createElement("button");
+    fold.id = "pill-fold";
+    fold.textContent = "⌄";
+    fold.title = "fold the chats into one badge";
+    fold.onclick = () => setPillsFolded(true);
+    box.appendChild(fold);
+  }
 }
 
 // working → ready when output has been quiet for a few seconds
@@ -2079,6 +2118,12 @@ setInterval(() => {
       opacity:0; pointer-events:none; transition:opacity .2s ease, transform .2s ease; z-index:90; }
     #hub-toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
     .pill.s-detached .dot { background:#7aa2f7; }
+    /* the fold control: quieter than a pill — it manages the stack, it isn't
+       a chat. Wide enough to tap, visually a whisper. */
+    #pill-fold { border:0; border-radius:999px; background:var(--ink-faint);
+      color:var(--parchment); font:inherit; font-size:.8rem; line-height:1;
+      padding:.15rem .9rem .3rem; cursor:pointer; opacity:.75; }
+    #pill-fold:hover { opacity:1; background:var(--ink-soft); }
     /* ⤢ in-place full-width drawer */
     #drawer { transition: transform .22s ease, width .22s ease; }
     body.drawer-full #drawer { width: 100vw; }
@@ -3644,3 +3689,4 @@ setInterval(() => {
   btn.addEventListener("click", e => e.preventDefault());
   head.insertBefore(btn, document.getElementById("d-wip"));
 })();
+

@@ -1576,6 +1576,11 @@ def index():
   .term-host {{ position:absolute; inset:.3rem; display:none; }}
   .term-host.shown {{ display:block; }}
   /* status pills for live sessions */
+  /* the container is as wide as its WIDEST pill, so without this the empty
+     space beside a short pill silently ate clicks meant for the cards under
+     it — the box must be a ghost, only the pills themselves are real */
+  #pills {{ pointer-events:none; }}
+  #pills > * {{ pointer-events:auto; }}
   #pills {{ position:fixed; right:1.1rem; bottom:1.1rem; z-index:40;
     display:flex; flex-direction:column; gap:.5rem; align-items:flex-end; }}
   .pill {{ background:var(--lapis); color:var(--parchment); border:0; border-radius:999px;
