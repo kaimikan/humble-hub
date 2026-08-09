@@ -2679,7 +2679,29 @@ setInterval(() => {
         body[data-theme="aqua"] input[type=text],
         body[data-theme="aqua"] input[type=search] {
           border-radius:999px; border:1px solid #b6c0cd; background:#fff;
-          box-shadow:inset 0 1px 3px rgba(0,0,0,.14); }`,
+          box-shadow:inset 0 1px 3px rgba(0,0,0,.14); }
+        /* dropdown menus (claude ▾ on a card, the mode/model picker in the
+           header). An Aqua menu is a rounded translucent panel of FLAT rows
+           with a blue highlight — never a stack of gel pills. The gel rules
+           above reach .card button, which includes the card menu's rows, so
+           they are undone here; the panel itself gets the rounding its rows
+           used to have on their own. */
+        body[data-theme="aqua"] .menu-items {
+          border-radius:7px; border:1px solid rgba(105,125,155,.55); overflow:hidden;
+          padding:3px 0; background:rgba(255,255,255,.97);
+          box-shadow:0 8px 20px rgba(40,70,120,.28), inset 0 1px 0 rgba(255,255,255,.9); }
+        body[data-theme="aqua"] .menu-items button,
+        body[data-theme="aqua"] .menu-items a {
+          border:0; border-radius:0; box-shadow:none; text-shadow:none;
+          background:none; color:#1d2733; }
+        body[data-theme="aqua"] .menu-items button::before,
+        body[data-theme="aqua"] .menu-items a::before { display:none; }
+        body[data-theme="aqua"] .menu-items button:hover,
+        body[data-theme="aqua"] .menu-items a:hover {
+          color:#fff; text-shadow:0 -1px 0 rgba(0,0,0,.25);
+          background:linear-gradient(to bottom, #5da2e0 0, #3f8bd4 48%, #2f78c4 52%, #2d6fb8 100%); }
+        body[data-theme="aqua"] .menu-head {
+          color:#6b7a8d; border-top:1px solid rgba(105,125,155,.28); }`,
     },
     // joke world: GeoCities. CSS chrome + mounted decorations (construction
     // banner, marquee, visitor counter) + a glitter cursor trail.
