@@ -41,6 +41,8 @@ with sync_playwright() as p:
           pg.eval_on_selector(".kbar", "el => getComputedStyle(el).display") == "none")
     check("desktop: files buttons visible",
           pg.eval_on_selector(".b-files", "el => getComputedStyle(el).display") != "none")
+    check("desktop: the split control is offered (two panes is a PC move)",
+          pg.eval_on_selector("#d-split", "el => getComputedStyle(el).display") != "none")
     check("desktop: no take-a-photo button (laptops don't point cameras at things)",
           pg.eval_on_selector("#d-camera", "el => getComputedStyle(el).display") == "none")
 
@@ -180,6 +182,8 @@ with sync_playwright() as p:
           and pg.evaluate("localStorage.getItem('pillsFolded')") == "")
 
     # take-a-photo attach: its own camera-capture input, phone only
+    check("mobile: no split control (two panes on a phone is two slivers)",
+          pg.eval_on_selector("#d-split", "el => getComputedStyle(el).display") == "none")
     check("mobile: the drawer head offers a take-a-photo button",
           pg.eval_on_selector("#d-camera", "el => getComputedStyle(el).display") != "none")
     check("…backed by a camera-capture input feeding the attach flow",

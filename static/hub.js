@@ -1643,7 +1643,10 @@ window.addEventListener("focus", () => { if (active) refit(sessions.get(active),
 function activate(key) {
   active = key;
   const s = sessions.get(key);
-  sessions.forEach(o => o.host.classList.toggle("shown", o.key === key));
+  // the focused tile takes the chat you activate; layoutTiles() decides which
+  // hosts are on screen and where (one full-width host when unsplit)
+  if (window.tileKeys) { tileKeys[focusedTile] = key; layoutTiles(); }
+  else sessions.forEach(o => o.host.classList.toggle("shown", o.key === key));
   document.getElementById("d-title").textContent = s.label;
   if (window.syncDrawerWip) syncDrawerWip();   // the mark follows the shown chat
   // ⤢ expands the drawer to the full window width in place. The href still
@@ -3735,32 +3738,274 @@ function rememberLabel(token, label) {
   localStorage.setItem(LABEL_KEY, JSON.stringify(m));
 }
 
+// Renames the ACTIVE chat, editing in place inside whichever element you hand
+// it — the drawer title when there is one chat, a tile's own name when split.
+function renameChat(el) {
+  const s = sessions.get(active);
+  if (!el || !s || el.querySelector("input")) return;
+  const inp = document.createElement("input");
+  inp.value = s.label;
+  inp.style.cssText = "font:inherit; width:100%; background:var(--input-bg,transparent);"
+    + "border:1px solid var(--ink-soft); border-radius:2px; color:inherit; padding:0 .3rem;";
+  el.textContent = "";
+  el.appendChild(inp);
+  inp.focus(); inp.select();
+  const commit = () => {
+    const v = inp.value.trim();
+    s.label = v || disp(s.name);              // empty = back to the default
+    rememberLabel(s.token, v);
+    el.textContent = s.label;
+    renderPills();
+    if (window.renderTileHeads) renderTileHeads();
+  };
+  inp.onkeydown = e => {
+    if (e.key === "Enter") inp.blur();         // blur commits
+    if (e.key === "Escape") { inp.onblur = null; el.textContent = s.label; }
+  };
+  inp.onblur = commit;
+}
+
 (() => {
   const title = document.getElementById("d-title");
   if (!title) return;
   title.title = "click to rename this chat (empty resets)";
   title.style.cursor = "text";
-  title.onclick = () => {
+  title.onclick = () => renameChat(title);
+})();
+
+// --- two tiles: a chat per pane, each owning its own header -----------------
+// Learned from a pin-model prototype: one header spanning two chats can only
+// ever name one of them, and its buttons silently act on that one — which also
+// forced the second chat's pill to mean something different from every other
+// pill. So the PANE is the unit here. Each visible chat gets its own head
+// (name + a ⋯ of its own actions), pills keep one uniform meaning (load into
+// the focused tile), and every button acts on the pane it lives in.
+//
+// Nothing changes for a single chat: the tile heads only appear once a second
+// pane exists, so the ordinary one-chat drawer keeps today's header exactly.
+// Hosts are NOT moved in the DOM — they stay children of #dterm and get
+// positioned into halves, which keeps xterm's canvases untouched by a split.
+window.tileKeys = [null, null];
+window.focusedTile = 0;
+const splitOn = () => document.body.classList.contains("drawer-split");
+
+function layoutTiles() {
+  const split = splitOn();
+  sessions.forEach(o => o.host.classList.remove("tile-0", "tile-1", "shown"));
+  if (!split) {
     const s = sessions.get(active);
-    if (!s || title.querySelector("input")) return;
-    const inp = document.createElement("input");
-    inp.value = s.label;
-    inp.style.cssText = "font:inherit; width:100%; background:var(--input-bg,transparent);"
-      + "border:1px solid var(--ink-soft); border-radius:2px; color:inherit; padding:0 .3rem;";
-    title.textContent = "";
-    title.appendChild(inp);
-    inp.focus(); inp.select();
-    const commit = () => {
-      const v = inp.value.trim();
-      s.label = v || disp(s.name);            // empty = back to the default
-      rememberLabel(s.token, v);
-      title.textContent = s.label;
-      renderPills();
+    if (s) s.host.classList.add("shown");       // exactly today's behaviour
+    tileKeys[0] = active; tileKeys[1] = null;
+  } else {
+    tileKeys.forEach((k, i) => {
+      const s = k && sessions.get(k);
+      if (s) s.host.classList.add(`tile-${i}`);
+    });
+  }
+  renderTileHeads();
+  document.body.classList.toggle("tiles-split", split);
+}
+
+function renderTileHeads() {
+  [0, 1].forEach(i => {
+    const head = document.getElementById(`tile-head-${i}`);
+    if (!head) return;
+    const s = tileKeys[i] && sessions.get(tileKeys[i]);
+    head.hidden = !splitOn() || !s;
+    head.classList.toggle("focused", i === focusedTile);
+    if (s) head.querySelector(".th-name").textContent = s.label;
+  });
+}
+
+function focusTile(i) {
+  if (!tileKeys[i]) return;
+  focusedTile = i;
+  activate(tileKeys[i]);      // active follows focus: one idea of "this chat"
+}
+
+function splitDrawer() {
+  if (splitOn()) return;
+  if (!document.body.classList.contains("drawer-full")) toggleDrawerFull();
+  document.body.classList.add("drawer-split");
+  tileKeys[0] = active;
+  // the second pane opens on the most recent other chat, or waits for a pill
+  const other = [...sessions.keys()].filter(k => k !== active).pop() || null;
+  tileKeys[1] = other;
+  focusedTile = other ? 1 : 0;
+  if (other) activate(other); else layoutTiles();
+  refitTiles();
+  syncSplitButton();
+  renderPills();
+}
+
+function closeTile(i) {
+  // closing a PANE never ends the chat — it goes back to being one of the
+  // background chats in the pills, which is what the pill stack is for
+  const keep = tileKeys[i === 0 ? 1 : 0];
+  document.body.classList.remove("drawer-split");
+  tileKeys = [keep, null];
+  focusedTile = 0;
+  if (keep) activate(keep); else layoutTiles();
+  refitTiles();
+  syncSplitButton();
+  renderPills();
+}
+
+function refitTiles() {
+  setTimeout(() => {
+    tileKeys.forEach(k => { const s = k && sessions.get(k); if (s) refit(s, true); });
+    const a = sessions.get(active);
+    if (a) refit(a, true);
+  }, 280);
+}
+
+function syncSplitButton() {
+  const b = document.getElementById("d-split");
+  if (!b) return;
+  b.classList.toggle("on", splitOn());
+  b.title = splitOn() ? "back to one chat" : "split: two chats side by side";
+}
+
+// --- tile chrome: the split button, the two heads, and their ⋯ menus --------
+(() => {
+  const head = document.querySelector("#drawer .d-head");
+  const dterm = document.getElementById("dterm");
+  if (!head || !dterm) return;
+
+  const style = document.createElement("style");
+  style.textContent = `
+    /* halves. The top inset makes room for each pane's own head. */
+    body.drawer-split .term-host.tile-0 { display:block; left:.3rem; right:calc(50% + .25rem); top:2rem; }
+    body.drawer-split .term-host.tile-1 { display:block; left:calc(50% + .25rem); right:.3rem; top:2rem; }
+    body.drawer-split #dterm::after { content:""; position:absolute; top:.3rem; bottom:.3rem;
+      left:50%; width:1px; background:var(--ink-faint); opacity:.45; }
+    /* These heads sit ON the terminal, not on parchment — so they take their
+       colours from the dark side, never the ink palette (ink on #1a1b26 is
+       invisible, which is exactly what focusing a head used to do). */
+    .tile-head { position:absolute; top:.3rem; height:1.55rem; z-index:6;
+      display:flex; align-items:center; gap:.35rem; padding:0 .2rem 0 .55rem;
+      color:rgba(255,255,255,.5); font-size:.76rem; font-variant:small-caps;
+      letter-spacing:.05em; border-bottom:1px solid transparent; }
+    .tile-head[hidden] { display:none; }
+    #tile-head-0 { left:.3rem; right:calc(50% + .25rem); }
+    #tile-head-1 { left:calc(50% + .25rem); right:.3rem; }
+    /* the focused pane is the one pills load into — say so quietly */
+    .tile-head.focused { color:#fff; border-bottom-color:rgba(255,255,255,.3); }
+    .tile-head .th-name { flex:1; overflow:hidden; text-overflow:ellipsis;
+      white-space:nowrap; cursor:text; }
+    .tile-head button { border:0; background:none; color:inherit; font:inherit;
+      cursor:pointer; padding:0 .35rem; line-height:1; }
+    .tile-head button:hover { color:#fff; background:rgba(255,255,255,.12); border-radius:2px; }
+    .th-menu { position:absolute; top:1.8rem; right:.2rem; z-index:8;
+      display:none; flex-direction:column; min-width:11rem;
+      background:var(--paper); border:1px solid var(--ink-soft);
+      box-shadow:2px 3px 8px rgba(67,51,28,.25); }
+    .th-menu.open { display:flex; }
+    .th-menu button { text-align:left; padding:.4rem .7rem; font-size:.8rem;
+      font-variant:normal; letter-spacing:0; color:var(--ink); }
+    .th-menu button:hover { background:var(--lapis); color:var(--parchment); }
+    #d-split.on { color:var(--lapis); }
+    /* splitting is a desktop move: two panes on a phone is two slivers */
+    @media (pointer: coarse) { #d-split { display:none; } }
+    /* with per-pane heads carrying the actions, the drawer's own per-chat
+       buttons would be a second, ambiguous copy — the head keeps only what is
+       genuinely global (minimise, close, split) */
+    body.drawer-split #d-title,
+    body.drawer-split #d-wip,
+    body.drawer-split #d-bottom,
+    body.drawer-split #d-camera,
+    body.drawer-split .d-head button[title="attach an image to this chat"] { display:none; }
+    /* ⤢ would squeeze BOTH panes into the one-chat width — meaningless while
+       split, since splitting implies full width. And the drawer's ✕ ends "the
+       session" with no way to say which one, so ending a chat moves into the
+       pane's own ⋯ where it can only mean one thing. */
+    body.drawer-split #d-full,
+    body.drawer-split #d-close { display:none; }`;
+  document.head.appendChild(style);
+
+  // the template's minimise/close carry no ids — tag the close one so the
+  // split rule above can hide it (its "which chat?" is unanswerable in a split)
+  const closeBtn = head.querySelector('button[title="end the session"]');
+  if (closeBtn) closeBtn.id = "d-close";
+
+  const btn = document.createElement("button");
+  btn.id = "d-split";
+  btn.tabIndex = -1;
+  btn.innerHTML = '<svg class="i" viewBox="0 0 24 24" aria-hidden="true">'
+    + '<rect x="3" y="5" width="18" height="14" rx="1"/><path d="M12 5v14"/></svg>';
+  btn.onclick = () => splitOn() ? closeTile(1) : splitDrawer();
+  head.insertBefore(btn, document.getElementById("d-bottom") || head.querySelector("a, button"));
+
+  // each pane's head: its chat's name, and a ⋯ of that chat's own actions
+  [0, 1].forEach(i => {
+    const th = document.createElement("div");
+    th.id = `tile-head-${i}`;
+    th.className = "tile-head";
+    th.hidden = true;
+    th.innerHTML = '<span class="th-name"></span>';
+
+    const dots = document.createElement("button");
+    dots.className = "th-dots";
+    dots.textContent = "⋯";
+    dots.title = "this chat's actions";
+
+    const menu = document.createElement("div");
+    menu.className = "th-menu";
+    // Each item focuses THIS pane first, then triggers the drawer's own
+    // button — one implementation of every action, no duplicate logic, and
+    // "focus first" is what makes it act on the right chat.
+    const item = (label, run) => {
+      const b = document.createElement("button");
+      b.textContent = label;
+      b.onclick = e => {
+        e.stopPropagation();
+        menu.classList.remove("open");
+        focusTile(i);
+        run();
+      };
+      menu.appendChild(b);
     };
-    inp.onkeydown = e => {
-      if (e.key === "Enter") inp.blur();       // blur commits
-      if (e.key === "Escape") { inp.onblur = null; title.textContent = s.label; }
+    const clickGlobal = sel => () => {
+      const el = document.querySelector(sel);
+      if (!el) return;
+      // the global buttons are display:none while split — briefly un-hide so
+      // the click lands (they are the single implementation of each action)
+      const prev = el.style.display;
+      el.style.display = "inline-flex";
+      el.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
+      el.click();
+      el.style.display = prev;
     };
-    inp.onblur = commit;
-  };
+    item("rename this chat", () => renameChat(th.querySelector(".th-name")));
+    item("mark unfinished", clickGlobal("#d-wip"));
+    item("attach an image", clickGlobal('.d-head button[title="attach an image to this chat"]'));
+    item("jump to the bottom", clickGlobal("#d-bottom"));
+    item("close this pane (chat keeps running)", () => closeTile(i));
+    // ending a chat needs a pane to point at: the drawer's ✕ can't say which
+    item("end this chat", () => {
+      const s = sessions.get(tileKeys[i]);
+      closeTile(i);
+      if (s) { active = s.key; closeActive(); }
+    });
+
+    dots.onclick = e => {
+      e.stopPropagation();
+      const wasOpen = menu.classList.contains("open");
+      document.querySelectorAll(".th-menu.open").forEach(m => m.classList.remove("open"));
+      if (!wasOpen) { focusTile(i); menu.classList.add("open"); }
+    };
+    th.append(dots, menu);
+    th.onclick = () => focusTile(i);
+    th.querySelector(".th-name").onclick = e => { e.stopPropagation(); focusTile(i); };
+    dterm.appendChild(th);
+  });
+
+  document.addEventListener("click", e => {
+    if (!e.target.closest(".th-menu, .th-dots")) {
+      document.querySelectorAll(".th-menu.open").forEach(m => m.classList.remove("open"));
+    }
+  });
+
+  syncSplitButton();
+  layoutTiles();
 })();

@@ -290,6 +290,106 @@ def run(page):
     page.click("#sess-open")                 # the resume-row block needs it back
     page.wait_for_selector(".sess-overlay:not([hidden])")
 
+    # --- two tiles: a chat per pane, each owning its head ---
+    page.evaluate("closeSessions(); null")
+    page.evaluate("""() => {
+        const mk = (k, label) => {
+            const host = document.createElement("div");
+            document.getElementById("dterm").appendChild(host);
+            sessions.set(k, { key: k, name: k, label, token: k, sid: "", host,
+                opened: true, fit: { fit() {} },
+                term: { focus() {}, refresh() {}, scrollToBottom() {}, cols: 80, rows: 24 },
+                ws: { readyState: 1, send: () => {} }, status: "ready" });
+        };
+        sessions.clear(); detachedPtys.length = 0;
+        mk("t1", "left work"); mk("t2", "right work");
+        document.getElementById("drawer").classList.add("open");
+        document.body.classList.add("drawer-open");
+        activate("t1");
+        renderPills();
+    }""")
+    check("one chat keeps today's header: no tile heads, no ⋯",
+          page.eval_on_selector_all(".tile-head:not([hidden])", "els => els.length") == 0
+          and page.eval_on_selector("#d-title", "el => getComputedStyle(el).display") != "none")
+
+    page.click("#d-split")
+    page.wait_for_timeout(150)
+    check("splitting gives each pane its own head",
+          page.eval_on_selector_all(".tile-head:not([hidden])", "els => els.length") == 2)
+    names = page.eval_on_selector_all(".tile-head:not([hidden]) .th-name",
+                                      "els => els.map(e => e.textContent)")
+    check("each head names ITS OWN chat", names == ["left work", "right work"], str(names))
+    check("the drawer's per-chat buttons step aside for the per-pane ones",
+          page.eval_on_selector("#d-title", "el => getComputedStyle(el).display") == "none"
+          and page.eval_on_selector("#d-wip", "el => getComputedStyle(el).display") == "none")
+    check("the focused pane is marked, and it is the one pills load into",
+          page.eval_on_selector("#tile-head-1", "el => el.classList.contains('focused')")
+          and page.evaluate("active") == "t2")
+
+    # a pill has ONE meaning again: load that chat into the focused pane
+    page.evaluate("focusTile(0); null")
+    page.wait_for_timeout(100)
+    check("clicking a pill loads the chat into the focused pane",
+          page.evaluate("focusedTile") == 0 and page.evaluate("active") == "t1")
+    page.evaluate("""() => {
+        const mk = (k, label) => {
+            const host = document.createElement("div");
+            document.getElementById("dterm").appendChild(host);
+            sessions.set(k, { key: k, name: k, label, token: k, sid: "", host,
+                opened: true, fit: { fit() {} },
+                term: { focus() {}, refresh() {}, scrollToBottom() {}, cols: 80, rows: 24 },
+                ws: { readyState: 1, send: () => {} }, status: "ready" });
+        };
+        mk("t3", "third chat");
+        renderPills();
+    }""")
+    page.evaluate("activate('t3'); null")
+    page.wait_for_timeout(100)
+    check("…without disturbing the other pane",
+          page.eval_on_selector("#tile-head-0 .th-name", "el => el.textContent") == "third chat"
+          and page.eval_on_selector("#tile-head-1 .th-name", "el => el.textContent") == "right work")
+
+    # the ⋯ carries that pane's own actions
+    page.click("#tile-head-1 .th-dots")
+    check("the ⋯ opens that pane's actions",
+          page.eval_on_selector("#tile-head-1 .th-menu", "el => el.classList.contains('open')")
+          and page.evaluate("focusedTile") == 1)
+    labels = page.eval_on_selector_all("#tile-head-1 .th-menu button",
+                                       "els => els.map(e => e.textContent)")
+    check("…including rename, mark, attach, jump, close-pane and end-chat",
+          labels == ["rename this chat", "mark unfinished", "attach an image",
+                     "jump to the bottom", "close this pane (chat keeps running)",
+                     "end this chat"], str(labels))
+
+    # the heads sit ON the terminal: ink-coloured text there is invisible, which
+    # is what focusing a head used to do (dark on #1a1b26)
+    focused_col = page.eval_on_selector("#tile-head-1.focused", "el => getComputedStyle(el).color")
+    check("a focused head stays legible over the dark terminal",
+          focused_col == "rgb(255, 255, 255)", focused_col)
+    dots_col = page.eval_on_selector("#tile-head-1 .th-dots", "el => getComputedStyle(el).color")
+    check("…and so does its ⋯", dots_col == "rgb(255, 255, 255)", dots_col)
+
+    # controls whose target is ambiguous in a split step aside
+    check("⤢ hides while split (splitting already implies full width)",
+          page.eval_on_selector("#d-full", "el => getComputedStyle(el).display") == "none")
+    check("the drawer's ✕ hides too — 'which chat?' has no answer there",
+          page.eval_on_selector("#d-close", "el => getComputedStyle(el).display") == "none")
+
+    page.click("#tile-head-1 .th-menu button:nth-child(5)")
+    page.wait_for_timeout(150)
+    check("closing a pane returns to one chat, keeping the other",
+          not page.evaluate("document.body.classList.contains('drawer-split')")
+          and page.evaluate("active") == "t3"
+          and page.eval_on_selector_all(".tile-head:not([hidden])", "els => els.length") == 0)
+    check("the closed pane's chat is still alive in the pills",
+          page.evaluate("sessions.has('t2')"))
+    check("…and the drawer's own controls come back with one chat",
+          page.eval_on_selector("#d-full", "el => getComputedStyle(el).display") != "none"
+          and page.eval_on_selector("#d-close", "el => getComputedStyle(el).display") != "none")
+    page.evaluate("document.body.classList.remove('drawer-full'); null")
+    page.click("#sess-open")
+    page.wait_for_selector(".sess-overlay:not([hidden])")
+
     # clicking a row resumes that session (stub openDrawer to capture the call)
     page.click(".sess-row:has-text('Resume Humble Hub setup')")
     resume = page.evaluate("window.__resume")
