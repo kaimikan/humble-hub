@@ -1236,6 +1236,9 @@ ICONS = {
     "ideas":   '<path d="M9 18h6"/><path d="M10 21h4"/>'
                '<path d="M12 3a6 6 0 0 1 3.7 10.7c-.6.5-.9 1-.9 1.8H9.2c0-.8-.3-1.3-.9-1.8A6 6 0 0 1 12 3z"/>',
     "star":    '<path d="M12 3.5l2.6 5.3 5.9.9-4.25 4.15 1 5.85L12 17l-5.25 2.75 1-5.85L3.5 9.7l5.9-.9z"/>',
+    # a lidded box — archive/unarchive toggle beside the ★ on each card
+    "archive": '<rect x="3" y="4" width="18" height="4.5" rx="1"/>'
+               '<path d="M4.5 8.5V19a1 1 0 0 0 1 1h13a1 1 0 0 0 1-1V8.5"/><path d="M10 13h4"/>',
     # an open tray with an item dropping in — the image inbox (was 📥)
     "inbox":   '<path d="M12 3v8"/><path d="M9 8l3 3 3-3"/>'
                '<path d="M4 14h3l2 3h6l2-3h3v4a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1z"/>',
@@ -1296,9 +1299,11 @@ def glyph(p: dict) -> str:
     return f'<span class="mono{wide} p-{pigment}">{html.escape(mark)}</span>'
 
 
-def card(p: dict, favs: set = frozenset(), peers: list = ()) -> str:
+def card(p: dict, favs: set = frozenset(), peers: list = (),
+         archived: set = frozenset()) -> str:
     name = html.escape(p["name"])
     fav_on = " on" if p["name"] in favs else ""
+    arch_on = " on" if p["name"] in archived else ""
     # show the declared port on service cards; flag it red if another project
     # declares the same port (idea #10 — port conflicts like the :5000 one)
     if p.get("port"):
@@ -1316,8 +1321,6 @@ def card(p: dict, favs: set = frozenset(), peers: list = ()) -> str:
             <button onclick="openDrawer('{name}', {{ fresh: true }})">fresh chat</button>
             <button onclick="openDrawer('{name}', true)">resume chat</button>
             <button onclick="act('{name}','terminal')">in konsole</button>
-            <button class="m-arch" data-arch="{name}"
-              onclick="toggleArchive('{name}')">archive</button>
           </div>
         </div>""",
         f"""<button class="b-files" onclick="act('{name}','folder')" title="Open in Dolphin">files</button>""",
@@ -1357,6 +1360,9 @@ def card(p: dict, favs: set = frozenset(), peers: list = ()) -> str:
         <h2>{name}</h2>
         {svc_dot}<span class="kind">{TYPE_LABELS[p["type"]]}</span>
         <button class="b-fav{fav_on}" data-fav="{name}" title="favorite — pin to top">{icon("star")}</button>
+        <button class="b-arch m-arch{arch_on}" data-arch="{name}"
+          title="{'unarchive — back onto the shelf' if arch_on else 'archive — fold away below the shelf'}"
+          onclick="toggleArchive('{name}')">{icon("archive")}</button>
       </div>
       <p class="excerpt">{f'“{excerpt}”' if excerpt else ''}</p>
       <p class="meta">{meta_line}</p>
@@ -1404,7 +1410,8 @@ def index():
 
     def render(p):
         return card(p, favs,
-                    [n for n in port_use.get(p.get("port"), []) if n != p["name"]])
+                    [n for n in port_use.get(p.get("port"), []) if n != p["name"]],
+                    archived)
 
     shelved = [k for k in ("pinned", "motion", "rest") if bands[k]]
     cards = "".join(
@@ -1650,6 +1657,13 @@ def index():
   .b-fav:hover {{ color:var(--ochre); background:transparent; }}
   .b-fav.on {{ color:var(--ochre); }}
   .b-fav.on svg.i {{ fill:currentColor; }}
+  /* archive toggle — a lidded box beside the ★; the lid fills once the card is
+     boxed away in the fold below the shelf */
+  .b-arch {{ border:0; background:transparent; color:var(--ink-faint); cursor:pointer;
+    padding:.1rem .15rem; line-height:0; }}
+  .b-arch:hover {{ color:var(--ink); background:transparent; }}
+  .b-arch.on {{ color:var(--ink-soft); }}
+  .b-arch.on svg.i rect {{ fill:currentColor; }}
   .excerpt {{ margin:0; font-style:italic; color:var(--ink-soft); font-size:.92rem;
               min-height:2.8em; display:-webkit-box; -webkit-line-clamp:4;
               -webkit-box-orient:vertical; overflow:hidden; }}

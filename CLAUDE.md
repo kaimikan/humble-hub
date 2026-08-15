@@ -33,7 +33,9 @@ max of last commit and newest Claude-session transcript mtime, see
 purpose: server-side in `index()` for the initial paint, and client-side in
 `reorderCards()` (hub.js) so ★/archive toggles re-band without a reload; keep
 the two in sync (`ACTIVE_DAYS` is mirrored). `archived` lives in `notes.json`
-next to `favorites`; the card menu's archive/unarchive item toggles it. Search
+next to `favorites`; the box icon beside each card's ★ (`.b-arch`, lid fills
+when boxed) toggles it — it is deliberately NOT in the claude ▾ menu, which is
+chat-only. Search
 reaches into the archive (auto-unfolds on a hit, refolds on clear). Each card's
 **glyph** is a chain: the project's own icon file (`icon.svg`/`favicon.svg`,
 root or `static/`, served via `/api/projects/{name}/icon`) beats a `hub.json`

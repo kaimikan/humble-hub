@@ -93,12 +93,16 @@ def run(page):
     check("archive fold is visible with count 1",
           page.eval_on_selector("#archive", "e => !e.hidden")
           and page.eval_on_selector("#arch-count", "e => e.textContent") == "1")
-    check("archived card's menu item flips to unarchive",
+    check("archived card's box toggle lights up as unarchive",
           page.eval_on_selector(
-              f'.m-arch[data-arch="{boxed}"]', "e => e.textContent")
-          == "unarchive")
+              f'.m-arch[data-arch="{boxed}"]',
+              "e => e.classList.contains('on') && e.title.startsWith('unarchive')"))
+    check("unarchived cards' box toggle stays off",
+          page.eval_on_selector(
+              f'.m-arch[data-arch="{cold}"]',
+              "e => !e.classList.contains('on') && e.title.startsWith('archive')"))
 
-    # unarchive via the card menu, then archive a different card
+    # unarchive via the head toggle (beside ★), then archive a different card
     page.evaluate(
         f"""document.querySelector('.m-arch[data-arch="{boxed}"]').click()""")
     check("unarchive returns the card to the grid",

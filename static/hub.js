@@ -246,8 +246,11 @@ function reorderCards() {
   archBox.hidden = arch.length === 0;
   const n = document.getElementById("arch-count");
   if (n) n.textContent = arch.length;
-  document.querySelectorAll(".m-arch").forEach(b =>
-    b.textContent = archived.has(b.dataset.arch) ? "unarchive" : "archive");
+  document.querySelectorAll(".m-arch").forEach(b => {
+    const on = archived.has(b.dataset.arch);
+    b.classList.toggle("on", on);
+    b.title = on ? "unarchive — back onto the shelf" : "archive — fold away below the shelf";
+  });
   refilter();   // keep band heads consistent with any active search/filter
 }
 
@@ -2674,10 +2677,11 @@ setInterval(() => {
         body[data-theme="aqua"] .pill {
           border:1px solid #2c6098; color:#fff; text-shadow:0 -1px 0 rgba(0,0,0,.3);
           background:linear-gradient(to bottom, #7cc3ff 0, #3f8bd4 48%, #2f78c4 52%, #2d6fb8 100%); }
-        /* keep icon-only buttons (favourite star) flat, not blue gels */
-        body[data-theme="aqua"] .card .b-fav {
+        /* keep icon-only buttons (★ favourite, archive box) flat, not blue gels */
+        body[data-theme="aqua"] .card .b-fav, body[data-theme="aqua"] .card .b-arch {
           background:none; border:0; box-shadow:none; }
-        body[data-theme="aqua"] .card .b-fav::before { display:none; }
+        body[data-theme="aqua"] .card .b-fav::before,
+        body[data-theme="aqua"] .card .b-arch::before { display:none; }
         /* inset Aqua search field */
         body[data-theme="aqua"] input[type=text],
         body[data-theme="aqua"] input[type=search] {
@@ -2805,6 +2809,7 @@ setInterval(() => {
           border-color:rgba(255,255,255,.75); background:rgba(255,255,255,.16); }
         body[data-theme="winxp"] .card .head .tglyph { color:#fff; }
         body[data-theme="winxp"] .card .head .b-fav { color:#ffe89a; }
+        body[data-theme="winxp"] .card .head .b-arch { color:#e6efff; }
         body[data-theme="winxp"] .card button,
         body[data-theme="winxp"] .card .btn,
         body[data-theme="winxp"] .chip,
@@ -2825,7 +2830,8 @@ setInterval(() => {
         body[data-theme="winxp"] .chip.active,
         body[data-theme="winxp"] .pill { color:#fff; border:1px solid #0842a0;
           background:linear-gradient(180deg,#5da2f2,#1a63d8 50%,#0e50b8); }
-        body[data-theme="winxp"] .card .b-fav { background:none; border:0; box-shadow:none; }
+        body[data-theme="winxp"] .card .b-fav,
+        body[data-theme="winxp"] .card .b-arch { background:none; border:0; box-shadow:none; }
         body[data-theme="winxp"] input[type=text],
         body[data-theme="winxp"] input[type=search] {
           border-radius:0; border:1px solid #7f9db9; background:#fff;
@@ -2915,6 +2921,8 @@ setInterval(() => {
           border-color:rgba(255,255,255,.75); background:rgba(255,255,255,.14); }
         body[data-theme="win95"] .card .head .tglyph { color:#fff; }
         body[data-theme="win95"] .card .head .b-fav { color:#ffe89a; background:none;
+          border:0; box-shadow:none; }
+        body[data-theme="win95"] .card .head .b-arch { color:#e6efff; background:none;
           border:0; box-shadow:none; }
         body[data-theme="win95"] .card button,
         body[data-theme="win95"] .card .btn,
