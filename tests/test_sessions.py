@@ -302,7 +302,8 @@ def run(page):
                 ws: { readyState: 1, send: () => {} }, status: "ready" });
         };
         sessions.clear(); detachedPtys.length = 0;
-        mk("t1", "left work"); mk("t2", "right work");
+        window.mkTile = mk;
+        mk("t1", "left work");
         document.getElementById("drawer").classList.add("open");
         document.body.classList.add("drawer-open");
         activate("t1");
@@ -312,7 +313,34 @@ def run(page):
           page.eval_on_selector_all(".tile-head:not([hidden])", "els => els.length") == 0
           and page.eval_on_selector("#d-title", "el => getComputedStyle(el).display") != "none")
 
+    # ⫿ never guesses the second chat: it asks. With a single chat there is no
+    # live chat to offer, so it offers a fresh one (this project first) or a past one
     page.click("#d-split")
+    opts = page.eval_on_selector_all(".row-menu button", "els => els.map(e => e.textContent)")
+    check("⫿ opens a chooser instead of splitting blind",
+          not page.evaluate("document.body.classList.contains('drawer-split')") and len(opts) > 0)
+    check("with one chat it offers no live chat, only a fresh or a past one",
+          not any(o.startswith("→ ") for o in opts)
+          and opts[0] == "new chat → t1" and opts[1] == "a past chat…", str(opts))
+    check("…and a fresh chat for any other project, filterable",
+          any(o.startswith("new chat → ") and o != "new chat → t1" for o in opts)
+          and page.eval_on_selector(".row-menu-search", "el => !!el"))
+    page.keyboard.press("Escape")
+    check("escape cancels: nothing split", page.evaluate("!document.querySelector('.row-menu')")
+          and not page.evaluate("document.body.classList.contains('drawer-split')"))
+    page.click("#d-split")
+    page.click("#d-split")           # ⫿ again = close the chooser (a toggle)
+    check("a second press on ⫿ closes its chooser, splitting nothing",
+          page.evaluate("!document.querySelector('.row-menu')")
+          and not page.evaluate("document.body.classList.contains('drawer-split')"))
+
+    # with a second live chat, that chat is the first offer; picking it splits
+    page.evaluate("mkTile('t2', 'right work'); renderPills(); null")
+    page.click("#d-split")
+    opts = page.eval_on_selector_all(".row-menu button", "els => els.map(e => e.textContent)")
+    check("live chats lead the chooser (the one you're in is not offered)",
+          opts[0] == "→ right work" and "→ left work" not in opts, str(opts))
+    page.click(".row-menu button:has-text('→ right work')")
     page.wait_for_timeout(150)
     check("splitting gives each pane its own head",
           page.eval_on_selector_all(".tile-head:not([hidden])", "els => els.length") == 2)
@@ -393,6 +421,7 @@ def run(page):
     # …but a split that began from full width stays full when it ends
     page.evaluate("toggleDrawerFull(); null")
     page.click("#d-split")
+    page.click(".row-menu button:has-text('→ right work')")
     page.wait_for_timeout(150)
     page.click("#d-split")           # ⫿ while split = back to one chat
     page.wait_for_timeout(150)
@@ -400,6 +429,49 @@ def run(page):
           not page.evaluate("document.body.classList.contains('drawer-split')")
           and page.evaluate("document.body.classList.contains('drawer-full')"))
     page.evaluate("toggleDrawerFull(); null")
+
+    # the fresh-chat pick opens a NEW chat for that project into the right pane
+    # (openDrawer is stubbed above, so we see the call rather than a pty)
+    page.evaluate("window.__resume = null; null")
+    page.click("#d-split")
+    page.click(".row-menu button:has-text('new chat → t3')")
+    page.wait_for_timeout(150)
+    fresh = page.evaluate("window.__resume")
+    check("'new chat → project' splits and asks for a FRESH chat there",
+          page.evaluate("document.body.classList.contains('drawer-split')")
+          and fresh and fresh["p"] == "t3" and fresh["o"].get("fresh") is True, json.dumps(fresh))
+    check("…into the right pane: it is focused and, until the chat lands, says so",
+          page.evaluate("focusedTile") == 1
+          and page.eval_on_selector("#tile-head-1", "el => el.classList.contains('empty')")
+          and "empty pane" in page.eval_on_selector("#tile-head-1 .th-name", "el => el.textContent")
+          and page.eval_on_selector("#tile-head-1 .th-dots", "el => getComputedStyle(el).display") == "none")
+    # a pane fills from the pills, so while split they must sit ABOVE the
+    # full-width drawer (at their usual z-index they were hidden beneath it)
+    check("the pills are reachable over the split drawer",
+          page.evaluate("""() => {
+              const p = document.querySelector('#pills .pill'); if (!p) return false;
+              const r = p.getBoundingClientRect();
+              return document.elementFromPoint(r.left + r.width/2, r.top + r.height/2)?.closest('.pill') === p;
+          }"""))
+    page.click("#d-split")           # back to one chat
+    page.wait_for_timeout(150)
+
+    # the past-chat pick opens the conversations list; the row you choose
+    # lands in the waiting right pane
+    page.evaluate("window.__resume = null; null")
+    page.click("#d-split")
+    page.click(".row-menu button:has-text('a past chat…')")
+    page.wait_for_selector(".sess-overlay:not([hidden])")
+    check("'a past chat…' splits with an empty, focused right pane and opens the list",
+          page.evaluate("document.body.classList.contains('drawer-split')")
+          and page.evaluate("focusedTile") == 1
+          and page.eval_on_selector("#tile-head-1", "el => el.classList.contains('empty')"))
+    page.click(".sess-row:has-text('Resume Humble Hub setup')")
+    past = page.evaluate("window.__resume")
+    check("…and the chosen conversation is resumed (into that pane)",
+          past and past["o"]["session"] == "aaaa-1111", json.dumps(past))
+    page.click("#d-split")           # back to one chat
+    page.wait_for_timeout(150)
     page.click("#sess-open")
     page.wait_for_selector(".sess-overlay:not([hidden])")
 

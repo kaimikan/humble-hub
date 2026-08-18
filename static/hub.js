@@ -3819,9 +3819,15 @@ function renderTileHeads() {
     const head = document.getElementById(`tile-head-${i}`);
     if (!head) return;
     const s = tileKeys[i] && sessions.get(tileKeys[i]);
-    head.hidden = !splitOn() || !s;
+    head.hidden = !splitOn();
     head.classList.toggle("focused", i === focusedTile);
-    if (s) head.querySelector(".th-name").textContent = s.label;
+    head.classList.toggle("empty", !s);
+    // an empty pane says how to fill it (a chosen chat is on its way, or the
+    // pick was cancelled): its ⋯ has nothing to act on, so it steps aside
+    head.querySelector(".th-name").textContent = s ? s.label
+      : "empty pane · click a pill, or pick a chat from the chats list";
+    const dots = head.querySelector(".th-dots");
+    if (dots) dots.hidden = !s;
   });
 }
 
@@ -3837,17 +3843,41 @@ function focusTile(i) {
 // mode (which read as "the split button maximises", not "goes back").
 window.wasFullBeforeSplit = false;
 
-function splitDrawer() {
-  if (splitOn()) return;
+// The chat you are in stays on the left; ⫿ asks what goes on the right. It
+// used to guess (the most recently *created* other chat), which never matched
+// what you meant, and with a single chat it opened an empty pane with no way
+// to say what should fill it. Now it is one explicit pick from a searchable
+// menu: a live chat, a fresh chat for this or any project, or a past chat
+// (which opens the conversations list into the waiting pane).
+function openSplitChooser(anchor) {
+  const cur = sessions.get(active);
+  const here = cur ? cur.name : "~";
+  const live = [...sessions.values()].filter(s => s.key !== active && s.ws.readyState <= 1);
+  const opts = [
+    ...live.map(s => ({ label: `→ ${s.label}`, value: { key: s.key } })),
+    { label: `new chat → ${here}`, value: { fresh: here }, pinned: true },
+    { label: "a past chat…", value: { past: true }, pinned: true },
+    ...projectList().filter(p => p !== here).map(p => ({ label: `new chat → ${p}`, value: { fresh: p } })),
+  ];
+  const r = anchor.getBoundingClientRect();
+  openSearchablePicker(r, opts, null, pick => splitDrawer(pick));
+}
+
+// pick: {key} a live chat · {fresh: project} a new chat · {past: true} the
+// conversations list. The right pane is created empty and focused first, so
+// whatever the pick activates lands there (activate() fills the focused pane).
+function splitDrawer(pick) {
+  if (splitOn() || !pick) return;
   wasFullBeforeSplit = document.body.classList.contains("drawer-full");
   if (!wasFullBeforeSplit) toggleDrawerFull();
   document.body.classList.add("drawer-split");
   tileKeys[0] = active;
-  // the second pane opens on the most recent other chat, or waits for a pill
-  const other = [...sessions.keys()].filter(k => k !== active).pop() || null;
-  tileKeys[1] = other;
-  focusedTile = other ? 1 : 0;
-  if (other) activate(other); else layoutTiles();
+  tileKeys[1] = null;
+  focusedTile = 1;
+  layoutTiles();
+  if (pick.key && sessions.has(pick.key)) activate(pick.key);
+  else if (pick.fresh) openDrawer(pick.fresh, { fresh: true });
+  else if (pick.past && window.openSessions) openSessions();
   refitTiles();
   syncSplitButton();
   renderPills();
@@ -3880,7 +3910,7 @@ function syncSplitButton() {
   const b = document.getElementById("d-split");
   if (!b) return;
   b.classList.toggle("on", splitOn());
-  b.title = splitOn() ? "back to one chat" : "split: two chats side by side";
+  b.title = splitOn() ? "back to one chat" : "split: choose a chat for the right pane";
 }
 
 // --- tile chrome: the split button, the two heads, and their ⋯ menus --------
@@ -3910,6 +3940,12 @@ function syncSplitButton() {
     .tile-head.focused { color:#fff; border-bottom-color:rgba(255,255,255,.3); }
     .tile-head .th-name { flex:1; overflow:hidden; text-overflow:ellipsis;
       white-space:nowrap; cursor:text; }
+    .tile-head.empty .th-name { font-style:italic; font-variant:normal; letter-spacing:0;
+      opacity:.75; cursor:default; }
+    .tile-head .th-dots[hidden] { display:none; }
+    /* pills are how a pane gets its chat, so while split they must sit ABOVE
+       the (full-width) drawer — at their usual z they hide beneath it */
+    body.drawer-split #pills { z-index:60; }
     .tile-head button { border:0; background:none; color:inherit; font:inherit;
       cursor:pointer; padding:0 .35rem; line-height:1; }
     .tile-head button:hover { color:#fff; background:rgba(255,255,255,.12); border-radius:2px; }
@@ -3950,7 +3986,15 @@ function syncSplitButton() {
   btn.tabIndex = -1;
   btn.innerHTML = '<svg class="i" viewBox="0 0 24 24" aria-hidden="true">'
     + '<rect x="3" y="5" width="18" height="14" rx="1"/><path d="M12 5v14"/></svg>';
-  btn.onclick = () => splitOn() ? closeTile(1) : splitDrawer();
+  btn.onclick = e => {
+    e.stopPropagation();          // the picker closes on any document click
+    if (splitOn()) return closeTile(1);
+    // a second press on ⫿ while its chooser is up closes it — a toggle, the
+    // way a menu button is expected to behave (clicking away works too)
+    if (rowMenuEl && rowMenuEl.dataset.owner === "split") return closeRowMenu();
+    openSplitChooser(btn);
+    if (rowMenuEl) rowMenuEl.dataset.owner = "split";
+  };
   head.insertBefore(btn, document.getElementById("d-bottom") || head.querySelector("a, button"));
 
   // each pane's head: its chat's name, and a ⋯ of that chat's own actions
