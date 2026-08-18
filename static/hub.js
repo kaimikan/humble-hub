@@ -3831,9 +3831,16 @@ function focusTile(i) {
   activate(tileKeys[i]);      // active follows focus: one idea of "this chat"
 }
 
+// Splitting borrows the full width; un-splitting hands it back. Remember
+// whether the drawer was a side panel when the split began so that closing
+// a pane returns there, instead of stranding the one chat in full-screen
+// mode (which read as "the split button maximises", not "goes back").
+window.wasFullBeforeSplit = false;
+
 function splitDrawer() {
   if (splitOn()) return;
-  if (!document.body.classList.contains("drawer-full")) toggleDrawerFull();
+  wasFullBeforeSplit = document.body.classList.contains("drawer-full");
+  if (!wasFullBeforeSplit) toggleDrawerFull();
   document.body.classList.add("drawer-split");
   tileKeys[0] = active;
   // the second pane opens on the most recent other chat, or waits for a pill
@@ -3854,6 +3861,8 @@ function closeTile(i) {
   tileKeys = [keep, null];
   focusedTile = 0;
   if (keep) activate(keep); else layoutTiles();
+  // back to the side panel if that is where the split started from
+  if (!wasFullBeforeSplit && document.body.classList.contains("drawer-full")) toggleDrawerFull();
   refitTiles();
   syncSplitButton();
   renderPills();

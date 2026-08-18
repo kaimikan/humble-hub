@@ -386,7 +386,20 @@ def run(page):
     check("…and the drawer's own controls come back with one chat",
           page.eval_on_selector("#d-full", "el => getComputedStyle(el).display") != "none"
           and page.eval_on_selector("#d-close", "el => getComputedStyle(el).display") != "none")
-    page.evaluate("document.body.classList.remove('drawer-full'); null")
+    # the split began from the side panel, so un-splitting returns there —
+    # not to a full-screen single chat (which read as "⫿ maximises")
+    check("un-splitting from a side-panel split returns to the side panel",
+          not page.evaluate("document.body.classList.contains('drawer-full')"))
+    # …but a split that began from full width stays full when it ends
+    page.evaluate("toggleDrawerFull(); null")
+    page.click("#d-split")
+    page.wait_for_timeout(150)
+    page.click("#d-split")           # ⫿ while split = back to one chat
+    page.wait_for_timeout(150)
+    check("un-splitting from a full-width split stays full",
+          not page.evaluate("document.body.classList.contains('drawer-split')")
+          and page.evaluate("document.body.classList.contains('drawer-full')"))
+    page.evaluate("toggleDrawerFull(); null")
     page.click("#sess-open")
     page.wait_for_selector(".sess-overlay:not([hidden])")
 
