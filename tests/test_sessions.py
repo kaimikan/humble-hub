@@ -506,18 +506,35 @@ def run(page):
     check("un-splitting from a full-width split stays full",
           not page.evaluate("document.body.classList.contains('drawer-split')")
           and page.evaluate("document.body.classList.contains('drawer-full')"))
+    # ⫿ keeps the FOCUSED chat: the right pane was focused (a fresh split
+    # focuses its new pane), so 'right work' is the one that stays
+    check("…and keeps the focused chat, not always the left one",
+          page.evaluate("active") == "t2"
+          and page.eval_on_selector("#d-title", "el => el.textContent") == "right work")
     page.evaluate("toggleDrawerFull(); null")
+    # focus the LEFT pane (a click into its terminal) and ⫿ keeps that one instead
+    page.click("#d-split")
+    page.click(".row-menu button:has-text('→ third chat')")
+    page.wait_for_timeout(150)
+    page.evaluate("""sessions.get('t2').host.dispatchEvent(
+        new PointerEvent('pointerdown', { bubbles: true, clientX: 10, clientY: 300 })); null""")
+    page.click("#d-split")
+    page.wait_for_timeout(150)
+    check("…so with the left pane focused, the left chat is the one kept",
+          not page.evaluate("document.body.classList.contains('drawer-split')")
+          and page.evaluate("active") == "t2"
+          and page.evaluate("sessions.has('t3')"))
 
     # the fresh-chat pick opens a NEW chat for that project into the right pane
     # (openDrawer is stubbed above, so we see the call rather than a pty)
     page.evaluate("window.__resume = null; null")
     page.click("#d-split")
-    page.click(".row-menu button:has-text('new chat → t3')")
+    page.click(".row-menu button:has-text('new chat → t2')")
     page.wait_for_timeout(150)
     fresh = page.evaluate("window.__resume")
     check("'new chat → project' splits and asks for a FRESH chat there",
           page.evaluate("document.body.classList.contains('drawer-split')")
-          and fresh and fresh["p"] == "t3" and fresh["o"].get("fresh") is True, json.dumps(fresh))
+          and fresh and fresh["p"] == "t2" and fresh["o"].get("fresh") is True, json.dumps(fresh))
     check("…into the right pane: it is focused and, until the chat lands, says so",
           page.evaluate("focusedTile") == 1
           and page.eval_on_selector("#tile-head-1", "el => el.classList.contains('empty')")
@@ -552,7 +569,7 @@ def run(page):
     page.click("#tile-head-1 .th-name")
     opts = page.eval_on_selector_all(".row-menu button", "els => els.map(e => e.textContent)")
     check("an empty pane's name opens the chooser for that pane",
-          len(opts) > 0 and "→ third chat" not in opts and "a past chat…" in opts, str(opts))
+          len(opts) > 0 and "→ right work" not in opts and "a past chat…" in opts, str(opts))
     page.keyboard.press("Escape")
     page.click("#d-split")           # back to one chat
     page.wait_for_timeout(150)

@@ -4043,7 +4043,9 @@ function syncSplitButton() {
     + '<rect x="3" y="5" width="18" height="14" rx="1"/><path d="M12 5v14"/></svg>';
   btn.onclick = e => {
     e.stopPropagation();          // the picker closes on any document click
-    if (splitOn()) return closeTile(1);
+    // back to one chat keeps the FOCUSED one — focus is "the chat I'm working
+    // in", so that is the one to keep (an empty focused pane keeps the other)
+    if (splitOn()) return closeTile(tileKeys[focusedTile] ? 1 - focusedTile : focusedTile);
     // a second press on ⫿ while its chooser is up closes it — a toggle, the
     // way a menu button is expected to behave (clicking away works too)
     if (rowMenuEl && rowMenuEl.dataset.owner === "split") return closeRowMenu();
