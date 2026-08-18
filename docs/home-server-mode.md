@@ -43,7 +43,13 @@ it's a toggle, not a permanent setting. Two ways, same engine:
   right-click for an explicit on/off/quit menu. Autostarts at login.
 - **CLI** (`tools/home-server`): `home-server [on|off|toggle|status]`.
 
-Install both (user scope, no sudo): `./tools/install.sh`. The tray normally
+Install both (user scope, no sudo): `./tools/install.sh`. The tray needs the
+system package `python-pyqt6`; install it as **explicit** so pacman orphan
+sweeps leave it alone: `sudo pacman -S --asexplicit python-pyqt6`. (On
+2026-08-04 an orphan cleanup removed it and the tray crashed at every login
+until reinstalled — symptom: no dot in the tray, and
+`journalctl --user -b | grep home-server-tray` shows `No module named 'PyQt6'`.)
+The tray normally
 starts at login via the autostart entry (independent of `hub.service`). "Off"
 restores KDE's default power behaviour (suspend on lid close); battery profile
 is never touched.
