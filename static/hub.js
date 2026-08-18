@@ -3823,9 +3823,14 @@ function renderTileHeads() {
     head.classList.toggle("focused", i === focusedTile);
     head.classList.toggle("empty", !s);
     // an empty pane says how to fill it (a chosen chat is on its way, or the
-    // pick was cancelled): its ⋯ has nothing to act on, so it steps aside
-    head.querySelector(".th-name").textContent = s ? s.label
-      : "empty pane · click a pill, or pick a chat from the chats list";
+    // pick was cancelled): its ⋯ has nothing to act on, so it steps aside.
+    // A rename in progress (an input inside the name) is left alone: a
+    // re-render mid-edit used to swallow the input, and the name with it.
+    const nameEl = head.querySelector(".th-name");
+    if (!nameEl.querySelector("input")) {
+      nameEl.textContent = s ? (s.label || disp(s.name))
+        : "empty pane · click a pill, or pick a chat from the chats list";
+    }
     const dots = head.querySelector(".th-dots");
     if (dots) dots.hidden = !s;
   });

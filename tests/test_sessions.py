@@ -389,6 +389,32 @@ def run(page):
                      "jump to the bottom", "close this pane (chat keeps running)",
                      "end this chat"], str(labels))
 
+    # names must never go missing from a head: through a rename in the head
+    # itself (a re-render mid-edit used to be able to swallow the input), on
+    # the pill, and on the untouched neighbour
+    page.click("#tile-head-1 .th-menu button:has-text('rename this chat')")
+    page.wait_for_selector("#tile-head-1 .th-name input")
+    page.evaluate("renderTileHeads(); null")          # a re-render mid-edit
+    check("a re-render while renaming keeps the input (and the name) alive",
+          page.eval_on_selector("#tile-head-1 .th-name", "el => !!el.querySelector('input')"))
+    page.fill("#tile-head-1 .th-name input", "compare pane")
+    page.press("#tile-head-1 .th-name input", "Enter")
+    page.wait_for_timeout(150)
+    check("renaming from a head renames THAT pane's chat…",
+          page.eval_on_selector("#tile-head-1 .th-name", "el => el.textContent") == "compare pane"
+          and page.eval_on_selector("#tile-head-0 .th-name", "el => el.textContent") == "third chat")
+    check("…and its pill; no head is ever blank",
+          page.evaluate("[...document.querySelectorAll('#pills .pill')].some(p => p.textContent.includes('compare pane'))")
+          and page.evaluate("[...document.querySelectorAll('.tile-head:not([hidden]) .th-name')].every(e => e.textContent.trim())"))
+    page.click("#tile-head-1 .th-dots")
+    page.click("#tile-head-1 .th-menu button:has-text('rename this chat')")
+    page.fill("#tile-head-1 .th-name input", "right work")
+    page.press("#tile-head-1 .th-name input", "Enter")
+    page.wait_for_timeout(150)
+    check("a second rename lands too (heads re-render from the label)",
+          page.eval_on_selector("#tile-head-1 .th-name", "el => el.textContent") == "right work")
+    page.click("#tile-head-1 .th-dots")                # re-open for the checks below
+
     # the heads sit ON the terminal: ink-coloured text there is invisible, which
     # is what focusing a head used to do (dark on #1a1b26)
     focused_col = page.eval_on_selector("#tile-head-1.focused", "el => getComputedStyle(el).color")
@@ -409,6 +435,8 @@ def run(page):
           not page.evaluate("document.body.classList.contains('drawer-split')")
           and page.evaluate("active") == "t3"
           and page.eval_on_selector_all(".tile-head:not([hidden])", "els => els.length") == 0)
+    check("…and the drawer title names the chat that stayed",
+          page.eval_on_selector("#d-title", "el => el.textContent") == "third chat")
     check("the closed pane's chat is still alive in the pills",
           page.evaluate("sessions.has('t2')"))
     check("…and the drawer's own controls come back with one chat",
