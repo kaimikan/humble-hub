@@ -1648,7 +1648,15 @@ function activate(key) {
   const s = sessions.get(key);
   // the focused tile takes the chat you activate; layoutTiles() decides which
   // hosts are on screen and where (one full-width host when unsplit)
-  if (window.tileKeys) { tileKeys[focusedTile] = key; layoutTiles(); }
+  if (window.tileKeys) {
+    // loading into a pane the chat the OTHER pane shows swaps them (one
+    // host can't be in two places; a swap is what that gesture means)
+    const other = 1 - focusedTile;
+    if (document.body.classList.contains("drawer-split") && tileKeys[other] === key)
+      tileKeys[other] = tileKeys[focusedTile];
+    tileKeys[focusedTile] = key;
+    layoutTiles();
+  }
   else sessions.forEach(o => o.host.classList.toggle("shown", o.key === key));
   document.getElementById("d-title").textContent = s.label;
   if (window.syncDrawerWip) syncDrawerWip();   // the mark follows the shown chat
@@ -3799,7 +3807,7 @@ const splitOn = () => document.body.classList.contains("drawer-split");
 
 function layoutTiles() {
   const split = splitOn();
-  sessions.forEach(o => o.host.classList.remove("tile-0", "tile-1", "shown"));
+  sessions.forEach(o => o.host.classList.remove("tile-0", "tile-1", "shown", "pane-focused"));
   if (!split) {
     const s = sessions.get(active);
     if (s) s.host.classList.add("shown");       // exactly today's behaviour
@@ -3822,6 +3830,7 @@ function renderTileHeads() {
     head.hidden = !splitOn();
     head.classList.toggle("focused", i === focusedTile);
     head.classList.toggle("empty", !s);
+    if (s) s.host.classList.toggle("pane-focused", splitOn() && i === focusedTile);
     // an empty pane says how to fill it (a chosen chat is on its way, or the
     // pick was cancelled): its ⋯ has nothing to act on, so it steps aside.
     // A rename in progress (an input inside the name) is left alone: a
@@ -3829,17 +3838,35 @@ function renderTileHeads() {
     const nameEl = head.querySelector(".th-name");
     if (!nameEl.querySelector("input")) {
       nameEl.textContent = s ? (s.label || disp(s.name))
-        : "empty pane · click a pill, or pick a chat from the chats list";
+        : "empty pane · click here to choose a chat, or click a pill";
     }
+    nameEl.title = s ? "click to rename" : "choose a chat for this pane";
+    head.title = i === focusedTile ? "focused pane — pills load here" : "click to focus this pane";
     const dots = head.querySelector(".th-dots");
     if (dots) dots.hidden = !s;
   });
 }
 
-function focusTile(i) {
-  if (!tileKeys[i]) return;
+// Focus is where the next chat lands (a pill, the chooser). It follows every
+// click INTO a pane — head or terminal — not only the head, since typing in
+// the right chat and then having a pill land on the left is exactly the
+// wrong surprise. `quiet` moves focus without activate()'s refit/scroll-to-
+// bottom/pill churn, so a click into a terminal you are reading doesn't yank
+// it; an empty pane can hold focus too (that is how it gets filled).
+function focusTile(i, quiet) {
   focusedTile = i;
-  activate(tileKeys[i]);      // active follows focus: one idea of "this chat"
+  const key = tileKeys[i];
+  if (!key) { renderTileHeads(); return; }
+  if (quiet) {
+    if (active !== key) {
+      active = key;
+      if (window.syncDrawerWip) syncDrawerWip();
+      renderPills();
+    }
+    renderTileHeads();
+    return;
+  }
+  activate(key);              // active follows focus: one idea of "this chat"
 }
 
 // Splitting borrows the full width; un-splitting hands it back. Remember
@@ -3854,10 +3881,13 @@ window.wasFullBeforeSplit = false;
 // to say what should fill it. Now it is one explicit pick from a searchable
 // menu: a live chat, a fresh chat for this or any project, or a past chat
 // (which opens the conversations list into the waiting pane).
-function openSplitChooser(anchor) {
+// The same chooser serves a pane's "load a chat here…", so a pane can be
+// refilled explicitly, not only by aiming a pill at it. Chats already on
+// screen in a pane are not offered (unsplit: that is just the current chat).
+function openChatChooser(anchor, onPick) {
   const cur = sessions.get(active);
   const here = cur ? cur.name : "~";
-  const live = [...sessions.values()].filter(s => s.key !== active && s.ws.readyState <= 1);
+  const live = [...sessions.values()].filter(s => !tileKeys.includes(s.key) && s.ws.readyState <= 1);
   const opts = [
     ...live.map(s => ({ label: `→ ${s.label}`, value: { key: s.key } })),
     { label: `new chat → ${here}`, value: { fresh: here }, pinned: true },
@@ -3865,12 +3895,21 @@ function openSplitChooser(anchor) {
     ...projectList().filter(p => p !== here).map(p => ({ label: `new chat → ${p}`, value: { fresh: p } })),
   ];
   const r = anchor.getBoundingClientRect();
-  openSearchablePicker(r, opts, null, pick => splitDrawer(pick));
+  openSearchablePicker(r, opts, null, onPick);
 }
+function openSplitChooser(anchor) { openChatChooser(anchor, pick => splitDrawer(pick)); }
 
 // pick: {key} a live chat · {fresh: project} a new chat · {past: true} the
-// conversations list. The right pane is created empty and focused first, so
-// whatever the pick activates lands there (activate() fills the focused pane).
+// conversations list. Whatever the pick activates lands in the FOCUSED pane
+// (activate() fills it), so focus the target pane before applying.
+function applyPick(pick) {
+  if (!pick) return;
+  if (pick.key && sessions.has(pick.key)) activate(pick.key);
+  else if (pick.fresh) openDrawer(pick.fresh, { fresh: true });
+  else if (pick.past && window.openSessions) openSessions();
+}
+
+// The right pane is created empty and focused first, then the pick fills it.
 function splitDrawer(pick) {
   if (splitOn() || !pick) return;
   wasFullBeforeSplit = document.body.classList.contains("drawer-full");
@@ -3880,12 +3919,16 @@ function splitDrawer(pick) {
   tileKeys[1] = null;
   focusedTile = 1;
   layoutTiles();
-  if (pick.key && sessions.has(pick.key)) activate(pick.key);
-  else if (pick.fresh) openDrawer(pick.fresh, { fresh: true });
-  else if (pick.past && window.openSessions) openSessions();
+  applyPick(pick);
   refitTiles();
   syncSplitButton();
   renderPills();
+}
+
+// "load a chat here…" from a pane: focus it, then choose what fills it
+function loadIntoTile(i, anchor) {
+  focusTile(i, true);
+  openChatChooser(anchor, pick => { focusTile(i, true); applyPick(pick); refitTiles(); });
 }
 
 function closeTile(i) {
@@ -3941,8 +3984,15 @@ function syncSplitButton() {
     .tile-head[hidden] { display:none; }
     #tile-head-0 { left:.3rem; right:calc(50% + .25rem); }
     #tile-head-1 { left:calc(50% + .25rem); right:.3rem; }
-    /* the focused pane is the one pills load into — say so quietly */
-    .tile-head.focused { color:#fff; border-bottom-color:rgba(255,255,255,.3); }
+    /* the focused pane is the one pills load into — say so plainly: bright
+       name on a solid rule, against a dim, unruled neighbour. Focus follows
+       clicks into either pane, so this always shows where the next chat lands. */
+    .tile-head { color:rgba(255,255,255,.38); }
+    .tile-head.focused { color:#fff; border-bottom:2px solid rgba(255,255,255,.8); }
+    .tile-head.empty.focused .th-name { opacity:1; }
+    body.drawer-split .term-host.tile-0, body.drawer-split .term-host.tile-1 {
+      outline:1px solid transparent; outline-offset:-1px; }
+    body.drawer-split .term-host.pane-focused { outline-color:rgba(255,255,255,.22); }
     .tile-head .th-name { flex:1; overflow:hidden; text-overflow:ellipsis;
       white-space:nowrap; cursor:text; }
     .tile-head.empty .th-name { font-style:italic; font-variant:normal; letter-spacing:0;
@@ -4046,6 +4096,8 @@ function syncSplitButton() {
     item("mark unfinished", clickGlobal("#d-wip"));
     item("attach an image", clickGlobal('.d-head button[title="attach an image to this chat"]'));
     item("jump to the bottom", clickGlobal("#d-bottom"));
+    // an explicit way to refill THIS pane, beside aiming a pill at it
+    item("load a chat here…", () => loadIntoTile(i, dots));
     item("close this pane (chat keeps running)", () => closeTile(i));
     // ending a chat needs a pane to point at: the drawer's ✕ can't say which
     item("end this chat", () => {
@@ -4062,9 +4114,25 @@ function syncSplitButton() {
     };
     th.append(dots, menu);
     th.onclick = () => focusTile(i);
-    th.querySelector(".th-name").onclick = e => { e.stopPropagation(); focusTile(i); };
+    // an empty pane's name IS its chooser; a filled pane's name focuses it
+    th.querySelector(".th-name").onclick = e => {
+      e.stopPropagation();
+      if (tileKeys[i]) focusTile(i); else loadIntoTile(i, th);
+    };
     dterm.appendChild(th);
   });
+
+  // focus follows a click INTO a pane — the terminal itself, not only its
+  // head. Quiet: no refit/scroll/pill churn on a click into a chat you are
+  // reading. Capture phase, so xterm's own handlers still get the event.
+  dterm.addEventListener("pointerdown", e => {
+    if (!splitOn() || e.target.closest(".tile-head")) return;
+    const host = e.target.closest(".term-host");
+    let i;
+    if (host) i = host.classList.contains("tile-1") ? 1 : host.classList.contains("tile-0") ? 0 : -1;
+    else { const r = dterm.getBoundingClientRect(); i = e.clientX > r.left + r.width / 2 ? 1 : 0; }
+    if (i >= 0 && i !== focusedTile) focusTile(i, true);
+  }, true);
 
   document.addEventListener("click", e => {
     if (!e.target.closest(".th-menu, .th-dots")) {

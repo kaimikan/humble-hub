@@ -384,10 +384,10 @@ def run(page):
           and page.evaluate("focusedTile") == 1)
     labels = page.eval_on_selector_all("#tile-head-1 .th-menu button",
                                        "els => els.map(e => e.textContent)")
-    check("…including rename, mark, attach, jump, close-pane and end-chat",
+    check("…including rename, mark, attach, jump, load-here, close-pane and end-chat",
           labels == ["rename this chat", "mark unfinished", "attach an image",
-                     "jump to the bottom", "close this pane (chat keeps running)",
-                     "end this chat"], str(labels))
+                     "jump to the bottom", "load a chat here…",
+                     "close this pane (chat keeps running)", "end this chat"], str(labels))
 
     # names must never go missing from a head: through a rename in the head
     # itself (a re-render mid-edit used to be able to swallow the input), on
@@ -413,7 +413,6 @@ def run(page):
     page.wait_for_timeout(150)
     check("a second rename lands too (heads re-render from the label)",
           page.eval_on_selector("#tile-head-1 .th-name", "el => el.textContent") == "right work")
-    page.click("#tile-head-1 .th-dots")                # re-open for the checks below
 
     # the heads sit ON the terminal: ink-coloured text there is invisible, which
     # is what focusing a head used to do (dark on #1a1b26)
@@ -428,8 +427,59 @@ def run(page):
           page.eval_on_selector("#d-full", "el => getComputedStyle(el).display") == "none")
     check("the drawer's ✕ hides too — 'which chat?' has no answer there",
           page.eval_on_selector("#d-close", "el => getComputedStyle(el).display") == "none")
+    page.keyboard.press("Escape")
 
-    page.click("#tile-head-1 .th-menu button:nth-child(5)")
+    # focus is where the next chat lands, so it must be unmistakable and must
+    # follow a click INTO a pane (its terminal), not only onto its head
+    check("the focused head is bright on a solid rule; the other is dim, unruled",
+          page.eval_on_selector("#tile-head-1", "el => getComputedStyle(el).borderBottomWidth") == "2px"
+          and page.eval_on_selector("#tile-head-0", "el => getComputedStyle(el).borderBottomColor") == "rgba(0, 0, 0, 0)"
+          and page.eval_on_selector("#tile-head-0", "el => getComputedStyle(el).color") != "rgb(255, 255, 255)")
+    check("…and its terminal carries the focus mark",
+          page.evaluate("sessions.get('t2').host.classList.contains('pane-focused')")
+          and not page.evaluate("sessions.get('t3').host.classList.contains('pane-focused')"))
+    page.evaluate("""() => {
+        const h = sessions.get('t3').host;   // a click INTO the left terminal
+        h.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, clientX: 10, clientY: 300 }));
+    }""")
+    page.wait_for_timeout(50)
+    check("clicking into a pane's terminal focuses that pane (quietly)",
+          page.evaluate("focusedTile") == 0 and page.evaluate("active") == "t3"
+          and page.eval_on_selector("#tile-head-0", "el => el.classList.contains('focused')")
+          and page.evaluate("sessions.get('t3').host.classList.contains('pane-focused')"))
+    # …so a pill now lands where you are actually working
+    page.evaluate("activate('t1'); null")
+    page.wait_for_timeout(100)
+    check("…and the next chat lands there",
+          page.eval_on_selector("#tile-head-0 .th-name", "el => el.textContent") == "left work"
+          and page.eval_on_selector("#tile-head-1 .th-name", "el => el.textContent") == "right work")
+    # loading the chat the OTHER pane shows swaps the two, never duplicates
+    page.evaluate("activate('t2'); null")
+    page.wait_for_timeout(100)
+    check("loading the other pane's chat swaps the panes",
+          page.eval_on_selector("#tile-head-0 .th-name", "el => el.textContent") == "right work"
+          and page.eval_on_selector("#tile-head-1 .th-name", "el => el.textContent") == "left work"
+          and page.evaluate("[...sessions.get('t2').host.classList].filter(c => c.startsWith('tile-')).length") == 1)
+
+    # each pane can be refilled explicitly: ⋯ → load a chat here… (the chooser,
+    # minus the chat already in that pane); the pick lands in THAT pane
+    page.click("#tile-head-1 .th-dots")
+    page.click("#tile-head-1 .th-menu button:has-text('load a chat here…')")
+    opts = page.eval_on_selector_all(".row-menu button", "els => els.map(e => e.textContent)")
+    check("'load a chat here…' opens the chooser, minus the chats already on screen",
+          "→ third chat" in opts and "→ right work" not in opts and "→ left work" not in opts, str(opts))
+    page.click(".row-menu button:has-text('→ third chat')")
+    page.wait_for_timeout(150)
+    check("…and the pick fills that pane, leaving the other alone",
+          page.eval_on_selector("#tile-head-1 .th-name", "el => el.textContent") == "third chat"
+          and page.eval_on_selector("#tile-head-0 .th-name", "el => el.textContent") == "right work"
+          and page.evaluate("focusedTile") == 1)
+    # restore the arrangement the checks below expect (t3 left, t2 right)
+    page.evaluate("focusTile(0, true); activate('t3'); focusTile(1, true); activate('t2'); null")
+    page.wait_for_timeout(100)
+    page.click("#tile-head-1 .th-dots")
+
+    page.click("#tile-head-1 .th-menu button:has-text('close this pane')")
     page.wait_for_timeout(150)
     check("closing a pane returns to one chat, keeping the other",
           not page.evaluate("document.body.classList.contains('drawer-split')")
@@ -498,6 +548,12 @@ def run(page):
     past = page.evaluate("window.__resume")
     check("…and the chosen conversation is resumed (into that pane)",
           past and past["o"]["session"] == "aaaa-1111", json.dumps(past))
+    # the pane is still empty (the stub resumed nothing): its name is its chooser
+    page.click("#tile-head-1 .th-name")
+    opts = page.eval_on_selector_all(".row-menu button", "els => els.map(e => e.textContent)")
+    check("an empty pane's name opens the chooser for that pane",
+          len(opts) > 0 and "→ third chat" not in opts and "a past chat…" in opts, str(opts))
+    page.keyboard.press("Escape")
     page.click("#d-split")           # back to one chat
     page.wait_for_timeout(150)
     page.click("#sess-open")
